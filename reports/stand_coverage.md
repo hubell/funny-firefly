@@ -1,0 +1,56 @@
+# Stand identifier coverage (OpenStreetMap)
+
+Gate check for the taxi-distance feature: can a `STAND_mvt` value be
+resolved to a physical location? Coverage is the share of
+`aeroway=parking_position` features carrying any usable identifier tag.
+
+Verdict bands: STRONG >=90%, PARTIAL >=60%, WEAK >0%, UNUSABLE none.
+
+Two things this table does not say, both of which matter downstream.
+`rwy ways` counts OSM ways, not physical runways -- OSM splits a runway
+into however many pieces the mapping produced, so Schiphol reads as 10
+for 6. And `with ID` counts *features* carrying a tag, not distinct
+identifiers: several features routinely share one, so the joinable
+count is materially lower. See [`taxi_routing.md`](taxi_routing.md),
+which reports both after merging.
+
+| ICAO | IATA | stands | with ID | coverage | verdict | rwy ways | taxiway | taxilane |
+| ---- | ---- | -----: | ------: | -------: | ------- | -------: | ------: | -------: |
+| EDDF | FRA | 436 | 322 | 74% | PARTIAL | 4 | 522 | 0 |
+| EDDM | MUC | 236 | 195 | 83% | PARTIAL | 2 | 606 | 0 |
+| EGLL | LHR | 374 | 347 | 93% | STRONG | 4 | 417 | 0 |
+| EHAM | AMS | 313 | 280 | 89% | PARTIAL | 10 | 485 | 41 |
+| LEBL | BCN | 270 | 262 | 97% | STRONG | 4 | 469 | 15 |
+| LEMD | MAD | 425 | 418 | 98% | STRONG | 9 | 751 | 4 |
+| LFPG | CDG | 768 | 754 | 98% | STRONG | 7 | 779 | 3 |
+| LIRF | FCO | 194 | 194 | 100% | STRONG | 4 | 200 | 31 |
+| LTAI | AYT | 576 | 261 | 45% | WEAK | 3 | 168 | 0 |
+| LTFM | IST | 761 | 756 | 99% | STRONG | 6 | 787 | 0 |
+| LSZH | ZRH | 267 | 267 | 100% | STRONG | 8 | 256 | 0 |
+
+## Identifier tags and formats in use
+
+Formats are given as *shapes* rather than as example identifiers:
+`#` is a digit, `@` a letter, `.` anything else. So `@##` is a pier
+letter followed by two digits, and `###` a bare three-digit numeric.
+
+This is the question that matters for the join -- whether to expect
+bare numerics or a pier prefix, and whether `STAND_mvt` will need
+zero-padding or suffix stripping -- and a shape answers it without
+reproducing OpenStreetMap's contents. Listing real identifiers would
+answer it too, and would put an extract of OSM into a repository that
+ships GPLv3 with none in it.
+
+- **EDDF** (Frankfurt Main) — id tags: ref=320, name=2; shapes: `@##` x78, `@###` x76, `@#` x60, `@.###` x28
+- **EDDM** (Munich) — id tags: ref=195; shapes: `###` x119, `###@` x76
+- **EGLL** (London Heathrow) — id tags: ref=347; shapes: `###` x257, `###@` x66, `@@#` x16, `@@#@` x4
+- **EHAM** (Amsterdam Schiphol) — id tags: ref=280; shapes: `@##` x221, `@#` x45, `@@@#` x7, `@@` x4
+- **LEBL** (Barcelona-El Prat) — id tags: ref=262; shapes: `###` x177, `##` x63, `###@` x17, `##@` x5
+- **LEMD** (Madrid-Barajas) — id tags: ref=418; shapes: `###` x299, `##` x59, `@##` x27, `@#` x9
+- **LFPG** (Paris Charles de Gaulle) — id tags: ref=748, name=6; shapes: `@##` x662, `@@##` x29, `@#@` x23, `@#` x15
+- **LIRF** (Rome Fiumicino) — id tags: ref=194; shapes: `###` x194
+- **LTAI** (Antalya) — id tags: ref=260, name=1; shapes: `###` x237, `###@` x24
+- **LTFM** (Istanbul) — id tags: ref=756; shapes: `@##` x189, `###` x181, `@#` x148, `@##@` x98
+- **LSZH** (Zurich) — id tags: ref=267; shapes: `@##` x177, `###` x83, `@#@` x6, `@@` x1
+
+Data (c) OpenStreetMap contributors, ODbL 1.0.

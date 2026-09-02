@@ -1,0 +1,104 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-only
+"""Report stand-identifier coverage per airport from the OSM cache.
+
+Writes ``reports/stand_coverage.md`` and prints the same table.
+"""
+
+from __future__ import annotations
+
+import gzip
+import json
+import sys
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO / "src"))
+
+from taxiout.airports import AIRPORTS  # noqa: E402
+from taxiout.coverage import shape_histogram, summarise  # noqa: E402
+from taxiout.osm import cache_path  # noqa: E402
+
+CACHE = REPO / "data" / "raw"
+OUT = REPO / "reports" / "stand_coverage.md"
+
+HEADER = (
+    "| ICAO | IATA | stands | with ID | coverage | verdict | rwy ways | taxiway | taxilane |\n"
+    "| ---- | ---- | -----: | ------: | -------: | ------- | -------: | ------: | -------: |"
+)
+
+
+def main() -> int:
+    rows, details, missing = [], [], []
+
+    for ap in AIRPORTS:
+        path = cache_path(CACHE, ap.icao)
+        if not path.exists():
+            missing.append(ap.icao)
+            continue
+        with gzip.open(path, "rt", encoding="utf-8") as fh:
+            payload = json.load(fh)
+        cov = summarise(ap.icao, payload)
+        rows.append(
+            f"| {cov.icao} | {ap.iata} | {cov.parking_positions} | {cov.with_any_id} "
+            f"| {cov.id_coverage:.0%} | {cov.verdict} | {cov.runways} "
+            f"| {cov.taxiways} | {cov.taxilanes} |"
+        )
+        tags = ", ".join(f"{k}={v}" for k, v in cov.id_tag_hist.most_common())
+        shapes = shape_histogram(cov.id_values)
+        shown = ", ".join(f"`{sh}` x{n}" for sh, n in shapes) or "n/a"
+        details.append(
+            f"- **{cov.icao}** ({ap.name}) — id tags: {tags or 'none'}; "
+            f"shapes: {shown}"
+        )
+
+    body = [
+        "# Stand identifier coverage (OpenStreetMap)",
+        "",
+        "Gate check for the taxi-distance feature: can a `STAND_mvt` value be",
+        "resolved to a physical location? Coverage is the share of",
+        "`aeroway=parking_position` features carrying any usable identifier tag.",
+        "",
+        "Verdict bands: STRONG >=90%, PARTIAL >=60%, WEAK >0%, UNUSABLE none.",
+        "",
+        "Two things this table does not say, both of which matter downstream.",
+        "`rwy ways` counts OSM ways, not physical runways -- OSM splits a runway",
+        "into however many pieces the mapping produced, so Schiphol reads as 10",
+        "for 6. And `with ID` counts *features* carrying a tag, not distinct",
+        "identifiers: several features routinely share one, so the joinable",
+        "count is materially lower. See [`taxi_routing.md`](taxi_routing.md),",
+        "which reports both after merging.",
+        "",
+        HEADER,
+        *rows,
+        "",
+        "## Identifier tags and formats in use",
+        "",
+        "Formats are given as *shapes* rather than as example identifiers:",
+        "`#` is a digit, `@` a letter, `.` anything else. So `@##` is a pier",
+        "letter followed by two digits, and `###` a bare three-digit numeric.",
+        "",
+        "This is the question that matters for the join -- whether to expect",
+        "bare numerics or a pier prefix, and whether `STAND_mvt` will need",
+        "zero-padding or suffix stripping -- and a shape answers it without",
+        "reproducing OpenStreetMap's contents. Listing real identifiers would",
+        "answer it too, and would put an extract of OSM into a repository that",
+        "ships GPLv3 with none in it.",
+        "",
+        *details,
+        "",
+        "Data (c) OpenStreetMap contributors, ODbL 1.0.",
+    ]
+    if missing:
+        body.insert(2, f"> Not yet cached: {', '.join(missing)}\n")
+
+    text = "\n".join(body) + "\n"
+    OUT.parent.mkdir(parents=True, exist_ok=True)
+    OUT.write_text(text, encoding="utf-8")
+    print(text)
+    print(f"written: {OUT.relative_to(REPO)}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
