@@ -37,8 +37,25 @@ Done, and reported rather than asserted:
 - Join layer (`taxiout.join`), challenge-data access and the hidden-field
   constants (`taxiout.challenge`), with tests on synthetic frames.
 
-Not done, and the honest list: nothing has been validated against a taxi time.
-Every number so far describes geometry and data, not prediction.
+*Added 2 September, Gate 1:*
+
+- Feature frame (`taxiout.features`) with a `FEATURE_SOURCES` registry naming
+  the raw columns behind every column, asserted against
+  `FORBIDDEN_FEATURE_INPUTS` both as a declaration and by poisoning the
+  forbidden fields and checking the frame does not move.
+- Unimpeded term (`taxiout.unimpeded`): the PRU 10th-percentile reference and
+  the geometric version fitted to reproduce it, with the calibration check
+  reported rather than assumed.
+- Validation harness (`taxiout.validation`) for the three splits below, and
+  the ablation ladder (`taxiout.models`, `scripts/run_baselines.py`) written
+  up in [`../reports/baseline.md`](../reports/baseline.md).
+- Submission writer (`scripts/make_submission.py`) over Stream B's
+  `taxiout.submission`, to a gitignored path the script verifies with git.
+
+Not done, and the honest list: the excess term does not exist yet, so every
+figure in the baseline report is a model with no congestion in it being asked
+to predict a quantity that is mostly congestion. Gates 2 and 2b are what close
+that.
 
 ## Licensing, and why it shapes the plan
 
@@ -107,6 +124,54 @@ record-quality component for the artefact rows, because without it no
 submission's RMSE means anything (*Tail handling* in
 [`modelling_notes.md`](modelling_notes.md)). Submit something valid early; a
 scored mediocre entry beats an unscored good one.
+
+*Outcome, 2 September.* The ladder runs end to end and is written up in
+[`../reports/baseline.md`](../reports/baseline.md), which the generator
+regenerates in under three minutes. Four things it settled, two of them
+against the geometry.
+
+The **calibration check** is the weak result. The geometric unimpeded term
+reproduces the PRU reference on seen pairs to 252 s RMSE against a median
+reference of 728 s — a 35% relative error, with the middle 80% of pairs
+between 0.69 and 1.53 times the reference, and a per-airport bias that
+changes sign between Frankfurt and Istanbul. A per-airport speed and five
+pooled shape coefficients are a coarse instrument, and the report says so.
+What the geometry buys has to be argued from the held-out-pair split, not
+from this table.
+
+On the **forward splits the geometry buys nothing**: December RMSE 442.2 s
+without it and 442.1 s with, July 677.2 against 676.4. That is the result
+*Validation* predicted before anything was fitted — a saturated identifier
+model has seen every pair it is asked about — and it is the reason a random
+K-fold would have been worthless.
+
+On the **held-out-pair split it buys something, and the number is small**.
+Over the rows the record-quality term leaves to the physical model, the
+identifier model's RMSE rises 35.8 s more on a pair it has never seen than
+the airport mean's does; adding the geometry block cuts that to 21.4 s. So
+the physical layer recovers about two fifths of what memorising the pair was
+worth. Real, measured, and not a headline: 9.7% of the top rung's splits fall
+in the geometry block against 36.9% on the stand identifier alone.
+
+The **frequency stratification is the cleanest version of that result**, and
+it falls exactly where the validation notes said it should. December
+validation RMSE, over the rows the record-quality term leaves alone, with and
+without the geometry block: 347.3 against 327.3 for pairs never seen in
+training, 446.1 against 426.1 for pairs seen one to ten times, 373.7 against
+369.3 for eleven to a hundred, and 316.4 against 316.7 — nothing, and very
+slightly worse — above a hundred. The geometry buys 20 s where the identifier
+has nothing to remember and nothing where it has plenty, which is the
+mechanism the entry claims and not merely its sign.
+
+The **record-quality term dominates the levels**, as the data review said it
+would: December RMSE 488.0 s for the airport mean, 391.1 with the term on
+top, 380.0 excluding the rows it covers. Fiumicino alone runs at 1,194.5 s
+in December and 409.1 excluding those rows.
+
+One environment note, because it cost an hour: pyarrow 19.0.0 cannot read the
+challenge parquet files at all (`Repetition level histogram size mismatch`, a
+page-index bug fixed in 19.0.1). The floor in `pyproject.toml` is still
+`>=15.0` and should be raised.
 
 **Gate 2 — cheap congestion** (~4–6 h). *Rewritten 2 September.* The
 original plan counted other departures' off-block events in a trailing window.
