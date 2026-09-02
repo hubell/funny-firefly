@@ -367,32 +367,64 @@ it reads nothing in `FORBIDDEN_FEATURE_INPUTS`.
 
 ## Tail handling
 
-Decided 2 September 2026. The target has a heavy tail: under 0.1% of
-training departures carry half the airport-mean squared error, and most of
-them are record-matching artefacts — a block time from an earlier day matched
-to a later take-off, so the "taxi" is a day and a quarter. They are flagged by
-two fields the ranking set exposes: no flight-side record, and a take-off more
-than four or twelve hours after schedule. The ranking set carries those flags
-at the training rate. The challenge's ranking page states the scoring rule —
-best RMSE across a team's submissions, over the January and July 2026
-movements, with a submission rejected if any template row is missing or
-extra — and states no exclusion of any row. Under that rule five such rows,
-predicted as ordinary taxi-outs, turn a 300 s model into a 512 s one.
+Decided 2 September 2026, and revised the same day once the term was built
+and the tail profiled for it. The figures below are quoted from
+[`../reports/tails.md`](../reports/tails.md), which is the one that is
+regenerated.
 
-The decision is to model them explicitly and say so: a separate record-quality
-component that predicts the conditional mean for flagged rows, kept apart from
-the physical model so the two cannot be confused, and a write-up that reports
-RMSE with and without the flagged rows. It is honest — the flags are inputs
-the organisers supplied, the same on both sides — and it follows the scoring
-rule as stated. It must also be presented for what it is. The conditional
-mean of a bucket that mixes ordinary taxi-outs with day-long artefacts is a
-number no aircraft ever produced; it is the RMSE-optimal prediction under the
-stated rule and nothing else, and the paper says so in those words, before a
-reviewer does, and gives the artefact analysis its own section rather than a
-footnote. The alternative, predicting only physically plausible taxi-outs and
-arguing the point in the paper, was set aside: it would place mid-table
-regardless of model quality, and the argument can be made just as well in a
-paper that also scores.
+The target has a heavy tail: under 0.1% of training departures carry half
+the airport-mean squared error. The data review read it as record-matching
+artifacts — a block time from an earlier day matched to a later take-off —
+and flagged it by two fields the ranking set exposes, no flight-side record
+and a take-off hours after schedule. Building the term found a different
+mechanism behind most of it. The departures recorded above two hours are
+82% Fiumicino, and for nine in ten of those the recorded off-block time sits
+within a minute of the *scheduled* departure time — over eight in ten within
+five seconds — while the take-off is hours later. The block time was
+defaulted to the schedule, so the recorded taxi-out is take-off minus
+schedule: the lag, which every ranking departure exposes. The day-shift is
+real but small, a dozen rows a year, a day plus an ordinary taxi, in the same
+cells. No other airport's cells carry either at a material rate.
+
+The scoring rule counts these rows. The ranking page says teams "will be
+ranked based on the best Root Mean Square Error (RMSE) achieved across their
+submissions", and the ranking script "will issue an error if ... any rows are
+missing", so every template row is scored and none is excluded. Five such
+rows predicted as ordinary taxi-outs turn a 300 s model into a 512 s one.
+
+The decision is to model them explicitly, as the third term of the
+decomposition, and to say what the term is. `taxiout.tails` measures, per
+(airport, flight-record presence, lag band) cell on training rows, how often
+the block time was defaulted and what the remaining rows average, and
+predicts for a row in a covered cell `share × lag + (1 − share) × rest_mean`
+— the conditional mean, computed knowing the mechanism. A cell is covered
+when it has at least five rows and a defaulted share of at least five
+percent; at the full-year fit that is three cells, all at Fiumicino, and 107
+of the 215,876 ranking rows, all in January. Every other row falls through
+to the physical model, which is fitted with the covered rows excluded and
+validated on every row, with RMSE reported with and without the term.
+
+Two forms were measured on the forward splits and set aside. A plain cell
+mean with thin cells pooled over airports — the first proposal — carries one
+airport's artifact rate to airports that have none and is the worst form
+tried on every split. The plain cell mean without pooling loses 12 s on
+December and 33 s on July to the mixture, because the mixture predicts each
+artifact's own value rather than the cell's average of them. An extra lag
+edge at two hours helped one split and hurt the other and is not adopted.
+Leaving thin and clean cells to the physical model rather than pooling is
+the choice with an exposure: an airport whose feed starts defaulting block
+times in 2026 is not covered, and no rule fitted on 2025 could cover it. The
+report states the arithmetic.
+
+It must be presented for what it is. The term is the RMSE-optimal
+prediction under the stated scoring rule for rows whose recorded value no
+aircraft produced; it is a conditional mean, not a taxi time, and the paper
+says so in those words, before a reviewer does, gives the artifact analysis
+its own section rather than a footnote, and reports the physical model
+without the term wherever it reports it with. The alternative, predicting
+only physically plausible taxi-outs and arguing the point in the paper, was
+set aside: it would place mid-table regardless of model quality, and the
+argument can be made just as well in a paper that also scores.
 
 ## Validation, before any model exists
 
@@ -432,7 +464,7 @@ The validation therefore needs to be, at minimum:
 - **Per-airport RMSE reported alongside the pooled figure.** The test set is
   weighted towards the three July airports; a pooled-optimal model could be a
   Frankfurt–Heathrow–Schiphol-optimal model.
-- **RMSE with and without the flagged artefact rows**, per *Tail handling*
+- **RMSE with and without the flagged artifact rows**, per *Tail handling*
   above, so the physical model's contribution is visible underneath the
   record-quality component's.
 
