@@ -366,8 +366,8 @@ distinct stand identifiers in the matrix. It is well below the stand count
 everywhere, because several OSM features routinely share one identifier -- so
 the coverage report's "share of features carrying a tag" overstates what can
 actually be joined against `STAND_mvt`. The worst case in scope is
-{worst_id_loss['icao']}: {worst_id_loss['stands_total']} mapped stands,
-{worst_id_loss['matrix_stands']} joinable identifiers.
+{worst_id_loss["icao"]}: {worst_id_loss["stands_total"]} mapped stands,
+{worst_id_loss["matrix_stands"]} joinable identifiers.
 
 {head}
 {chr(10).join(table)}
@@ -482,9 +482,9 @@ thing to test when the buckets land.
 **That a matrix cell describes the stand its identifier names.** Where several
 OSM features share one identifier the cell takes the feature closest to their
 mean, and `spread_m` records how far apart they were. Usually that is metres.
-Sometimes it is not: {worst_spread['icao']} has an identifier whose features
-disagree by {worst_spread['max_spread_m']:.0f} m against a median taxi distance
-of {worst_spread['taxi_median_m']:.0f} m, and {ambiguous_total} identifiers across all
+Sometimes it is not: {worst_spread["icao"]} has an identifier whose features
+disagree by {worst_spread["max_spread_m"]:.0f} m against a median taxi distance
+of {worst_spread["taxi_median_m"]:.0f} m, and {ambiguous_total} identifiers across all
 airports disagree by more than 250 m. Those cells are not uncertain by a metre
 or two; they are ambiguous about which piece of pavement the identifier means.
 `spread_m` and `snap_max_m` exist so such cells can be down-weighted or dropped

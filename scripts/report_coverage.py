@@ -48,8 +48,7 @@ def main() -> int:
         shapes = shape_histogram(cov.id_values)
         shown = ", ".join(f"`{sh}` x{n}" for sh, n in shapes) or "n/a"
         details.append(
-            f"- **{cov.icao}** ({ap.name}) — id tags: {tags or 'none'}; "
-            f"shapes: {shown}"
+            f"- **{cov.icao}** ({ap.name}) — id tags: {tags or 'none'}; shapes: {shown}"
         )
 
     body = [
