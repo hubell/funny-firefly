@@ -101,33 +101,45 @@ from the stand. Attaching directly leaves the taxi-round-or-backtrack question
 to the cost function, where the penalty can express it, and puts the backtrack
 in `backtrack_m` where it can be seen.
 
+## What the challenge data turned out to contain
+
+Settled on 2 September 2026, the day the data landed, by
+[`../reports/data_review.md`](../reports/data_review.md); the figures below
+are quoted from it and it is the one that is regenerated.
+
+**The OSM stand refs do match `STAND_mvt`, after a staged normalisation.**
+Exact matching gives 57–99% by airport. Folding case and whitespace, then
+stripping leading zeros in digit runs, then one trailing letter after a
+digit — each stage applied to both sides and tried only for rows the previous
+stage left unmatched — gives 87% (Munich) to 99.9% (Istanbul), 96% of
+departures overall, in both the training year and the ranking set. Each
+stage was explained by inspecting what it fixed, never by what it did to a
+validation error: the whitespace is inside OSM's refs at Frankfurt, Schiphol's
+movement data zero-pads where OSM does not, and Munich and Istanbul map split
+stands as lettered halves where the movement data names the whole. The
+remainder is mostly stands OSM does not have — whole numeric blocks at Munich
+and Barcelona — and those rows fall back to airport-level features.
+Implementation and the ambiguity bookkeeping it adds (a coarser key can fold
+several OSM identifiers onto one; the collapsed cell records how many and how
+far apart) are in `taxiout.join`.
+
+**Antalya is not in the data.** LTAI has no rows in training or ranking,
+though the organisers list it and the row total matches theirs. The 45%
+coverage question is moot; the geometry stays in the pipeline unused.
+
+**Runway assignment is given.** `RUNWAY_mvt` and `STAND_mvt` are present for
+every ranking departure, so the matrix applies directly and nothing is
+marginalised.
+
+**The ranking set is a census where it is present at all.** January 2026
+covers all ten airports at the same daily volumes as January 2025; July 2026
+covers Frankfurt, Heathrow and Schiphol only. Congestion counts need no
+coverage normalisation, and those three airports are 53% of the test rows.
+
+**The off-block time is blanked, and that changes the feature rules.** See
+*Leakage watch* below, which was rewritten for it.
+
 ## Open questions
-
-**Do OSM stand refs actually match `STAND_mvt`?** Coverage measures whether an
-identifier *exists*, not whether it matches the challenge's string. The formats
-look plausible and are reported as *shapes* rather than values in
-[`../reports/stand_coverage.md`](../reports/stand_coverage.md) — bare numerics
-dominate at MUC, BCN, FCO and MAD, a pier letter plus two digits at CDG, AMS and
-ZRH, and IST mixes both. Shapes rather than examples because a list of real
-identifiers would be an extract of OSM, and this repository carries none.
-
-The join rate is unknown until the buckets arrive. **This is the first thing to
-test on real data.** The shapes say what normalisation to expect: zero-padding
-where bare numerics run to two and three digits, suffix stripping where a
-trailing letter marks a split stand, and case folding throughout.
-
-**Antalya (LTAI) is at 45% coverage.** The one airport where stand→runway
-distance may not be derivable for most movements. Options, in preference order:
-fall back to apron-centroid geometry; treat the airport with a separate
-stand-agnostic feature set; or accept degraded features there and let the model
-learn an airport-level offset. Decide once the join rate is known — the real
-figure could be better or worse than 45% depending on which stands actually
-appear in the movement data.
-
-**Runway assignment is given, not predicted.** `RUNWAY_mvt` is present in the
-ranking set, so taxi distance can be computed directly rather than marginalised
-over a runway-assignment model. Worth confirming against the ranking file, since
-it changes the feature construction substantially.
 
 **Do departures taxi to the threshold?** The matrix gives full-length
 distances. Intersection departures are routine and shorten the taxi materially,
@@ -195,10 +207,12 @@ route uses. Counting how many *other* departures in a trailing window are on
 routes that share edges with this one gives a congestion measure that is
 geometric rather than aggregate — two aircraft leaving opposite ends of the
 field at the same moment do not interact, and a count of concurrent movements
-cannot tell the difference. It is built entirely from off-block times and
-runway assignments, both given, so it satisfies both leakage conditions above.
-This is the strongest idea latent in the work so far and the one most likely to
-be genuinely new.
+cannot tell the difference. It was to be built from off-block times and runway
+assignments; the off-block times turned out to be blanked, so it is built from
+take-off times and runway assignments instead — the other departures on
+overlapping routes in a window before the subject's take-off — which the
+ranking set does expose (see *Leakage watch*). This is the strongest idea
+latent in the work so far and the one most likely to be genuinely new.
 
 **Intersection-departure offsets.** `backtrack_m` isolates the along-runway
 component only where the mapping is defective. For a correctly mapped runway
@@ -223,54 +237,162 @@ holding point is a static proxy for where queueing accrues.
 ## Deliberate non-goals
 
 Not attempting to reconstruct the ATFM slot or regulation state. The rationale
-page names ATFM as a driver of taxi-out variability, but the challenge data does
-not expose regulation identifiers, and inferring them from timestamps risks
-leakage from the target. Congestion is instead approached through observable
-concurrent movements.
+page names ATFM as a driver of taxi-out variability, but the challenge data
+does not expose regulation identifiers or slot times. What it does expose is
+the delay a regulation causes before departure: the flight side carries the
+initial off-block estimate (`IOBT_flt`), the filed one (`EOBT_1_flt`) and the
+last one the Network Manager held (`LOBT_flt`), all present for test rows,
+and `LOBT − IOBT` is how far the planned off-block moved before the aircraft
+left — from ATFM, from the airline, from the airport, without saying which.
+It is used as a regime indicator, and the write-up says it is a proxy for
+pre-departure delay of any cause, not for ATFM specifically. Congestion itself
+is approached through observable movements.
+
+## The model, stated as a decomposition
+
+Fixed on review, 2 September 2026. The organisers describe the use of a
+taxi-out estimate as post-operations analysis: identifying constrained
+intervals and measuring "excess fuel burnt/CO2 production compared to
+unconstrained status"
+([rationale](https://ansperformance.eu/study/data-challenge/dc2026/rationale.html)).
+That is a decomposition, and the model is stated as one:
+
+    taxi-out = unimpeded(geometry) + excess(congestion, regime) + record-quality term
+
+**Unimpeded.** The time an aircraft would take from this stand to this runway
+with nothing in its way. The PRU's additional-taxi-out-time indicator defines
+it empirically, as the 10th percentile of observed taxi-out per (stand,
+runway) pair — which exists only for pairs that have been observed often
+enough. The geometry supplies the same quantity as a function of route
+distance and shape, and so extends the reference to pairs seen rarely or
+never. Distance becomes time through a speed fitted on training data; the
+route descriptors (turn angle, junctions, junction-free running) modulate it,
+per Ravizza et al.
+
+**Excess.** Everything above unimpeded: runway queueing, surface congestion,
+de-icing and low-visibility procedures, pre-departure holds. Built from what
+the ranking set exposes about surrounding traffic — take-offs, arrivals'
+landings, on-blocks and taxi-in times, schedules, runway configuration —
+and, as regime indicators, weather flags per airport-hour and the flight
+plan's own delay signal (see *Deliberate non-goals*).
+
+**Record-quality term.** A separate component for rows the data flags as
+record-matching artefacts, whose recorded taxi-out no aircraft produced. It
+exists because the stated scoring rule counts those rows; it is kept apart
+so it cannot be mistaken for either of the other two (*Tail handling*).
+
+The ablation ladder (*Validation*) is the decomposition read bottom-up: each
+rung adds one term, and the held-out-pair split measures the one claim that
+distinguishes this entry — that the unimpeded term carries over to pairs the
+model never saw.
 
 ## Leakage watch
 
-Two conditions, both of which a congestion feature must satisfy. The first was
-obvious; the second was not, and is the one that would have done real damage.
+Rewritten on 2 September 2026 once the ranking set had been read, because the
+version written before it assumed the wrong anchor. What the ranking set
+exposes for a departure — measured in
+[`../reports/data_review.md`](../reports/data_review.md) — is its take-off
+time (`MVT_TIME_UTC_mvt`, to the second), its scheduled time, the flight
+plan's estimated off-block times, and its stand and runway. `BLOCK_TIME_UTC_mvt`
+is blanked along with the target, for every departure in the ranking months.
 
-**Causality.** Every event contributing to a feature must have occurred strictly
-before the aircraft's own off-block time. Any window extending past
-`BLOCK_TIME_UTC_mvt` leaks the target. This is what rules out the strongest
-feature in the literature: Idris's takeoff queue size Q counts departures
-between the subject's own pushback and its own take-off, so its value is a
-function of the answer. Ravizza and Chen's Q has the same shape. Published RMSE
-figures resting on them are not operationally achievable and are not a fair
-benchmark.
+That settles what kind of problem this is. Operationally, taxi-out is predicted
+at pushback, when the actual off-block time is known and the take-off time is
+not. The challenge poses the reverse: the take-off time is given and the
+off-block time is what is missing. It is a post-hoc estimation task — and
+that is the use the organisers state, "post-operations analysis"
+([rationale](https://ansperformance.eu/study/data-challenge/dc2026/rationale.html)),
+not a departure-time forecast. The rules below are written for it; the
+write-up states both framings and builds to the challenge's. The alternative
+— anchoring only on schedules and filed estimates and reading no actual
+take-off time at all — is principled for a pushback-time forecaster and was
+considered and set aside: it answers a question the challenge did not ask,
+and forgoes the strongest signal the data exposes.
 
-**Availability.** Every *field* read from those events must be one the ranking
-set also exposes for test rows. This is a separate condition and the causal
-version of the queue feature fails it. Counting aircraft that have pushed back
-but not yet taken off means
+**One rule with two halves.** A feature may read any field that the ranking
+set exposes for the rows it reads from, and no field that it hides or that is
+a noisy copy of one it hides. Concretely:
 
-    N(t) = #{AOBT_j <= t} - #{AOBT_j + TAXITIME_j <= t}
+- *Hidden:* `BLOCK_TIME_UTC_mvt` and `TAXITIME_SEC_mvt` of any **departure**
+  in the same month — the subject's or a neighbour's. This is the condition
+  that bites. A trailing window of other departures' pushbacks, the feature
+  the first version of this plan called Gate 2, is unavailable at inference
+  for exactly the reason the queue-size feature was: the field it counts is
+  blanked for every departure in January and July 2026. So is anything that
+  subtracts other departures' taxi times. Both were oracle-quality in training
+  and would have been noise on the leaderboard.
+- *Excluded by decision:* `AOBT_3_flt`. It survives in the ranking set, but it
+  is a minute-resolution Network Manager off-block that sits a median 51 s
+  from the blanked field with an interquartile range of five minutes; as a
+  single predictor it is worth no more than the filed EOBT lag. Not an oracle,
+  but a noisy copy of a hidden field, and an entry judged on originality has
+  nothing to gain from it. The organisers say they monitor for attempts to
+  exploit the ranking process; this is the one place it could be alleged.
+- *Available, and used:* every departure's take-off time, scheduled time and
+  filed estimates; every arrival's landing time, on-block time and taxi-in
+  time, which the ranking set gives in full; stand, runway, aircraft type,
+  operator, and the flight-side categoricals; and whether the flight-side
+  join exists at all, which turns out to matter.
 
-and `TAXITIME_j` is the hidden target. In January and July 2026 the other
-movements in the window are themselves ranking-set rows, so the subtrahend is
-missing exactly where it is needed. Training on true values and scoring on a
-proxy would make the model lean hard on a feature that is oracle-quality in
-training and noise at inference — which shows up as an unexplained gap between
-validation and leaderboard, the one failure mode a solo entrant cannot afford to
-debug blind.
+The constants are in `taxiout.challenge` (`HIDDEN_FOR_TEST_DEPARTURES`,
+`EXCLUDED_BY_DECISION`, `FORBIDDEN_FEATURE_INPUTS`) so that the feature layer
+can be tested against them rather than against a paragraph.
 
-So congestion features are built from inputs only: departures with off-block in
-a trailing window, the same restricted to the subject's runway, the same
-restricted to its pier. Whatever is chosen must be constructed identically on
-both sides.
+**What congestion is built from, then.** Take-offs from the subject's runway
+and from all runways in trailing windows before its own take-off — the
+runway's realised throughput, which under post-hoc rules is legitimate and
+under operational rules would not be. Arrivals: landings and on-blocks in the
+same windows, and the taxi-in times of arrivals that reached their stand in
+the window, which is a direct measurement of surface congestion available on
+both sides. Scheduled departures in windows around the subject's schedule,
+which is demand and is causal under either framing. The runway configuration
+in force, from other movements' designators. Each is constructed identically
+on both sides, with the subject excluded from its own count and the tie-break
+for an equal timestamp fixed explicitly.
 
-Two smaller traps worth writing down before they are hit. A window running
-*forward* from the subject's off-block time is technically computable (off-block
-times are given) but is not knowable operationally and correlates with the
-subject's own queueing — forbidden. And the subject must be excluded from its
-own count, with the tie-break for an exactly-equal timestamp fixed explicitly;
-that is precisely the class of bug that produces a suspiciously good feature.
+**What is still forbidden even under post-hoc rules.** Reading the target of
+any departure; reading `AOBT_3_flt`; and recovering the blanked off-block time
+from outside the challenge data — ADS-B surface tracks for the ranking months
+would do it, and using them would be reconstructing a hidden variable through
+a side channel, whatever their licence. External data is for calibrating the
+physical layer on 2025 and nothing else.
+
+**The literature's benchmark figures do not transfer.** Idris's takeoff queue
+size counts departures between the subject's pushback and its take-off, a
+function of the answer; published RMSEs resting on it are not a fair
+comparison in either framing.
 
 Every congestion feature needs an explicit as-of time and a test that asserts
-both conditions.
+it reads nothing in `FORBIDDEN_FEATURE_INPUTS`.
+
+## Tail handling
+
+Decided 2 September 2026. The target has a heavy tail: under 0.1% of
+training departures carry half the airport-mean squared error, and most of
+them are record-matching artefacts — a block time from an earlier day matched
+to a later take-off, so the "taxi" is a day and a quarter. They are flagged by
+two fields the ranking set exposes: no flight-side record, and a take-off more
+than four or twelve hours after schedule. The ranking set carries those flags
+at the training rate. The challenge's ranking page states the scoring rule —
+best RMSE across a team's submissions, over the January and July 2026
+movements, with a submission rejected if any template row is missing or
+extra — and states no exclusion of any row. Under that rule five such rows,
+predicted as ordinary taxi-outs, turn a 300 s model into a 512 s one.
+
+The decision is to model them explicitly and say so: a separate record-quality
+component that predicts the conditional mean for flagged rows, kept apart from
+the physical model so the two cannot be confused, and a write-up that reports
+RMSE with and without the flagged rows. It is honest — the flags are inputs
+the organisers supplied, the same on both sides — and it follows the scoring
+rule as stated. It must also be presented for what it is. The conditional
+mean of a bucket that mixes ordinary taxi-outs with day-long artefacts is a
+number no aircraft ever produced; it is the RMSE-optimal prediction under the
+stated rule and nothing else, and the paper says so in those words, before a
+reviewer does, and gives the artefact analysis its own section rather than a
+footnote. The alternative, predicting only physically plausible taxi-outs and
+arguing the point in the paper, was set aside: it would place mid-table
+regardless of model quality, and the argument can be made just as well in a
+paper that also scores.
 
 ## Validation, before any model exists
 
@@ -290,10 +412,15 @@ nothing, and the README's central claim would go unexamined.
 
 The validation therefore needs to be, at minimum:
 
-- **Blocked and forward in time.** Train Jan–Oct 2025, validate Nov–Dec; and
-  train Jan–Jun, validate Jul, because the test set is a January and a July.
-  Never random K-fold on rows: congestion is autocorrelated over hours, so
-  neighbouring departures share queue state. Block by airport-day at least.
+- **Blocked and forward in time.** Two splits, fixed on 2 September 2026 once
+  the ranking set's shape was known. Train January–November 2025, validate
+  December, at all ten airports: the winter proxy for a January test month
+  that the training year cannot hold out forward (its only January is its
+  first month). Train January–June, validate July, reported for Frankfurt,
+  Heathrow and Schiphol separately, because those three are the whole of the
+  July test set and 53% of the test rows. Never random K-fold on rows:
+  congestion is autocorrelated over hours, so neighbouring departures share
+  queue state. Block by airport-day at least.
 - **A held-out-pair diagnostic.** `GroupKFold` on (stand_id, designator) within
   airport, holding out whole pairs. This is the only split that measures what
   the geometry is for, and the gap between it and the temporal split *is* the
@@ -302,9 +429,12 @@ The validation therefore needs to be, at minimum:
   pair appeared in training: 0, 1–10, 11–100, >100. Geometry should buy most in
   the first two buckets. If it does not, the physical layer is decoration, and
   the write-up should say so — that is still an honest and publishable result.
-- **Per-airport RMSE reported alongside the pooled figure.** LTFM and LFPG will
-  otherwise dominate, and a pooled-optimal model could be an Istanbul-optimal
-  model.
+- **Per-airport RMSE reported alongside the pooled figure.** The test set is
+  weighted towards the three July airports; a pooled-optimal model could be a
+  Frankfurt–Heathrow–Schiphol-optimal model.
+- **RMSE with and without the flagged artefact rows**, per *Tail handling*
+  above, so the physical model's contribution is visible underneath the
+  record-quality component's.
 
 The ablation ladder that settles the question: airport mean; the PRU
 10th-percentile-per-(stand, runway) reference; a tuned model on one-hot

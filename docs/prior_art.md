@@ -52,8 +52,13 @@ driver.
 chronological split: a naive train-mean baseline at 216 s RMSE, the EUROCONTROL
 PRU reference method at 199 s, gradient boosting at 78 s, and a graph neural
 network at 76 s. The architecture bought 2 s; the feature set bought the rest.
-For eleven pooled airports on public data, anything below roughly 90 s RMSE
-should prompt a leakage audit before celebration.
+Those figures are on a cleaned single-airport target. On this challenge's
+data the airport-mean predictor scores 515 s with the tail and 361 s without
+([`../reports/data_review.md`](../reports/data_review.md)), so an absolute
+threshold transfers badly; the audit trigger here is a ratio. Lim's gradient
+boosting cut the naive baseline by roughly 64%. A model that cuts the ex-tail
+airport-mean RMSE by more than that, or that shows a validation-to-leaderboard
+gap, gets a leakage audit before celebration.
 
 ## The leakage trap this field is full of
 
@@ -78,12 +83,17 @@ field simply is not there at inference. Training on true values and scoring on a
 proxy would leave the model leaning on a feature that is oracle-quality in
 training and noise in the test months.
 
-So this entry implements neither. Congestion is built from inputs only —
-departures with off-block in a trailing window, the same restricted to the
-subject's runway or pier — with the identical construction on both sides. The
-second condition that catches this, availability, is stated alongside causality
-under *Leakage watch* in [`modelling_notes.md`](modelling_notes.md); it was
-added after this reading, not before it.
+So this entry implements neither. The first replacement this paragraph
+proposed — departures with off-block in a trailing window, restricted to the
+subject's runway or pier — failed the same availability test once the ranking
+set was opened: the off-block time is blanked for every departure in the
+ranking months, not only the subject's. Congestion is therefore built from
+what the ranking set does expose for other movements — take-offs, schedules,
+and arrivals' landings, on-blocks and taxi-in times — with the identical
+construction on both sides. The availability condition is stated alongside
+causality under *Leakage watch* in
+[`modelling_notes.md`](modelling_notes.md); it was added after this reading,
+not before it, and it caught the plan's own feature second.
 
 ## Prior art on OSM airport graphs
 
@@ -119,13 +129,13 @@ usefulness. Assessed rather than assumed.
 | ------ | ------- | -------- |
 | OpenStreetMap | ODbL 1.0 | **In use.** Attribution plus share-alike on derived databases — the distance matrices are a Derivative Database and ship under ODbL, not GPLv3 |
 | OurAirports | Public domain | **In use** as a cross-check on runway designators and lengths; `le_heading_degT` is degrees *true*, so no magnetic model is needed |
-| Iowa State Mesonet ASOS | Public domain | **Candidate** for weather. Covers all 11 ICAOs including LTFM. European caveat: `vsby` saturates at 6.21 mi, precisely where low-visibility procedures matter, so the raw METAR string must be parsed instead |
+| Iowa State Mesonet ASOS | Public domain | **In use from Gate 2b** (decided on review, 2 September 2026) as per-airport-hour regime flags, fetched by script and cached like the OSM data so a reader can re-fetch it. Covers all 11 ICAOs including LTFM. European caveat: `vsby` saturates at 6.21 mi, precisely where low-visibility procedures matter, so the raw METAR string must be parsed instead |
 | ERA5 via CDS | CC-BY-4.0 | **Candidate** for the precipitation, snowfall and ceiling that European METAR omits |
 | OPDI (opdi.aero) | **No open licence found** | **Excluded pending clarification.** Its T04–T06 milestones are exactly taxi-out and would be enormously useful, but the governing EUROCONTROL notice is non-commercial and no-derivatives. Not openly licensed in the OSI sense, whatever its spirit |
 | EUROCONTROL ADRR / DDR | R&D use, no redistribution | **Excluded.** Not an open licence |
 | AIXM / AMDB / EAD | Restricted or commercial | **Excluded.** No openly licensed pan-European aerodrome mapping database exists; OSM is the only practical source |
 | X-Plane `apt.dat` | **Unverifiable** | **Excluded.** Has exactly the taxi network wanted, but the widely repeated GPL-2 claim traces to forum posts, not to the publisher |
-| OpenSky historical ADS-B | Research use, no redistribution | **Not a backbone.** Usable to audit surface coverage, but application-gated and non-redistributable, and surface coverage at these airports is unmeasured — published assessments call OpenSky ground coverage limited, and recent surface studies converged on LSZH because a receiver was installed at the airport |
+| OpenSky historical ADS-B | Research use, citation required, no redistribution of raw data | **Diagnostics only, never a model input** (decided on review, 2 September 2026). The prize rules require additional datasets to be "openly available under an open source license", which research-use is not, so nothing derived from OpenSky enters a feature or a fitted parameter. 2025 surface tracks at the ten airports, access requested, would validate OSM routes against routes flown and report speed distributions and intersection-departure evidence in the paper. Never the ranking months: recovering the blanked off-block time from tracks would be reconstructing a hidden variable through a side channel, whatever the licence. Surface coverage at these airports is unmeasured — published assessments call OpenSky ground coverage limited, and recent surface studies converged on LSZH because a receiver was installed at the airport — so a coverage audit comes first |
 
 ## Sources
 
@@ -153,6 +163,10 @@ usefulness. Assessed rather than assumed.
 - EUROCONTROL PRU, *Additional Taxi-Out Time Performance Indicator*, 2023 — the
   10th-percentile-per-(stand, runway) reference definition, used here as a
   documented baseline to beat.
+- EUROCONTROL PRC, *PRC Data Challenge 2026* — rationale, data, ranking and
+  eligibility pages, <https://ansperformance.eu/study/data-challenge/dc2026/>;
+  and the 2025 outcome page with the selection committee's reviews,
+  <https://ansperformance.eu/study/data-challenge/dc2025/outcome.html>.
 - `traffic`, <https://github.com/xoolive/traffic> (MIT).
 - OpenStreetMap copyright, <https://www.openstreetmap.org/copyright>.
 - OurAirports data, <https://ourairports.com/data/>.
