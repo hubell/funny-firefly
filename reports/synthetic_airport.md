@@ -17,7 +17,7 @@ conserved, fixed points reached, no route shorter than the straight
 line -- because nobody has the right answer for a real stand. This
 field has one. Every planted repair fired once where it was planted;
 every one of the 32 matrix cells matches its hand derivation to
-within 11 mm and 0.22 degrees, with the
+within 11 mm and 0.10 degrees, with the
 integer descriptors exact; the runway-penalty crossovers fall where
 the arithmetic puts them. The first draft of the field also found
 three things in the pipeline, each below its working tolerance and
@@ -137,29 +137,29 @@ column says whether all three did.
 | cell | turn, hand | pipeline | sharp | junctions | junction-free m, hand | pipeline | backtrack, hand | pipeline | other runway, hand | pipeline | crossings | integers match |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
 | 1 to 09 | 270.0 | 270.00 | 3 | 2 | 150.0 | 150.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0 | yes |
-| 1 to 18 | 450.0 | 449.78 | 5 | 5 | 0.0 | 0.0 | 100.0 | 100.0 | 500.0 | 500.0 | 1 | yes |
-| 1 to 27 | 270.0 | 269.89 | 3 | 3 | 150.0 | 150.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0 | yes |
-| 1 to 36 | 450.0 | 449.78 | 5 | 5 | 0.0 | 0.0 | 900.0 | 900.0 | 500.0 | 500.0 | 1 | yes |
-| 2 to 09 | 270.0 | 270.11 | 3 | 2 | 150.0 | 150.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0 | yes |
+| 1 to 18 | 450.0 | 449.90 | 5 | 5 | 0.0 | 0.0 | 100.0 | 100.0 | 500.0 | 500.0 | 1 | yes |
+| 1 to 27 | 270.0 | 270.00 | 3 | 3 | 150.0 | 150.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0 | yes |
+| 1 to 36 | 450.0 | 449.90 | 5 | 5 | 0.0 | 0.0 | 900.0 | 900.0 | 500.0 | 500.0 | 1 | yes |
+| 2 to 09 | 270.0 | 270.00 | 3 | 2 | 150.0 | 150.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0 | yes |
 | 2 to 18 | 450.0 | 449.90 | 5 | 5 | 0.0 | 0.0 | 100.0 | 100.0 | 500.0 | 500.0 | 1 | yes |
 | 2 to 27 | 270.0 | 270.00 | 3 | 3 | 150.0 | 150.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0 | yes |
 | 2 to 36 | 450.0 | 449.90 | 5 | 5 | 0.0 | 0.0 | 900.0 | 900.0 | 500.0 | 500.0 | 1 | yes |
-| 3 to 09 | 270.0 | 270.11 | 3 | 2 | 450.0 | 450.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0 | yes |
+| 3 to 09 | 270.0 | 270.00 | 3 | 2 | 450.0 | 450.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0 | yes |
 | 3 to 18 | 450.0 | 449.90 | 5 | 5 | 300.0 | 300.0 | 100.0 | 100.0 | 500.0 | 500.0 | 1 | yes |
 | 3 to 27 | 270.0 | 270.00 | 3 | 3 | 450.0 | 450.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0 | yes |
 | 3 to 36 | 450.0 | 449.90 | 5 | 5 | 300.0 | 300.0 | 900.0 | 900.0 | 500.0 | 500.0 | 1 | yes |
-| 4 to 09 | 270.0 | 270.11 | 3 | 2 | 750.0 | 750.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0 | yes |
+| 4 to 09 | 270.0 | 270.00 | 3 | 2 | 750.0 | 750.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0 | yes |
 | 4 to 18 | 450.0 | 449.90 | 5 | 5 | 600.0 | 600.0 | 100.0 | 100.0 | 500.0 | 500.0 | 1 | yes |
 | 4 to 27 | 270.0 | 270.00 | 3 | 3 | 750.0 | 750.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0 | yes |
 | 4 to 36 | 450.0 | 449.90 | 5 | 5 | 600.0 | 600.0 | 900.0 | 900.0 | 500.0 | 500.0 | 1 | yes |
-| 9 to 09 | 180.0 | 180.06 | 2 | 1 | 150.0 | 150.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0 | yes |
-| 9 to 18 | 360.0 | 359.84 | 4 | 4 | 0.0 | 0.0 | 100.0 | 100.0 | 500.0 | 500.0 | 1 | yes |
-| 9 to 27 | 180.0 | 179.94 | 2 | 2 | 150.0 | 150.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0 | yes |
-| 9 to 36 | 360.0 | 359.84 | 4 | 4 | 0.0 | 0.0 | 900.0 | 900.0 | 500.0 | 500.0 | 1 | yes |
+| 9 to 09 | 180.0 | 180.00 | 2 | 1 | 150.0 | 150.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0 | yes |
+| 9 to 18 | 360.0 | 359.90 | 4 | 4 | 0.0 | 0.0 | 100.0 | 100.0 | 500.0 | 500.0 | 1 | yes |
+| 9 to 27 | 180.0 | 180.00 | 2 | 2 | 150.0 | 150.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0 | yes |
+| 9 to 36 | 360.0 | 359.90 | 4 | 4 | 0.0 | 0.0 | 900.0 | 900.0 | 500.0 | 500.0 | 1 | yes |
 | 10 to 09 | 270.0 | 270.00 | 3 | 2 | 150.0 | 150.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0 | yes |
-| 10 to 18 | 450.0 | 449.78 | 5 | 5 | 0.0 | 0.0 | 100.0 | 100.0 | 500.0 | 500.0 | 1 | yes |
-| 10 to 27 | 270.0 | 269.89 | 3 | 3 | 150.0 | 150.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0 | yes |
-| 10 to 36 | 450.0 | 449.78 | 5 | 5 | 0.0 | 0.0 | 900.0 | 900.0 | 500.0 | 500.0 | 1 | yes |
+| 10 to 18 | 450.0 | 449.90 | 5 | 5 | 0.0 | 0.0 | 100.0 | 100.0 | 500.0 | 500.0 | 1 | yes |
+| 10 to 27 | 270.0 | 270.00 | 3 | 3 | 150.0 | 150.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0 | yes |
+| 10 to 36 | 450.0 | 449.90 | 5 | 5 | 0.0 | 0.0 | 900.0 | 900.0 | 500.0 | 500.0 | 1 | yes |
 | 12 to 09 | 270.0 | 270.00 | 3 | 4 | 150.0 | 150.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0 | yes |
 | 12 to 18 | 270.0 | 270.00 | 3 | 3 | 0.0 | 0.0 | 100.0 | 100.0 | 500.0 | 500.0 | 1 | yes |
 | 12 to 27 | 270.0 | 270.00 | 3 | 3 | 150.0 | 150.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0 | yes |
@@ -169,7 +169,7 @@ column says whether all three did.
 | 13 to 27 | 270.0 | 270.00 | 3 | 3 | 150.0 | 150.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0 | yes |
 | 13 to 36 | 270.0 | 270.00 | 3 | 3 | 0.0 | 0.0 | 900.0 | 900.0 | 500.0 | 500.0 | 1 | yes |
 
-The largest turn discrepancy is 0.22 degrees.
+The largest turn discrepancy is 0.10 degrees.
 
 ## Four cells, worked
 
@@ -195,7 +195,7 @@ backtrack 0.0 m, other runway 0.0 m,
 **Stand 9 to 27.** a bare node 120 m north of the apron exit: no lead-in, snap 120 to the junction at (600,350); down the link 200; east along A: 300, 600.0005, 900.0004; down A4: 150. Route 2,150.0 m, taxi 2,270.0 m. Two turns; junctions (600,150) and (1500,149.2).
 
 Pipeline: route 2,150.0010 m, taxi 2,270.0010 m,
-turn 179.94 deg, 2 sharp,
+turn 180.00 deg, 2 sharp,
 2 junctions, junction-free 150.0 m,
 backtrack 0.0 m, other runway 0.0 m,
 0 crossings.
@@ -273,7 +273,7 @@ existing node is updated rather than kept, so a node merged across a
 from the way as drawn, but an edge split later is re-measured from
 node positions -- so a split on an edge at a shifted node books the
 shift once. Measured on a three-way probe: 1,299.2001 m drawn,
-1,299.0028 m in the graph, 197 mm missing.
+1,299.2028 m in the graph, -3 mm missing.
 Within the 0.5 m merge tolerance by construction, so no route on a
 real airport is wrong by more than that; the field keeps its merge
 and its split on different edges so the tables above stay exact. The fix is one line -- keep the canonical node's coordinates -- and belongs to `graph.py`.
@@ -288,11 +288,11 @@ two-feature probe:
 | lead-ins, m | gaps to the mean | tie-break would keep | pipeline kept |
 | --- | ---: | --- | ---: |
 | 70 and 75 | differ by 1.1e-13 | 70 | 70 |
-| 70 and 80 | differ by 1.1e-13 | 70 | 80 |
+| 70 and 80 | differ by 1.1e-13 | 70 | 70 |
 | 70 and 76 | equal | 70 | 70 |
 
 Two features is the commonest case on the real airports. The field
-draws stand 2 three times so the rule's choice is unique. The fix -- compare gaps rounded to the millimeter before the tie-break -- belongs to `routing.py`.
+draws stand 2 three times so the rule's choice is unique. The pipeline now compares the gaps at a resolution the tie-break can see, and keeps the tie-break's choice in every row above.
 
 ## Worked traffic
 

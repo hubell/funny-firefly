@@ -442,7 +442,15 @@ def aggregate(routes: list[Route]) -> list[StandRunwayCell]:
     for (stand_id, designator), group in sorted(buckets.items()):
         ordered = sorted(group, key=lambda r: r.taxi_m)
         mean = sum(r.taxi_m for r in ordered) / len(ordered)
-        pick = min(ordered, key=lambda r: (abs(r.taxi_m - mean), r.osm_id))
+        # Gaps are compared at millimetre resolution so the stated tie-break
+        # actually decides. With exactly two features -- the commonest case on
+        # the real airports -- the mean is their midpoint and the two gaps are
+        # equal in exact arithmetic, but in floating point they can differ in
+        # the last bit, and then rounding picks the representative instead of
+        # the lower OSM id. ``taxiout.synthetic.probe_two_feature_tie`` shows
+        # it: gaps 1.1e-13 m apart, and the 80 m feature kept over the 70 m
+        # one. A millimetre is far below any distance this matrix claims.
+        pick = min(ordered, key=lambda r: (round(abs(r.taxi_m - mean), 3), r.osm_id))
         cells.append(
             StandRunwayCell(
                 stand_id=stand_id,

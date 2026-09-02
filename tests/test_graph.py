@@ -9,6 +9,8 @@ one behaviour per test, not to re-measure the real airports, which
 
 from __future__ import annotations
 
+import math
+
 import networkx as nx
 import pytest
 
@@ -554,3 +556,67 @@ def test_aggregate_representative_is_not_biased_short():
         mean = sum(r.taxi_m for r in group) / len(group)
         nearest = min(abs(r.taxi_m - mean) for r in group)
         assert abs(c.values["taxi_m"] - mean) == pytest.approx(nearest, abs=1e-6)
+
+
+# --------------------------------------------------------------------------
+# The two defects the worked airport found. The probe tests in
+# tests/test_synthetic_airport.py accept either state on purpose, so that the
+# probes could be committed before the fixes; these assert the fixed state.
+
+
+def test_a_merged_node_keeps_the_canonical_coordinates_not_the_last_way_s():
+    """A node merged across a gap stays where the position that created it was.
+
+    ``nx.Graph.add_node`` updates an existing node's attributes, so writing
+    each way's own coordinates as it is read moved a merged node to wherever
+    the last way to reference it put it -- anywhere inside the merge
+    tolerance. Edge lengths are taken from the way as drawn and survive that,
+    but any edge split afterwards is re-measured from node positions, so the
+    shift was booked once as missing pavement.
+    """
+    els = [
+        way(1, "taxiway", [(50.0, lon(0)), (50.0, lon(500))]),
+        # ends 0.2 m short of way 1's eastern end, so it merges onto it
+        way(2, "taxiway", [(50.0, lon(499.8)), (lat(200), lon(499.8))]),
+    ]
+    g = build_graph("TEST", els, REF)
+    assert g.stats["nodes_merged"] == 1
+    merged = [n for n in g.g if g.g.degree(n) >= 2]
+    assert len(merged) == 1
+    # the canonical position is way 1's end, not way 2's start
+    assert g.g.nodes[merged[0]]["lon"] == pytest.approx(lon(500), abs=1e-12)
+
+
+def test_the_merge_shift_probe_no_longer_loses_pavement():
+    """``probe_merge_shift`` accounted for to a tenth of a millimetre.
+
+    The probe compares the graph against the three ways as drawn. What is
+    left after the fix is not missing pavement but the split detour: the
+    node the eastern edge is split at is way 2's endpoint, which lies 0.8 m
+    off that edge, so a path through it is genuinely longer than the edge it
+    replaced. Both halves are named here so the residual cannot drift into
+    looking like a defect again.
+    """
+    synthetic = pytest.importorskip("taxiout.synthetic")
+    p = synthetic.probe_merge_shift()
+    detour = (math.hypot(300.0, 0.8) - 300.0) + (math.hypot(200.0, 0.8) - 200.0)
+    assert detour == pytest.approx(0.002667, abs=1e-6)
+    # every millimetre of the difference is that detour: no shift survives
+    assert -p["missing_m"] == pytest.approx(detour, abs=1e-4)
+    assert p["nodes_merged"] == 1 and p["edges_split"] == 1
+
+
+@pytest.mark.parametrize("lead_ins", [(70.0, 75.0), (70.0, 80.0), (70.0, 76.0)])
+def test_two_features_on_one_stand_go_to_the_lower_osm_id(lead_ins):
+    """The stated tie-break decides, not the last bit of a float.
+
+    With exactly two features the group mean is their midpoint, so both gaps
+    to it are equal in exact arithmetic and the lower OSM id should win. In
+    floating point the gaps can differ by ~1e-13 m and rounding decided
+    instead: ``(70, 80)`` kept the 80 m feature. Gaps are now compared at
+    millimetre resolution, which is far below anything the matrix claims.
+    """
+    synthetic = pytest.importorskip("taxiout.synthetic")
+    p = synthetic.probe_two_feature_tie(lead_ins)
+    assert p["kept_lead_in_m"] == pytest.approx(p["tie_break_lead_in_m"], abs=1e-6)
+    assert p["kept_lead_in_m"] == pytest.approx(min(lead_ins), abs=1e-6)

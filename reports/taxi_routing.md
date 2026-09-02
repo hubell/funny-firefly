@@ -32,17 +32,17 @@ LTAI: 576 mapped stands,
 
 | ICAO | rwy | desig | stands | attached | direct | joinable IDs | routable pairs | median taxi | p95 | detour p50 | verdict |
 | ---- | --: | ----: | -----: | -------: | -----: | -----------: | -------------: | ----------: | --: | ---------: | ------- |
-| EDDF | 4 | 7 | 436 | 436 (100%) | 423 (97%) | 277 (64%) | 100.0% | 3687 m | 6888 m | 1.29 | STRONG |
+| EDDF | 4 | 7 | 436 | 436 (100%) | 423 (97%) | 277 (64%) | 100.0% | 3694 m | 6888 m | 1.29 | STRONG |
 | EDDM | 2 | 4 | 236 | 231 (98%) | 230 (97%) | 190 (81%) | 100.0% | 3521 m | 5462 m | 1.42 | STRONG |
 | EGLL | 2 | 4 | 374 | 374 (100%) | 305 (82%) | 269 (72%) | 100.0% | 2865 m | 4707 m | 1.30 | PARTIAL |
-| EHAM | 6 | 12 | 313 | 311 (99%) | 274 (88%) | 262 (84%) | 95.2% | 3618 m | 9079 m | 1.35 | PARTIAL |
-| LEBL | 3 | 6 | 270 | 268 (99%) | 225 (83%) | 186 (69%) | 100.0% | 2876 m | 4144 m | 1.34 | PARTIAL |
+| EHAM | 6 | 12 | 313 | 311 (99%) | 274 (88%) | 262 (84%) | 95.2% | 3618 m | 9078 m | 1.35 | PARTIAL |
+| LEBL | 3 | 6 | 270 | 268 (99%) | 225 (83%) | 186 (69%) | 100.0% | 2894 m | 4259 m | 1.34 | PARTIAL |
 | LEMD | 4 | 8 | 425 | 425 (100%) | 419 (99%) | 405 (95%) | 99.1% | 5470 m | 10291 m | 1.37 | STRONG |
-| LFPG | 4 | 8 | 768 | 768 (100%) | 503 (65%) | 484 (63%) | 99.7% | 4190 m | 8720 m | 1.37 | PARTIAL |
-| LIRF | 3 | 6 | 194 | 194 (100%) | 165 (85%) | 147 (76%) | 100.0% | 3646 m | 8644 m | 1.33 | PARTIAL |
-| LTAI | 3 | 6 | 576 | 522 (91%) | 398 (69%) | 149 (26%) | 100.0% | 2814 m | 4971 m | 1.38 | PARTIAL |
-| LTFM | 6 | 12 | 761 | 761 (100%) | 665 (87%) | 454 (60%) | 100.0% | 4291 m | 8138 m | 1.32 | PARTIAL |
-| LSZH | 3 | 6 | 267 | 267 (100%) | 264 (99%) | 250 (94%) | 98.5% | 2550 m | 5005 m | 1.26 | STRONG |
+| LFPG | 4 | 8 | 768 | 768 (100%) | 503 (65%) | 484 (63%) | 99.7% | 4195 m | 8720 m | 1.37 | PARTIAL |
+| LIRF | 3 | 6 | 194 | 194 (100%) | 165 (85%) | 147 (76%) | 100.0% | 3655 m | 8644 m | 1.34 | PARTIAL |
+| LTAI | 3 | 6 | 576 | 522 (91%) | 398 (69%) | 149 (26%) | 100.0% | 2823 m | 4971 m | 1.39 | PARTIAL |
+| LTFM | 6 | 12 | 761 | 761 (100%) | 665 (87%) | 454 (60%) | 100.0% | 4302 m | 8138 m | 1.33 | PARTIAL |
+| LSZH | 3 | 6 | 267 | 267 (100%) | 264 (99%) | 250 (94%) | 98.5% | 2550 m | 5005 m | 1.27 | STRONG |
 
 Verdict bands: STRONG >=95% of pairs routable and >=90% of stands directly
 attached; PARTIAL >=90% routable; WEAK any.
@@ -90,14 +90,14 @@ for one during development.
 | EDDF | 526 | 6449 | 6979 | 5 | 808 | 13 | 4.5 km | 1 | 100.0% | 122 km |
 | EDDM | 608 | 3596 | 4075 | 2 | 309 | 89 | 1.9 km | 1 | 100.0% | 95 km |
 | EGLL | 421 | 3836 | 4201 | 2 | 168 | 53 | 1.3 km | 1 | 100.0% | 75 km |
-| EHAM | 536 | 4244 | 4644 | 7 | 313 | 26 | 1.7 km | 8 | 99.1% | 108 km |
+| EHAM | 536 | 4244 | 4645 | 7 | 312 | 26 | 1.7 km | 8 | 99.1% | 108 km |
 | LEBL | 488 | 4538 | 4906 | 2 | 620 | 6 | 3.1 km | 1 | 100.0% | 74 km |
 | LEMD | 764 | 5750 | 6269 | 2 | 541 | 11 | 2.4 km | 3 | 99.6% | 123 km |
 | LFPG | 789 | 6620 | 7339 | 5 | 328 | 23 | 2.5 km | 2 | 99.9% | 153 km |
 | LIRF | 235 | 2490 | 2705 | 1 | 158 | 14 | 1.3 km | 1 | 100.0% | 70 km |
 | LTAI | 171 | 1238 | 1368 | 0 | 26 | 1 | 0.2 km | 1 | 100.0% | 47 km |
 | LTFM | 793 | 4071 | 4797 | 0 | 7 | 0 | 0.1 km | 1 | 100.0% | 158 km |
-| LSZH | 264 | 5676 | 5959 | 166 | 1912 | 15 | 5.1 km | 2 | 100.0% | 51 km |
+| LSZH | 264 | 5675 | 5954 | 166 | 1925 | 14 | 5.1 km | 2 | 100.0% | 51 km |
 
 ## Flags
 
@@ -125,13 +125,13 @@ the effect is worth seeing:
 | EDDF | 25C | 2654 m | 07L | 6057 m | 2.3x |
 | EDDM | 26L | 2387 m | 08R | 4480 m | 1.9x |
 | EGLL | 27L | 2244 m | 09L | 3351 m | 1.5x |
-| EHAM | 24 | 2008 m | 18R | 9355 m | 4.7x |
-| LEBL | 06L | 1999 m | 24L | 3721 m | 1.9x |
+| EHAM | 24 | 2011 m | 18R | 9355 m | 4.7x |
+| LEBL | 06L | 1962 m | 24L | 3737 m | 1.9x |
 | LEMD | 14R | 2695 m | 18L | 8554 m | 3.2x |
 | LFPG | 08L | 3374 m | 26R | 6022 m | 1.8x |
-| LIRF | 07 | 2147 m | 16L | 7055 m | 3.3x |
+| LIRF | 07 | 2147 m | 16L | 7054 m | 3.3x |
 | LTAI | 36C | 2232 m | 18L | 3339 m | 1.5x |
-| LTFM | 35R | 2322 m | 27 | 7162 m | 3.1x |
+| LTFM | 35R | 2331 m | 27 | 7164 m | 3.1x |
 | LSZH | 34 | 1894 m | 14 | 4593 m | 2.4x |
 
 At 6 of 11 airports the within-airport spread exceeds the
@@ -187,7 +187,7 @@ OSM features share one identifier the cell takes the feature closest to their
 mean, and `spread_m` records how far apart they were. Usually that is metres.
 Sometimes it is not: LEBL has an identifier whose features
 disagree by 2064 m against a median taxi distance
-of 2876 m, and 89 identifiers across all
+of 2894 m, and 89 identifiers across all
 airports disagree by more than 250 m. Those cells are not uncertain by a metre
 or two; they are ambiguous about which piece of pavement the identifier means.
 `spread_m` and `snap_max_m` exist so such cells can be down-weighted or dropped

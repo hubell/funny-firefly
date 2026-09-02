@@ -262,8 +262,19 @@ def build_graph(
         for (u, p), (v, q) in zip(zip(nodes, pts), zip(nodes[1:], pts[1:])):
             if u == v:
                 continue  # collapsed to zero length by merging
-            g.add_node(u, lat=p[0], lon=p[1])
-            g.add_node(v, lat=q[0], lon=q[1])
+            # The canonical node keeps the coordinates of the position that
+            # created it, not of the last way to reference it. ``add_node``
+            # updates an existing node's attributes, so writing this way's
+            # point unconditionally moves a merged node to wherever the last
+            # way put it -- up to the merge tolerance away. Edge lengths are
+            # taken from the way as drawn and survive that, but an edge split
+            # later is re-measured from node positions, so a split on an edge
+            # at a shifted node books the shift once and pavement goes missing.
+            # ``taxiout.synthetic.probe_merge_shift`` measured 0.197 m.
+            for node in (u, v):
+                if node not in g:
+                    lat, lon = merger.points[node]
+                    g.add_node(node, lat=lat, lon=lon)
             existing = g.get_edge_data(u, v)
             if existing is not None:
                 # Runway wins the label: shared pavement must be costed and
