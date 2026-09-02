@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=77"]  # PEP 639 license expression
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "prc-taxiout-2026"
+version = "0.1.0"
+description = "Taxi-out time prediction for the EUROCONTROL PRC Data Challenge 2026"
+requires-python = ">=3.10"
+license = "GPL-3.0-only"
+license-files = ["LICENSE"]
+
+# Kept to what is actually imported. The geometry stage needs a graph library
+# and nothing else; numpy, pandas, pyarrow, scipy and scikit-learn were declared
+# here before anything used them, which meant `pip install -e .` pulled several
+# hundred megabytes to run a pipeline that imports none of it. They move in
+# under `modelling` when that stage needs them.
+dependencies = [
+    "networkx>=3.2",
+]
+
+[project.optional-dependencies]
+modelling = [
+    "numpy>=1.26",
+    "pandas>=2.1",
+    "pyarrow>=15.0",
+    "scipy>=1.11",
+    "scikit-learn>=1.4",
+    "catboost>=1.2",
+    "lightgbm>=4.3",
+]
+dev = ["pytest>=8.0", "ruff>=0.4"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 90
+target-version = "py310"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# So `pytest` works on a fresh checkout with nothing installed. Without it the
+# documented reproduction sequence fails at its own first test run.
+pythonpath = ["src"]
