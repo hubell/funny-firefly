@@ -1,0 +1,43 @@
+# SPDX-License-Identifier: GPL-3.0-only
+#
+# Tests and lint only. The pipeline itself cannot run here: data/raw/ is
+# gitignored, and rebuilding it would mean hammering the public Overpass API
+# from CI, which is not a reasonable thing to do to a free service.
+name: tests
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      # Prove the clean-checkout path a reader will actually take, before any
+      # install: pytest is configured with pythonpath, so this must pass.
+      - name: install pytest only
+        run: pip install pytest
+      - name: tests without installing the package
+        run: python -m pytest -q
+
+      - name: install
+        run: pip install -e ".[dev]"
+      - name: tests
+        run: python -m pytest -q
+      - name: lint
+        run: |
+          ruff check .
+          ruff format --check .
+
+      # Verifies no OpenStreetMap content is tracked. The identifier half of
+      # the check needs the OSM cache, which CI does not have, so it verifies
+      # the artefact and attribution rules only -- and says which it skipped.
+      - name: licence hygiene
+        run: python scripts/check_licence_hygiene.py
