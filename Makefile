@@ -5,11 +5,12 @@
 
 PYTHON ?= python3
 
-.PHONY: all data reports crosscheck test lint licence-check clean help
+.PHONY: all data reports crosscheck data-review test lint licence-check clean help
 
 help:
 	@echo "make data     fetch and cache OSM geometry      -> data/raw/<ICAO>.json.gz"
 	@echo "make reports  build graph, matrices and reports -> data/processed/, reports/"
+	@echo "make data-review  profile the challenge data   -> reports/data_review.md"
 	@echo "make test     run the unit tests                (no network, no challenge data)"
 	@echo "make lint     ruff check and format check"
 	@echo "make licence-check  verify no OSM-derived content is tracked"
@@ -34,6 +35,12 @@ reports:
 # Offline, but fetches OurAirports on first run and caches it.
 crosscheck:
 	$(PYTHON) scripts/check_runways_ourairports.py
+
+# Needs the challenge data under data/challenge/ (never committed) and the
+# matrices from 'make reports'. Writes only aggregates and identifier shapes,
+# and refuses to write a literal stand identifier.
+data-review:
+	$(PYTHON) scripts/review_challenge_data.py
 
 test:
 	$(PYTHON) -m pytest -q
