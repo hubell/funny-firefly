@@ -13,9 +13,13 @@ data/processed/taxi_distance/*
 !data/processed/taxi_distance/README.md
 !data/processed/taxi_distance/ODbL-NOTICE.md
 
-# challenge datasets (never commit; distributed under challenge terms)
+# Challenge datasets: never commit, and not redistributable under any licence.
+# Supplied under the terms of the challenge, which grant access to participants
+# and nothing further. Only the README explaining where they go is tracked.
 *.parquet
 challenge_data/
+data/challenge/*
+!data/challenge/README.md
 
 # credentials — Minio/OpenSky bucket keys
 .env

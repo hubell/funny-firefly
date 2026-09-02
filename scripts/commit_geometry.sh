@@ -204,7 +204,8 @@ turned integer counts into halves; taking the lower of two middle values
 instead always picked the shorter route, biasing Barcelona 154 m low."
 
 if [ "$COMMIT_MATRICES" = "1" ]; then
-    git add data/processed/taxi_distance reports/taxi_routing.md
+    git add data/processed/taxi_distance reports/taxi_routing.md \
+            data/challenge/README.md
     git commit -q -m "Publish the stand-to-runway distance matrices under ODbL
 
 Between 95% and 100% of attached stand-runway pairs route at every
@@ -222,7 +223,7 @@ that these identifiers join to STAND_mvt at all, which is unverified
 until the challenge data lands."
 else
     git add reports/taxi_routing.md data/processed/taxi_distance/README.md \
-            data/processed/taxi_distance/ODbL-NOTICE.md
+            data/processed/taxi_distance/ODbL-NOTICE.md data/challenge/README.md
     git commit -q -m "Add the stand-to-runway routing report
 
 Between 95% and 100% of attached stand-runway pairs route at every

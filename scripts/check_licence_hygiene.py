@@ -10,16 +10,21 @@ now, in a hurry.
 
 Three checks:
 
-1. **No OSM-derived artefact is tracked.** The distance matrices, the raw
-   Overpass cache, cached third-party data, and any feature frame built from
-   them are Derivative Databases. They must be gitignored, not committed.
+1. **No non-redistributable artefact is tracked.** Two classes, for two
+   different reasons. OSM-derived artefacts -- the distance matrices, the raw
+   Overpass cache, any feature frame built from them -- are Derivative
+   Databases carrying ODbL. Challenge data is supplied under terms that permit
+   no redistribution whatsoever, which makes it the stricter case and the one
+   where a mistake cannot be undone by relicensing.
 
-2. **No list of literal OSM identifiers appears in prose.** Stand identifiers
-   are the ones that matter: unlike runway designators, which are published in
-   AIPs and in the public-domain OurAirports data and so are not OSM's to
-   restrict, a stand identifier at these airports comes from OSM and nowhere
-   else. Reports describe identifier *shapes* instead; a shape is a description,
-   an identifier is an extract.
+2. **No list of literal stand identifiers appears in prose.** Stand
+   identifiers are the ones that matter: unlike runway designators, which are
+   published in AIPs and in the public-domain OurAirports data and so are
+   nobody's to restrict, a stand identifier at these airports comes from OSM
+   or from the challenge data, and neither may be excerpted here. Reports
+   describe identifier *shapes* instead; a shape is a description, an
+   identifier is an extract. The challenge side is checked only where the
+   data is present locally, which CI is not.
 
    Three deliberate limits, stated rather than hidden, because a check that
    cries wolf gets ignored:
@@ -66,13 +71,22 @@ from taxiout.coverage import stand_identifier  # noqa: E402
 CACHE = REPO / "data" / "raw"
 
 # Paths that must never be tracked, as glob patterns against repo-relative paths.
+# Two distinct reasons, both fatal. The OSM-derived artefacts carry ODbL, which
+# this GPLv3-in-totality repository cannot host. The challenge data carries the
+# challenge's own terms, which permit no redistribution at all -- so it is the
+# stricter of the two, and the one where a mistake is unrecoverable.
 FORBIDDEN = (
+    # OpenStreetMap-derived: ODbL
     "data/raw/*",
     "data/interim/*",
     "data/processed/taxi_distance/*.csv",
-    "data/processed/**/*.parquet",
     "*.osm",
     "*.pbf",
+    # Challenge data and anything built from it: not redistributable
+    "data/challenge/*.parquet",
+    "data/challenge/**/*.parquet",
+    "challenge_data/*",
+    "**/*.parquet",
 )
 
 # A tracked file that reports OSM-derived figures must attribute OSM.
@@ -146,6 +160,38 @@ def osm_stand_identifiers() -> set[str]:
     return out
 
 
+def challenge_stand_identifiers() -> set[str]:
+    """Distinctive ``STAND_mvt`` values from the local challenge data, if any.
+
+    The challenge data is not redistributable at all, so its identifiers are
+    held to the same rule as OSM's. Reads only the one column, and only when
+    the data and ``pyarrow`` are both present; CI has neither and skips.
+    """
+    files = sorted((REPO / "data" / "challenge").rglob("*.parquet"))
+    if not files:
+        return set()
+    try:
+        import pyarrow.parquet as pq
+    except ImportError:
+        return set()
+    out: set[str] = set()
+    for path in files:
+        if "STAND_mvt" not in pq.read_schema(path).names:
+            continue
+        column = pq.read_table(path, columns=["STAND_mvt"])["STAND_mvt"]
+        for value in column.unique().to_pylist():
+            if not value:
+                continue
+            value = str(value).strip()
+            if (
+                len(value) >= 3
+                and re.search(r"[A-Za-z]", value)
+                and re.search(r"[0-9]", value)
+            ):
+                out.add(value)
+    return out
+
+
 def main() -> int:
     files = tracked_files()
     failures: list[str] = []
@@ -154,14 +200,18 @@ def main() -> int:
     # 1 -- forbidden artefacts
     bad = sorted({f for f in files for pat in FORBIDDEN if Path(f).match(pat)})
     if bad:
-        failures.append("OSM-derived artefacts are tracked:\n    " + "\n    ".join(bad))
+        failures.append(
+            "non-redistributable artefacts are tracked:\n    " + "\n    ".join(bad)
+        )
     else:
-        print("  ok  no OSM-derived artefact is tracked")
+        print("  ok  no OSM-derived or challenge data is tracked")
 
-    # 2 -- literal identifiers
-    ids = osm_stand_identifiers()
+    # 2 -- literal identifiers, from either non-redistributable source
+    osm_ids = osm_stand_identifiers()
+    challenge_ids = challenge_stand_identifiers()
+    ids = osm_ids | challenge_ids
     if not ids:
-        print("  --  no OSM cache present; identifier check skipped")
+        print("  --  no OSM cache or challenge data present; identifier check skipped")
     else:
         hits: dict[str, list[str]] = {}
         prose = [f for f in files if any(Path(f).match(pat) for pat in PROSE)]
@@ -179,12 +229,19 @@ def main() -> int:
                 hits[f] = found
         if hits:
             failures.append(
-                "literal OSM stand identifiers appear in tracked files:\n    "
+                "literal stand identifiers appear in tracked files:\n    "
                 + "\n    ".join(f"{f}: {v}" for f, v in hits.items())
             )
         else:
+            sources = []
+            if osm_ids:
+                sources.append(f"{len(osm_ids)} OSM")
+            if challenge_ids:
+                sources.append(f"{len(challenge_ids)} challenge")
             print(
-                f"  ok  none of {len(ids)} OSM stand identifiers appears in a tracked file"
+                "  ok  none of "
+                + " and ".join(sources)
+                + " stand identifiers appears in a tracked file"
             )
 
     # 3 -- attribution
