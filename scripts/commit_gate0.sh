@@ -181,18 +181,11 @@ git status --short
 say "nothing untracked that should be tracked"
 git status --porcelain --untracked-files=all | grep '^??' || echo "clean"
 
-say "no attribution anywhere in the tree or the new history"
-FOUND=0
-grep -rniE 'cowork|claude|anthropic|copilot|chatgpt|openai|co-authored-by' \
-    --exclude-dir=.git --exclude="$(basename "$0")" \
-    --exclude=commit_geometry.sh . && FOUND=1
-git log -4 --format='%B%n%an%n%ae%n%cn%n%ce' \
-    | grep -niE 'cowork|claude|anthropic|copilot|chatgpt|openai|co-authored-by' && FOUND=1
-if [ "$FOUND" -ne 0 ]; then
-    echo "FOUND -- inspect before pushing."
-    exit 1
-fi
-echo "clean"
+say "no assistant attribution anywhere"
+# Check 4 of scripts/check_licence_hygiene.py, run above, covers the
+# tree and the recent history in one place. It spells the pattern in
+# bracket classes so it does not match its own source, which is what
+# made every copy of this grep have to exclude every other one.
 
 echo
 echo "Not pushed. Review with: git log -p -4"

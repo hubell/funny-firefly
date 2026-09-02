@@ -5,12 +5,17 @@
 
 PYTHON ?= python3
 
-.PHONY: all data reports crosscheck data-review test lint licence-check clean help
+.PHONY: all data reports crosscheck data-review synthetic tails baseline \
+        submission test lint licence-check clean help
 
 help:
 	@echo "make data     fetch and cache OSM geometry      -> data/raw/<ICAO>.json.gz"
 	@echo "make reports  build graph, matrices and reports -> data/processed/, reports/"
+	@echo "make synthetic    the worked airport            -> reports/synthetic_airport.md, .svg"
 	@echo "make data-review  profile the challenge data   -> reports/data_review.md"
+	@echo "make tails        profile the record-quality term -> reports/tails.md"
+	@echo "make baseline     run the ablation ladder      -> reports/baseline.md"
+	@echo "make submission TEAM=<name>  fit and write     -> data/submissions/<name>_v<n>.parquet"
 	@echo "make test     run the unit tests                (no network, no challenge data)"
 	@echo "make lint     ruff check and format check"
 	@echo "make licence-check  verify no OSM-derived content is tracked"
@@ -19,6 +24,9 @@ help:
 	@echo "'make data' calls the Overpass API and takes a few minutes; it is"
 	@echo "resumable and skips airports already cached. 'make reports' is"
 	@echo "offline and takes two to three minutes for all 11 airports."
+	@echo "'make synthetic' needs neither, and is the one geometry report a"
+	@echo "clean checkout can regenerate. The four targets below it need the"
+	@echo "challenge data under data/challenge/, which is never committed."
 
 all: data reports test licence-check
 
@@ -36,11 +44,33 @@ reports:
 crosscheck:
 	$(PYTHON) scripts/check_runways_ourairports.py
 
+# Offline and needs nothing cached: the field is authored in taxiout.synthetic.
+# Reads no data at all; writes the worked-airport report and its figure.
+synthetic:
+	$(PYTHON) scripts/report_synthetic_airport.py
+
 # Needs the challenge data under data/challenge/ (never committed) and the
 # matrices from 'make reports'. Writes only aggregates and identifier shapes,
 # and refuses to write a literal stand identifier.
 data-review:
 	$(PYTHON) scripts/review_challenge_data.py
+
+# Reads data/challenge/. Writes the record-quality term's own report; carries
+# aggregates only and refuses to write a challenge identifier.
+tails:
+	$(PYTHON) scripts/report_tails.py
+
+# Reads data/challenge/ and the matrices from 'make reports'. Writes the
+# ablation ladder. Needs the modelling extras; takes a few minutes.
+baseline:
+	$(PYTHON) scripts/run_baselines.py
+
+# Reads data/challenge/ and the matrices; writes a submission file to
+# data/submissions/, which is gitignored and which the script verifies is
+# ignored before writing. TEAM is the team name as the organizers hold it.
+submission:
+	@test -n "$(TEAM)" || { echo "usage: make submission TEAM=<name>"; exit 1; }
+	$(PYTHON) scripts/make_submission.py --team $(TEAM)
 
 test:
 	$(PYTHON) -m pytest -q

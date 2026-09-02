@@ -8,7 +8,7 @@ appear in a tracked file -- and "no OSM content" has to be a checkable property
 rather than a habit, because the failure mode is forgetting once, months from
 now, in a hurry.
 
-Three checks:
+Four checks:
 
 1. **No non-redistributable artefact is tracked.** Two classes, for two
    different reasons. OSM-derived artefacts -- the distance matrices, the raw
@@ -44,6 +44,20 @@ Three checks:
    examples -- and not a single unlucky string in a test.
 
 3. **Attribution is present** wherever OSM was used to produce a tracked file.
+
+4. **No assistant attribution anywhere.** The repository carries no trace of
+   what wrote it -- no tool name in a file, a comment, a docstring or a commit
+   message, and no co-authorship trailer naming one. This is a property of the
+   published artefact, so it is checked over both the tree and the recent
+   history rather than trusted to habit.
+
+   The pattern is spelled with bracket classes -- ``cla[u]de`` rather than the
+   word itself -- for one reason: a check that names what it forbids matches
+   its own source, and every scanner then has to exclude itself by name. Three
+   commit scripts learned that the hard way, each having to list the others,
+   and one of them failed a run purely because a newer script existed. Written
+   this way the check is inert against its own text, so nothing needs an
+   exclusion and nothing is silently exempt.
 
 Exit code is non-zero if anything fails, so it can gate a commit or a push.
 
@@ -126,6 +140,22 @@ def tracked_files() -> list[str]:
 # Files where a leak would realistically land: prose that might list examples.
 PROSE = ("reports/*.md", "docs/*.md", "*.md")
 
+# Everything a reader of the published repository would see. Prose and source
+# both, because an attribution is as likely to sit in a docstring as in a
+# report.
+AUTHORED = PROSE + ("*.py", "*.sh", "*.toml", "*.yml", "*.yaml", "Makefile")
+
+# Spelled in bracket classes so this file does not match its own pattern; the
+# docstring says why that matters. Each class holds one letter of the word it
+# hides, so the expression is the word and nothing else.
+ATTRIBUTION_PATTERN = (
+    r"co[w]ork|cla[u]de|anthro[p]ic|copi[l]ot|chat[g]pt|open[a]i|co-authored-b[y]"
+)
+
+# How much history to scan. Deep enough to cover a batch of commits made by
+# one script, shallow enough to stay fast on every run.
+HISTORY_DEPTH = 40
+
 # Below this many distinct matches in one file, treat it as coincidence.
 LEAK_THRESHOLD = 3
 
@@ -190,6 +220,41 @@ def challenge_stand_identifiers() -> set[str]:
             ):
                 out.add(value)
     return out
+
+
+def attribution_hits(files: list[str]) -> dict[str, list[str]]:
+    """Assistant-attribution matches in tracked files and in recent history.
+
+    Returns a mapping of where to what was found; empty is clean. History is
+    read with ``git log``, so a message that names a tool is caught even
+    though no file does.
+    """
+    rx = re.compile(ATTRIBUTION_PATTERN, re.IGNORECASE)
+    hits: dict[str, list[str]] = {}
+    for f in files:
+        if not any(Path(f).match(pat) for pat in AUTHORED):
+            continue
+        try:
+            text = (REPO / f).read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError):
+            continue
+        found = sorted({m.group(0).lower() for m in rx.finditer(text)})
+        if found:
+            hits[f] = found
+    try:
+        proc = subprocess.run(
+            ["git", "log", f"-{HISTORY_DEPTH}", "--format=%B%n%an <%ae>%n%cn <%ce>"],
+            cwd=REPO,
+            capture_output=True,
+            text=True,
+        )
+    except FileNotFoundError:
+        return hits
+    if proc.returncode == 0:
+        found = sorted({m.group(0).lower() for m in rx.finditer(proc.stdout)})
+        if found:
+            hits[f"the last {HISTORY_DEPTH} commit messages"] = found
+    return hits
 
 
 def main() -> int:
@@ -258,6 +323,19 @@ def main() -> int:
         )
     else:
         print("  ok  every report attributes OpenStreetMap")
+
+    # 4 -- assistant attribution, in the tree and in the history
+    attribution = attribution_hits(files)
+    if attribution:
+        failures.append(
+            "assistant attribution appears in the repository:\n    "
+            + "\n    ".join(f"{k}: {v}" for k, v in attribution.items())
+        )
+    else:
+        print(
+            f"  ok  no assistant attribution in {len(files)} tracked files "
+            f"or the last {HISTORY_DEPTH} commit messages"
+        )
 
     print()
     if failures:

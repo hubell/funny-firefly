@@ -243,25 +243,11 @@ git status --short
 say "nothing untracked that should be tracked"
 git status --porcelain --untracked-files=all | grep '^??' || echo "clean"
 
-say "no attribution anywhere in the tree or the new history"
-# Bracket classes, as in commit_tails.sh, so that this file does not match the
-# tree-wide grep here or the one in commit_gate0.sh. The two older scripts
-# spell the words out and exclude themselves by name, which means every new
-# script has to be added to every older script's exclude list -- and is why
-# this one tripped commit_gate0.sh's check simply by existing. Those two still
-# need excluding; nothing written this way does.
-PATTERN='co[w]ork|cla[u]de|anthro[p]ic|copi[l]ot|chat[g]pt|open[a]i|co-authored-b[y]'
-FOUND=0
-grep -rniE "$PATTERN" \
-    --exclude-dir=.git --exclude=commit_geometry.sh \
-    --exclude=commit_gate0.sh . && FOUND=1
-git log -6 --format='%B%n%an%n%ae%n%cn%n%ce' \
-    | grep -niE "$PATTERN" && FOUND=1
-if [ "$FOUND" -ne 0 ]; then
-    echo "FOUND -- inspect before pushing."
-    exit 1
-fi
-echo "clean"
+say "no assistant attribution anywhere"
+# Check 4 of scripts/check_licence_hygiene.py, run above, covers the
+# tree and the recent history in one place. It spells the pattern in
+# bracket classes so it does not match its own source, which is what
+# made every copy of this grep have to exclude every other one.
 
 echo
 echo "Not pushed. Review with: git log -p -6"

@@ -96,11 +96,17 @@ from it and carries every figure. Four findings shape everything after:
   blanked field by minutes; it is excluded by decision.
 - **The target has a heavy tail, and the scoring rule counts every row.**
   Under 0.1% of training departures carry half the squared error of the
-  airport-mean predictor, most of them record-matching artefacts a day long,
-  and the ranking set carries the same flags at the same rate. The ranking
-  page states that the score is RMSE over the January and July 2026
-  movements, with no row excluded; five such rows predicted as ordinary
-  taxi-outs would raise a 300 s model to 512 s.
+  airport-mean predictor, and the mechanism behind most of it turned out to
+  be one airport's data feed rather than a scatter of bad records: 82% of the
+  departures recorded above two hours are at Rome Fiumicino, and for nine in
+  ten of those the recorded off-block time sits within a minute of the
+  *scheduled* departure while the take-off is hours later. The block time was
+  defaulted to the schedule, so the recorded taxi-out is the schedule lag —
+  which every ranking departure exposes. The ranking page states that the
+  score is RMSE over the January and July 2026 movements, with no row
+  excluded; five such rows predicted as ordinary taxi-outs would raise a
+  300 s model to 512 s. [`reports/tails.md`](reports/tails.md) has the
+  mechanism, the cells it covers, and what the term is worth.
 - **The identifiers join.** Runways at ~100%; stands at 87% (Munich) to 99.9%
   (Istanbul) of departures after a staged normalisation chosen by join rate
   and inspection, never by validation error.
@@ -168,9 +174,13 @@ airport in scope uses.
 ```bash
 make data      # cache OSM geometry from Overpass (network, resumable)
 make reports   # coverage, distance matrices, routing + sensitivity reports
+make synthetic # the worked airport; reads nothing, so it runs anywhere
 make test      # unit tests, no network, no challenge data
 make crosscheck  # optional: verify runway geometry against OurAirports
 make data-review  # needs the challenge data locally; writes reports/data_review.md
+make tails        # needs the challenge data; writes reports/tails.md
+make baseline     # needs the challenge data; writes reports/baseline.md
+make submission TEAM=<name>   # needs the challenge data; writes a submission
 make licence-check  # verify no OSM-derived or challenge content is tracked
 ```
 
@@ -186,7 +196,11 @@ data review and everything after it need `pip install -e ".[modelling]"`.
 | `scripts/build_taxi_graph.py` | `data/raw/` | `data/processed/taxi_distance/`, `reports/taxi_routing.md` |
 | `scripts/check_penalty_sensitivity.py` | `data/raw/` | `reports/penalty_sensitivity.md` |
 | `scripts/check_runways_ourairports.py` | `data/raw/`, OurAirports | `reports/runway_crosscheck.md` |
+| `scripts/report_synthetic_airport.py` | nothing — the field is authored in `taxiout.synthetic` | `reports/synthetic_airport.md`, `reports/synthetic_airport.svg` |
 | `scripts/review_challenge_data.py` | `data/challenge/`, `data/processed/taxi_distance/` | `reports/data_review.md` |
+| `scripts/report_tails.py` | `data/challenge/` | `reports/tails.md` |
+| `scripts/run_baselines.py` | `data/challenge/`, `data/processed/taxi_distance/` | `reports/baseline.md` |
+| `scripts/make_submission.py` | `data/challenge/`, `data/processed/taxi_distance/` | `data/submissions/<team>_v<n>.parquet` (gitignored) |
 
 Only `fetch_osm.py` and `check_runways_ourairports.py` touch the network. `build_taxi_graph.py` runs all 11
 airports in about two minutes from the cache and takes `--airports`,
@@ -268,16 +282,31 @@ src/taxiout/
   routing.py     stand->runway routes and their physical descriptors
   challenge.py   challenge data access; which fields are hidden or excluded
   join.py        staged join of STAND_mvt / RUNWAY_mvt to the matrices
+  synthetic.py   the worked airport: a field where every number is known, and
+                 worked traffic in the challenge schema
+  features.py    the feature frame, and a registry of what every column reads
+  unimpeded.py   the PRU reference and its geometric counterpart
+  validation.py  the splits and the metrics, fixed before any model
+  models.py      the ablation ladder and the estimators its rungs use
+  tails.py       the record-quality term
+  submission.py  validate and write a submission file
 scripts/
   fetch_osm.py                 cache OSM geometry (resumable, network)
   report_coverage.py           reports/stand_coverage.md
   build_taxi_graph.py          distance matrices + reports/taxi_routing.md
   check_penalty_sensitivity.py reports/penalty_sensitivity.md
   check_runways_ourairports.py reports/runway_crosscheck.md (network)
+  report_synthetic_airport.py  reports/synthetic_airport.md (+ .svg; reads nothing)
   review_challenge_data.py     reports/data_review.md (needs challenge data)
+  report_tails.py              reports/tails.md (needs challenge data)
+  run_baselines.py             reports/baseline.md (needs challenge data)
+  make_submission.py           a submission file (needs challenge data)
   check_licence_hygiene.py     verifies no OSM or challenge content is tracked
   commit_geometry.sh           one-shot commit batch (geometry stage)
   commit_gate0.sh              one-shot commit batch (data review stage)
+  commit_tails.sh              one-shot commit batch (record-quality term)
+  commit_synthetic.sh          one-shot commit batch (worked airport)
+  commit_gate1.sh              one-shot commit batch (modelling stage)
 docs/
   modelling_notes.md  decisions, caveats, open questions, leakage rules
   prior_art.md        literature, external data licences, benchmarks
