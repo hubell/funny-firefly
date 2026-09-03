@@ -179,6 +179,7 @@ make test      # unit tests, no network, no challenge data
 make crosscheck  # optional: verify runway geometry against OurAirports
 make data-review  # needs the challenge data locally; writes reports/data_review.md
 make tails        # needs the challenge data; writes reports/tails.md
+make geometry-gaps  # needs the challenge data and the OSM cache; writes reports/geometry_gaps.md
 make baseline     # needs the challenge data; writes reports/baseline.md
 make submission TEAM=<name>   # needs the challenge data; writes a submission
 make licence-check  # verify no OSM-derived or challenge content is tracked
@@ -199,6 +200,7 @@ data review and everything after it need `pip install -e ".[modelling]"`.
 | `scripts/report_synthetic_airport.py` | nothing — the field is authored in `taxiout.synthetic` | `reports/synthetic_airport.md`, `reports/synthetic_airport.svg` |
 | `scripts/review_challenge_data.py` | `data/challenge/`, `data/processed/taxi_distance/` | `reports/data_review.md` |
 | `scripts/report_tails.py` | `data/challenge/` | `reports/tails.md` |
+| `scripts/report_geometry_gaps.py` | `data/challenge/`, `data/processed/taxi_distance/`, `data/raw/` | `reports/geometry_gaps.md` |
 | `scripts/run_baselines.py` | `data/challenge/`, `data/processed/taxi_distance/` | `reports/baseline.md` |
 | `scripts/make_submission.py` | `data/challenge/`, `data/processed/taxi_distance/` | `data/submissions/<team>_v<n>.parquet` (gitignored) |
 
@@ -299,6 +301,7 @@ scripts/
   report_synthetic_airport.py  reports/synthetic_airport.md (+ .svg; reads nothing)
   review_challenge_data.py     reports/data_review.md (needs challenge data)
   report_tails.py              reports/tails.md (needs challenge data)
+  report_geometry_gaps.py      reports/geometry_gaps.md (needs challenge data + OSM cache)
   run_baselines.py             reports/baseline.md (needs challenge data)
   make_submission.py           a submission file (needs challenge data)
   check_licence_hygiene.py     verifies no OSM or challenge content is tracked
@@ -307,6 +310,7 @@ scripts/
   commit_tails.sh              one-shot commit batch (record-quality term)
   commit_synthetic.sh          one-shot commit batch (worked airport)
   commit_gate1.sh              one-shot commit batch (modelling stage)
+  commit_geometry_gaps.sh      one-shot commit batch (unimpeded-term diagnostics)
 docs/
   modelling_notes.md  decisions, caveats, open questions, leakage rules
   prior_art.md        literature, external data licences, benchmarks
