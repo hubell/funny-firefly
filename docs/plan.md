@@ -330,6 +330,20 @@ is why the chain without them is kept.
 The top rung now stands at 237.3 s in December and 351.1 s in July, 222.7
 and 260.2 s on the three July airports.
 
+**The configuration set, dropped, 3 September.** The raw configuration set
+— the designators in use in the trailing hour, as one categorical with 12
+to 63 levels per airport — took 12% of the top rung's splits before the
+plan lags and 8% after, and was worth nothing on any split. It is now a
+diagnostic in [`../reports/congestion.md`](../reports/congestion.md) and
+not a feature; the model keeps the count of runways in use and the seconds
+since the set last changed. Without it the configuration rung is worth
+0.2 s in December net of the plan lags and the top rung stands at 237.9 s
+in December and 349.1 s in July (from 237.3 and 351.1), 223.7 and 260.1 s
+on the three July airports; the held-out contrast for the configuration
+rung is −0.1 s [−0.6, +0.3] net of the lags and +0.5 s [+0.2, +0.9]
+without them. A column that costs nothing to drop and was memorizing
+airport-hours is better dropped.
+
 **Gate 3 — the queueing layer, only if Gate 2's ablation says congestion is
 binding** (~20–30 h). This is the piece where the geometry stops being a side
 feature. *Revised 2 September:* the forward simulation as first written —

@@ -79,7 +79,6 @@ ARRIVAL_FEATURES: tuple[str, ...] = tuple(
 )
 DEMAND_FEATURES: tuple[str, ...] = tuple(f"sched_pm{h}m" for h in DEMAND_HALF_MIN)
 CONFIGURATION_FEATURES: tuple[str, ...] = (
-    "cfg_runways",
     "cfg_n_runways",
     "cfg_since_change_s",
 )
@@ -92,7 +91,13 @@ CONGESTION_FEATURES: tuple[str, ...] = (
     + CONFIGURATION_FEATURES
     + COVERAGE_FEATURES
 )
-CATEGORICAL: tuple[str, ...] = ("cfg_runways",)
+# The raw configuration set -- the designators in use, as one categorical --
+# was a feature until the ladder showed it taking 12% of the top rung's
+# splits and buying nothing on any split: a high-cardinality categorical
+# memorizing airport-hours. It is now a diagnostic only, exposed by
+# ``configuration_sets`` for the report; the model reads the count of
+# runways in use and the seconds since the set last changed.
+CATEGORICAL: tuple[str, ...] = ()
 
 # The subject's own columns every feature here anchors on.
 _SELF = ("MVT_TIME_UTC_mvt", "ADEP_mvt", "MVT_ID_mvt")
@@ -235,6 +240,33 @@ def congestion_features(
         out[f"sched_pm{h}m"] = centred_count(schedules, icao, s, 60 * h) - self_in_dep
 
     # -- configuration, at every movement, read back by the subject's identifier
+    got = _configuration(departures, movements)
+    out["cfg_n_runways"] = got["n"].fillna(0.0).to_numpy()
+    out["cfg_since_change_s"] = got["since"].to_numpy()
+
+    # -- coverage flags, from the subjects' own months
+    start = coverage_start(t)
+    end = coverage_end(t)
+    out["win_truncated"] = truncated(t, 60 * max(WINDOWS_MIN), start).astype(float)
+    out["sched_truncated"] = truncated_centred(
+        s, 60 * max(DEMAND_HALF_MIN), start, end
+    ).astype(float)
+    return out[list(CONGESTION_FEATURES)]
+
+
+def configuration_sets(departures: pd.DataFrame, movements: pd.DataFrame) -> pd.Series:
+    """The designator set in use at each subject's take-off, ``"09|27"`` style.
+
+    A diagnostic for the report, not a feature: see ``CATEGORICAL``. Empty
+    where no runway had two movements in the trailing hour.
+    """
+    got = _configuration(departures, movements)
+    return pd.Series(got["cfg"].fillna("").to_numpy(), index=departures.index)
+
+
+def _configuration(departures: pd.DataFrame, movements: pd.DataFrame) -> pd.DataFrame:
+    """The configuration at every movement, read back by the subjects' identifiers."""
+    ids = departures["MVT_ID_mvt"]
     events = movements[
         [
             "MVT_ID_mvt",
@@ -272,16 +304,4 @@ def congestion_features(
         {"cfg": cfg, "since": since, "n": n_rwy}, index=events["MVT_ID_mvt"].to_numpy()
     )
     lookup = lookup[~lookup.index.duplicated(keep="first")]
-    got = lookup.reindex(ids.to_numpy())
-    out["cfg_runways"] = got["cfg"].fillna("").to_numpy()
-    out["cfg_n_runways"] = got["n"].fillna(0.0).to_numpy()
-    out["cfg_since_change_s"] = got["since"].to_numpy()
-
-    # -- coverage flags, from the subjects' own months
-    start = coverage_start(t)
-    end = coverage_end(t)
-    out["win_truncated"] = truncated(t, 60 * max(WINDOWS_MIN), start).astype(float)
-    out["sched_truncated"] = truncated_centred(
-        s, 60 * max(DEMAND_HALF_MIN), start, end
-    ).astype(float)
-    return out[list(CONGESTION_FEATURES)]
+    return lookup.reindex(ids.to_numpy())

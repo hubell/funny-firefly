@@ -19,6 +19,7 @@ from taxiout.challenge import (  # noqa: E402
 )
 from taxiout.congestion import (  # noqa: E402
     CONGESTION_FEATURES,
+    configuration_sets,
     MOVEMENT_COLUMNS,
     SOURCES,
     congestion_features,
@@ -123,7 +124,8 @@ def test_configuration_reads_every_movement_and_ignores_sentinels():
     m.loc[m["MVT_ID_mvt"] == 202.0, "RUNWAY_mvt"] = "NA"  # a sentinel, not a runway
     f = congestion_features(_subject(m), m)
     # in the hour before t=60 both 27 and 09 have two or more movements
-    assert f["cfg_runways"].iloc[0] == "09|27"
+    assert "cfg_runways" not in f.columns  # the set is a diagnostic, not a feature
+    assert configuration_sets(_subject(m), m).iloc[0] == "09|27"
     assert f["cfg_n_runways"].iloc[0] == 2.0
     assert np.isfinite(f["cfg_since_change_s"].iloc[0])
 

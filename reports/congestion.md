@@ -11,7 +11,7 @@ refuses to write a literal stand identifier from either source.
 ## In one paragraph
 
 2,085,047 training departures and 215,876 ranking departures
-get the same 50 congestion columns, from windows of 5, 15, 30, 60 minutes anchored on the subject's take-off, built by one function
+get the same 49 congestion columns, from windows of 5, 15, 30, 60 minutes anchored on the subject's take-off, built by one function
 from each side's own movement frame with the subject removed from its
 own count by identity. The same calendar month a year apart has the
 same shape on both sides. 10 training rows and 16 ranking rows have a window
@@ -47,7 +47,7 @@ held to that archive's field list.
 | throughput | 8 | `ADEP_mvt`, `MVT_ID_mvt`, `MVT_TIME_UTC_mvt`, `RUNWAY_mvt` | `ADEP_mvt`, `MVT_ID_mvt`, `MVT_TIME_UTC_mvt`, `RUNWAY_mvt` | -- | -- |
 | arrivals | 16 | `ADEP_mvt`, `MVT_ID_mvt`, `MVT_TIME_UTC_mvt` | -- | `ADES_mvt`, `BLOCK_TIME_UTC_mvt`, `MVT_TIME_UTC_mvt`, `TAXITIME_SEC_mvt` | -- |
 | demand | 3 | `ADEP_mvt`, `MVT_ID_mvt`, `SCHED_TIME_UTC_mvt` | `ADEP_mvt`, `MVT_ID_mvt`, `SCHED_TIME_UTC_mvt` | -- | -- |
-| configuration | 3 | `ADEP_mvt`, `MVT_ID_mvt`, `MVT_TIME_UTC_mvt` | `ADEP_mvt`, `MVT_ID_mvt`, `MVT_TIME_UTC_mvt`, `RUNWAY_mvt` | `ADES_mvt`, `MVT_ID_mvt`, `MVT_TIME_UTC_mvt`, `RUNWAY_mvt` | -- |
+| configuration | 2 | `ADEP_mvt`, `MVT_ID_mvt`, `MVT_TIME_UTC_mvt` | `ADEP_mvt`, `MVT_ID_mvt`, `MVT_TIME_UTC_mvt`, `RUNWAY_mvt` | `ADES_mvt`, `MVT_ID_mvt`, `MVT_TIME_UTC_mvt`, `RUNWAY_mvt` | -- |
 | coverage | 2 | `MVT_TIME_UTC_mvt`, `SCHED_TIME_UTC_mvt` | -- | -- | -- |
 | corridor | 5 | `ADEP_mvt`, `MVT_ID_mvt`, `MVT_TIME_UTC_mvt`, `RUNWAY_mvt`, `STAND_mvt` | `ADEP_mvt`, `MVT_ID_mvt`, `MVT_TIME_UTC_mvt`, `RUNWAY_mvt`, `STAND_mvt` | `ADES_mvt`, `BLOCK_TIME_UTC_mvt`, `RUNWAY_mvt`, `STAND_mvt` | -- |
 | weather | 5 | `ADEP_mvt`, `MVT_TIME_UTC_mvt` | -- | -- | `METAR.p01i`, `METAR.tmpf`, `METAR.valid`, `METAR.vsby`, `METAR.wxcodes` |
@@ -260,7 +260,10 @@ The set of designators with at least two movements in the trailing hour,
 from every movement's designator, and the seconds since that set last
 changed, capped at six hours. The floor of two suppresses the flicker of
 a stray movement on an idle runway; a runway the window has forgotten is
-a change like any other. Per airport: how many distinct sets the year
+a change like any other. The set itself is a diagnostic here and not a
+feature: as a categorical it took 12% of the top rung's splits and bought
+nothing on any split, so the model reads the count of runways in use and
+the seconds since the set last changed. Per airport: how many distinct sets the year
 runs, how much of the year the three commonest cover, how often the set
 is empty, the median number of runways in use, the median time since the
 last change, and the share of departures within half an hour of one:

@@ -61,6 +61,7 @@ from taxiout.challenge import (  # noqa: E402
     to_pandas,
 )
 from taxiout.congestion import (  # noqa: E402
+    configuration_sets,
     ARRIVAL_FEATURES,
     CONFIGURATION_FEATURES,
     COVERAGE_FEATURES,
@@ -389,7 +390,10 @@ def section_configuration(train: pd.DataFrame) -> list[str]:
         "from every movement's designator, and the seconds since that set last",
         "changed, capped at six hours. The floor of two suppresses the flicker of",
         "a stray movement on an idle runway; a runway the window has forgotten is",
-        "a change like any other. Per airport: how many distinct sets the year",
+        "a change like any other. The set itself is a diagnostic here and not a",
+        "feature: as a categorical it took 12% of the top rung's splits and bought",
+        "nothing on any split, so the model reads the count of runways in use and",
+        "the seconds since the set last changed. Per airport: how many distinct sets the year",
         "runs, how much of the year the three commonest cover, how often the set",
         "is empty, the median number of runways in use, the median time since the",
         "last change, and the share of departures within half an hour of one:",
@@ -538,6 +542,8 @@ def main() -> int:
             dep, matrix, fallback=fallback, movements=moves, edges=edges, weather=hourly
         )
         f["_takeoff"] = dep["MVT_TIME_UTC_mvt"].to_numpy()
+        # the configuration set, for its own table below: a diagnostic, not a feature
+        f["cfg_runways"] = configuration_sets(dep, moves).to_numpy()
         sides[side] = f
         del moves
     train, rank = sides["training"], sides["ranking"]
