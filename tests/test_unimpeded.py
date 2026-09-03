@@ -30,6 +30,7 @@ def _frame(
     *,
     distances: dict[tuple[str, str, str], float] | None = None,
     modulator: dict[tuple[str, str, str], float] | None = None,
+    wake: dict[tuple[str, str, str], str] | None = None,
 ) -> tuple[pd.DataFrame, pd.Series]:
     """Rows for each (icao, stand, designator) with the listed taxi-out times."""
     recs, target = [], []
@@ -41,6 +42,7 @@ def _frame(
                     "stand": stand,
                     "designator": designator,
                     "pair": f"{icao}|{stand}|{designator}",
+                    "wake_class": (wake or {}).get((icao, stand, designator), "M"),
                     "taxi_m": (distances or {}).get((icao, stand, designator), 1000.0),
                     "geom_imputed": 0.0,
                     "turn_deg_per_km": (modulator or {}).get(
@@ -156,7 +158,7 @@ def test_speed_recovers_an_exact_distance_over_speed_reference():
     """Where the reference *is* d/v, the fit must return v to floating point."""
     v = 8.0
     pairs, dist = {}, {}
-    for i, d in enumerate([500.0, 1500.0, 3000.0, 4500.0]):
+    for i, d in enumerate([500.0, 1500.0, 2500.0, 3500.0, 4500.0]):
         key = ("ZZZZ", f"S{i}", "27")
         dist[key] = d
         # every row of the pair sits at exactly d/v, so the 10th percentile is
@@ -166,14 +168,14 @@ def test_speed_recovers_an_exact_distance_over_speed_reference():
     ref = fit_pru_reference(frame, y)
     model = fit_geometric(frame, ref, lower_tail(frame, y, ref))
     assert model.speed["ZZZZ"] == pytest.approx(v, rel=1e-9)
-    assert model.intercept == pytest.approx(0.0, abs=1e-9)
+    assert model.class_intercept[("ZZZZ", "M")] == pytest.approx(0.0, abs=1e-6)
     assert model.predict(frame).iloc[0] == pytest.approx(500.0 / v, rel=1e-6)
 
 
 def test_speed_is_fitted_per_airport():
     pairs, dist = {}, {}
     for icao, v in (("AAAA", 6.0), ("BBBB", 12.0)):
-        for i, d in enumerate([800.0, 2400.0, 4000.0]):
+        for i, d in enumerate([800.0, 1600.0, 2400.0, 3200.0, 4000.0]):
             key = (icao, f"S{i}", "27")
             dist[key] = d
             pairs[key] = [d / v] * MIN_PAIR_COUNT
@@ -185,7 +187,8 @@ def test_speed_is_fitted_per_airport():
 
 
 def test_modulator_recovers_a_planted_coefficient():
-    v, beta = 8.0, 0.20
+    """Plant ``r = a + d * (1/v + g * z)`` and read every parameter back."""
+    a, v, g = 120.0, 8.0, 0.004
     pairs, dist, mod = {}, {}, {}
     rng = np.random.default_rng(0)
     for i in range(24):
@@ -193,34 +196,36 @@ def test_modulator_recovers_a_planted_coefficient():
         d = float(500 + 200 * i)
         z = float(rng.normal())
         dist[key], mod[key] = d, z
-        pairs[key] = [(d / v) * np.exp(beta * z)] * MIN_PAIR_COUNT
+        pairs[key] = [a + d * (1.0 / v + g * z)] * MIN_PAIR_COUNT
     frame, y = _frame(pairs, distances=dist, modulator=mod)
     ref = fit_pru_reference(frame, y)
     model = fit_geometric(
         frame, ref, lower_tail(frame, y, ref), modulators=("turn_deg_per_km",)
     )
-    # the descriptor is standardised in the fit, so the recovered coefficient
-    # is beta times the descriptor's own standard deviation
-    sd = model.scale["turn_deg_per_km"]
-    assert model.coef["turn_deg_per_km"] / sd == pytest.approx(beta, rel=1e-6)
-    got = model.predict(frame)
-    assert np.allclose(got, ref.predict(frame), rtol=1e-6)
+    # the descriptor is standardised in the fit: the coefficient is g times its
+    # standard deviation, and its mean has moved into the inverse speed
+    sd, mu = model.scale["turn_deg_per_km"], model.centre["turn_deg_per_km"]
+    assert model.coef["turn_deg_per_km"] / sd == pytest.approx(g, rel=1e-6)
+    assert model.inverse_speed["ZZZZ"] == pytest.approx(1.0 / v + g * mu, rel=1e-6)
+    assert model.class_intercept[("ZZZZ", "M")] == pytest.approx(a, rel=1e-6)
+    assert np.allclose(model.predict(frame), ref.predict(frame), rtol=1e-6)
 
 
 def test_fit_refuses_rows_whose_pair_has_no_reference_of_its_own():
     """A pair below the minimum count would fit the speed to a fallback."""
     pairs, dist = {}, {}
-    key = ("ZZZZ", "S0", "27")
-    dist[key] = 1000.0
-    pairs[key] = [125.0] * MIN_PAIR_COUNT
-    thin = ("ZZZZ", "S1", "27")
+    for i, d in enumerate([1000.0, 1500.0, 2000.0, 2500.0, 3000.0]):
+        key = ("ZZZZ", f"S{i}", "27")
+        dist[key] = d
+        pairs[key] = [d / 8.0] * MIN_PAIR_COUNT
+    thin = ("ZZZZ", "S9", "27")
     dist[thin] = 9000.0
     pairs[thin] = [125.0]  # absurd, and below the minimum count
     frame, y = _frame(pairs, distances=dist)
     ref = fit_pru_reference(frame, y)
     model = fit_geometric(frame, ref, lower_tail(frame, y, ref))
     assert model.speed["ZZZZ"] == pytest.approx(8.0, rel=1e-9)
-    assert model.n_fit == MIN_PAIR_COUNT
+    assert model.n_fit == 5 * MIN_PAIR_COUNT
 
 
 def test_fit_refuses_imputed_geometry():
@@ -234,11 +239,12 @@ def test_fit_refuses_imputed_geometry():
 
 def test_prediction_is_floored_and_clipped():
     model = GeometricUnimpeded(
-        speed={"ZZZZ": 8.0},
-        default_speed=8.0,
+        inverse_speed={"ZZZZ": 1.0 / 8.0},
+        default_inverse_speed=1.0 / 8.0,
         coef={"turn_deg_per_km": 50.0},
         centre={"turn_deg_per_km": 0.0},
         scale={"turn_deg_per_km": 1.0},
+        class_column=None,
     )
     frame = pd.DataFrame(
         {
@@ -249,7 +255,7 @@ def test_prediction_is_floored_and_clipped():
     )
     out = model.predict(frame)
     assert out.iloc[0] >= 30.0  # the physical floor
-    assert out.iloc[1] <= 2.0 * 4000.0 / 8.0  # the clip on the modulator
+    assert out.iloc[1] <= 2.0 * 4000.0 / 8.0  # the clip on the modulated speed
     assert out.iloc[2] == pytest.approx(500.0)  # unknown airport, default speed
 
 
@@ -260,7 +266,7 @@ def test_prediction_is_floored_and_clipped():
 def test_calibration_is_exact_where_the_geometry_reproduces_the_reference():
     v = 8.0
     pairs, dist = {}, {}
-    for i, d in enumerate([600.0, 1800.0, 3000.0, 4200.0]):
+    for i, d in enumerate([600.0, 1500.0, 2400.0, 3300.0, 4200.0]):
         key = ("ZZZZ", f"S{i}", "27")
         dist[key] = d
         pairs[key] = [d / v] * MIN_PAIR_COUNT
@@ -270,7 +276,7 @@ def test_calibration_is_exact_where_the_geometry_reproduces_the_reference():
     cal = calibration(frame, ref, model)
     assert list(cal["icao"]) == ["ZZZZ", "all"]
     row = cal.iloc[-1]
-    assert row["pairs"] == 4
+    assert row["pairs"] == 5
     assert row["rmse_s"] == pytest.approx(0.0, abs=1e-6)
     assert row["ratio_p50"] == pytest.approx(1.0, abs=1e-9)
 
@@ -287,3 +293,131 @@ def test_calibration_counts_pairs_once_however_busy_they_are():
     model = fit_geometric(frame, ref, lower_tail(frame, y, ref))
     cal = calibration(frame, ref, model)
     assert int(cal.loc[cal["icao"] == "all", "pairs"].iloc[0]) == 2
+
+
+# --------------------------------------------------------------------------
+# the per-class intercept
+
+
+def test_the_intercept_is_fitted_per_airport_and_class():
+    """Two classes at one speed, two intercepts; each recovered exactly."""
+    v, a_heavy, a_medium = 8.0, 300.0, 120.0
+    pairs, dist, wake = {}, {}, {}
+    for i, d in enumerate([800.0, 1600.0, 2400.0, 3200.0, 4000.0]):
+        for cls, a in (("H", a_heavy), ("M", a_medium)):
+            key = ("ZZZZ", f"S{i}{cls}", "27")
+            dist[key], wake[key] = d, cls
+            pairs[key] = [a + d / v] * MIN_PAIR_COUNT
+    frame, y = _frame(pairs, distances=dist, wake=wake)
+    ref = fit_pru_reference(frame, y)
+    model = fit_geometric(frame, ref, lower_tail(frame, y, ref))
+    assert model.speed["ZZZZ"] == pytest.approx(v, rel=1e-9)
+    assert model.class_intercept[("ZZZZ", "H")] == pytest.approx(a_heavy, rel=1e-9)
+    assert model.class_intercept[("ZZZZ", "M")] == pytest.approx(a_medium, rel=1e-9)
+    assert np.allclose(model.predict(frame), ref.predict(frame), rtol=1e-9)
+
+
+def test_without_a_class_column_there_is_one_intercept_per_airport():
+    v, a = 8.0, 200.0
+    pairs, dist, wake = {}, {}, {}
+    for i, d in enumerate([800.0, 1600.0, 2400.0, 3200.0, 4000.0]):
+        for cls in ("H", "M"):
+            key = ("ZZZZ", f"S{i}{cls}", "27")
+            dist[key], wake[key] = d, cls
+            pairs[key] = [a + d / v] * MIN_PAIR_COUNT
+    frame, y = _frame(pairs, distances=dist, wake=wake)
+    ref = fit_pru_reference(frame, y)
+    model = fit_geometric(frame, ref, lower_tail(frame, y, ref), class_column=None)
+    assert list(model.class_intercept) == [("ZZZZ", "all")]
+    assert model.class_intercept[("ZZZZ", "all")] == pytest.approx(a, rel=1e-9)
+    # and a frame carrying classes is predicted the same, because none is read
+    assert np.allclose(model.predict(frame), ref.predict(frame), rtol=1e-9)
+
+
+def test_a_thin_class_is_pooled_and_an_unseen_class_cascades():
+    from taxiout.unimpeded import OTHER_CLASS
+
+    v = 8.0
+    pairs, dist, wake = {}, {}, {}
+    for i, d in enumerate([800.0, 1600.0, 2400.0]):
+        key = ("ZZZZ", f"S{i}", "27")
+        dist[key], wake[key] = d, "M"
+        pairs[key] = [100.0 + d / v] * MIN_PAIR_COUNT
+    # a light with one row at every distance: too thin for its own intercept
+    for i, d in enumerate([800.0, 1600.0, 2400.0]):
+        key = ("ZZZZ", f"L{i}", "27")
+        dist[key], wake[key] = d, "L"
+        pairs[key] = [400.0 + d / v] * MIN_PAIR_COUNT
+    frame, y = _frame(pairs, distances=dist, wake=wake)
+    ref = fit_pru_reference(frame, y)
+    model = fit_geometric(
+        frame, ref, lower_tail(frame, y, ref), min_class_rows=4 * MIN_PAIR_COUNT
+    )
+    assert ("ZZZZ", "L") not in model.class_intercept
+    assert ("ZZZZ", OTHER_CLASS) in model.class_intercept
+    # a class the fit never saw at all cascades to the pool, then the airport
+    unseen = frame.iloc[[0]].assign(wake_class="J")
+    assert model.intercepts(unseen)[0] == pytest.approx(
+        model.class_intercept[("ZZZZ", OTHER_CLASS)]
+    )
+    other_airport = frame.iloc[[0]].assign(icao="QQQQ", wake_class="M")
+    assert model.intercepts(other_airport)[0] == pytest.approx(model.default_intercept)
+
+
+def test_a_non_positive_slope_falls_back_to_the_pooled_one():
+    """An airport whose own fit runs backwards is not allowed to."""
+    v = 8.0
+    pairs, dist = {}, {}
+    for i, d in enumerate([800.0, 1200.0, 1600.0, 2000.0, 2400.0]):
+        key = ("AAAA", f"S{i}", "27")
+        dist[key] = d
+        pairs[key] = [100.0 + d / v] * MIN_PAIR_COUNT
+    # BBBB: the longer the route, the *shorter* the reference
+    for i, (d, r) in enumerate(
+        [
+            (800.0, 500.0),
+            (1200.0, 450.0),
+            (1600.0, 400.0),
+            (2000.0, 350.0),
+            (2400.0, 300.0),
+        ]
+    ):
+        key = ("BBBB", f"S{i}", "27")
+        dist[key] = d
+        pairs[key] = [r] * MIN_PAIR_COUNT
+    frame, y = _frame(pairs, distances=dist)
+    ref = fit_pru_reference(frame, y)
+    model = fit_geometric(frame, ref, lower_tail(frame, y, ref), class_column=None)
+    assert model.inverse_speed["AAAA"] == pytest.approx(1.0 / v, rel=1e-9)
+    # BBBB is pooled outright: a slope that fails must not leave its intercept
+    # behind, and the shared modulators are refitted without its rows
+    assert model.pooled_airports == ("BBBB",)
+    assert "BBBB" not in model.inverse_speed and "BBBB" not in model.airport_intercept
+    assert model.default_inverse_speed > 0
+    got = model.predict(frame[frame["icao"] == "BBBB"])
+    assert (got > 0).all() and (got < 10_000).all()
+
+
+def test_an_airport_with_too_few_pairs_takes_the_pooled_parameters():
+    """A single pair cannot identify a line, so the airport is pooled and said so."""
+    v = 8.0
+    pairs, dist = {}, {}
+    for i, d in enumerate([800.0, 1200.0, 1600.0, 2000.0, 2400.0]):
+        key = ("AAAA", f"S{i}", "27")
+        dist[key] = d
+        pairs[key] = [100.0 + d / v] * MIN_PAIR_COUNT
+    thin = ("BBBB", "S0", "27")
+    dist[thin] = 3000.0
+    pairs[thin] = [100.0 + 3000.0 / v] * MIN_PAIR_COUNT
+    frame, y = _frame(pairs, distances=dist)
+    ref = fit_pru_reference(frame, y)
+    model = fit_geometric(frame, ref, lower_tail(frame, y, ref), class_column=None)
+    assert model.pooled_airports == ("BBBB",)
+    assert "BBBB" not in model.inverse_speed
+    assert model.inverse_speed["AAAA"] == pytest.approx(1.0 / v, rel=1e-9)
+    # the pooled line was fitted on every row, thin airport included, and on
+    # this exact data it is the same line
+    assert model.default_inverse_speed == pytest.approx(1.0 / v, rel=1e-9)
+    assert model.default_intercept == pytest.approx(100.0, rel=1e-9)
+    got = model.predict(frame[frame["icao"] == "BBBB"]).iloc[0]
+    assert got == pytest.approx(100.0 + 3000.0 / v, rel=1e-9)

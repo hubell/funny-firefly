@@ -21,6 +21,11 @@ reports:
    and its quality flags added. Rung 4 to rung 5 is the claim, and it is only
    readable on the held-out-pair split, where rung 4's advantage of having
    memorised the pair is taken away.
+6. **plus the aircraft** -- wake class and type as categoricals. On a seen
+   pair the stand absorbs the class, because heavies park at wide-body
+   stands; on a new pair nothing does, so this too is read on the held-out
+   split. The geometric rung has a twin for the same reason: one intercept
+   per airport, then one per (airport, wake class).
 
 Each rung is scored twice, once plain and once with the record-quality term on
 top. That term lives in ``taxiout.tails`` and is deliberately not reimplemented
@@ -47,6 +52,8 @@ import numpy as np
 import pandas as pd
 
 from taxiout.features import (
+    AIRCRAFT_FEATURES,
+    CATEGORICAL_FEATURES,
     GEOMETRY_FEATURES,
     PLAN_FEATURES,
     QUALITY_FEATURES,
@@ -88,6 +95,10 @@ class Rung:
     kind: str  # "airport-mean" | "pru" | "geometric" | "booster"
     features: tuple[str, ...] = ()
     note: str = ""
+    # Keyword options for the rung's fitter, as pairs so the dataclass stays
+    # frozen and hashable. The geometric rungs use it to say which class
+    # column, if any, the intercept reads.
+    options: tuple[tuple[str, object], ...] = ()
 
     @property
     def uses_geometry(self) -> bool:
@@ -116,7 +127,18 @@ LADDER: tuple[Rung, ...] = (
         key="geometric",
         label="geometric unimpeded",
         kind="geometric",
-        note="taxi_m / speed, modulated by route shape; no learned model above it",
+        options=(("class_column", None),),
+        note=(
+            "an intercept per airport plus taxi_m over a per-airport speed, "
+            "modulated by route shape; no learned model above it"
+        ),
+    ),
+    Rung(
+        key="geometric-class",
+        label="geometric unimpeded + wake class",
+        kind="geometric",
+        options=(("class_column", "wake_class"),),
+        note="the same, with the intercept fitted per (airport, wake class)",
     ),
     Rung(
         key="identifiers",
@@ -135,6 +157,18 @@ LADDER: tuple[Rung, ...] = (
         + GEOMETRY_FEATURES
         + QUALITY_FEATURES,
         note="the same model with the matrix block and its join-quality flags",
+    ),
+    Rung(
+        key="identifiers-geometry-aircraft",
+        label="identifiers + time + geometry + aircraft",
+        kind="booster",
+        features=IDENTIFIER_BLOCK
+        + TIME_FEATURES
+        + PLAN_FEATURES
+        + GEOMETRY_FEATURES
+        + QUALITY_FEATURES
+        + AIRCRAFT_FEATURES,
+        note="the same model with the wake class and the aircraft type",
     ),
 )
 
@@ -188,9 +222,7 @@ class Booster:
         self.params = dict(BOOSTER_PARAMS if params is None else params)
         self.backend = booster_backend()
         self.model = None
-        self.categorical = tuple(
-            c for c in self.features if c in ("icao", "stand", "designator", "pair")
-        )
+        self.categorical = tuple(c for c in self.features if c in CATEGORICAL_FEATURES)
         self._levels: dict[str, pd.Index | None] = {}
 
     def _design(self, X: pd.DataFrame) -> pd.DataFrame:

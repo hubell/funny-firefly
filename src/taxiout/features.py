@@ -2,7 +2,7 @@
 """The Gate 1 feature frame, and a registry of what every column reads.
 
 One frame per movement, built from ``taxiout.challenge``'s loaders and
-``taxiout.join.join_stands``. Four blocks, and nothing else at this gate:
+``taxiout.join.join_stands``. Six blocks:
 
 - **Identifiers.** Airport, stand, runway, and the pair. These are what the
   ablation ladder's saturated rung uses and what the held-out-pair split
@@ -25,6 +25,10 @@ One frame per movement, built from ``taxiout.challenge``'s loaders and
   planned off-block moved between the first estimate the Network Manager held
   and the last, from ATFM or the airline or the airport without saying which
   (*Deliberate non-goals* in ``docs/modelling_notes.md``).
+- **The aircraft.** Wake-turbulence class and type, as categoricals. A
+  heavy pushes back, starts and lines up more slowly than a medium on the
+  same route; on a seen pair the stand identifier absorbs that, because
+  heavies park at wide-body stands, and on a new pair nothing does.
 
 Stands that do not join fall back to airport level rather than carrying nulls
 -- 3.7% of training departures and 3.3% of ranking departures are stands
@@ -92,12 +96,21 @@ QUALITY_FEATURES: tuple[str, ...] = (
 
 PLAN_FEATURES: tuple[str, ...] = ("lobt_iobt_s", "lobt_iobt_missing")
 
+# The aircraft. Both are exposed for every ranking departure and neither
+# depends on the phase. ``reports/geometry_gaps.md`` found the wake class
+# worth 35 to 281 s on the fastest decile at the same stand and runway, which
+# the stand identifier absorbs on a seen pair and nothing absorbs on a new
+# one; the type is the finer version of the same thing. A null class is the
+# unjoined flight-side block and is carried as a class of its own.
+AIRCRAFT_FEATURES: tuple[str, ...] = ("wake_class", "aircraft_type")
+
 FEATURE_COLUMNS: tuple[str, ...] = (
     IDENTIFIER_FEATURES
     + TIME_FEATURES
     + GEOMETRY_FEATURES
     + QUALITY_FEATURES
     + PLAN_FEATURES
+    + AIRCRAFT_FEATURES
 )
 
 # Every feature column against the raw columns it reads. Checked against
@@ -110,6 +123,8 @@ FEATURE_SOURCES: dict[str, tuple[str, ...]] = {
     **{c: _KEYS for c in GEOMETRY_FEATURES},
     **{c: _KEYS for c in QUALITY_FEATURES},
     **{c: ("LOBT_flt", "IOBT_flt") for c in PLAN_FEATURES},
+    "wake_class": ("WK_TBL_CAT_flt",),
+    "aircraft_type": ("AIRCRAFT_TYPE_mvt",),
 }
 
 # What a caller has to load to build the frame. The target is not here: it is
@@ -119,7 +134,12 @@ REQUIRED_COLUMNS: tuple[str, ...] = tuple(
 )
 
 # Columns the model treats as categorical rather than ordered.
-CATEGORICAL_FEATURES: tuple[str, ...] = IDENTIFIER_FEATURES
+CATEGORICAL_FEATURES: tuple[str, ...] = IDENTIFIER_FEATURES + AIRCRAFT_FEATURES
+
+# What a null categorical is called. Null-ness is information here -- a null
+# wake class is the unjoined block -- and a label keeps it a level rather
+# than a hole.
+NULL_LEVEL = "none"
 
 _DAY = 86400.0
 _MINUTE = 60.0
@@ -133,6 +153,16 @@ def _finite_ratio(num: pd.Series, den: pd.Series, floor: float = 1.0) -> pd.Seri
     an infinity in a feature column is worse than a null.
     """
     return num / den.where(den.abs() >= floor)
+
+
+def _level(column: pd.Series) -> pd.Series:
+    """A categorical's values as strings, with nulls as ``NULL_LEVEL``.
+
+    Through ``np.where`` rather than ``fillna`` because a pandas categorical
+    refuses a fill value that is not already one of its levels.
+    """
+    values = np.where(column.isna(), NULL_LEVEL, column.astype(str))
+    return pd.Series(values, index=column.index, dtype=object)
 
 
 def time_features(takeoff: pd.Series) -> pd.DataFrame:
@@ -278,6 +308,9 @@ def build_features(
     ).dt.total_seconds()
     out["lobt_iobt_missing"] = delay.isna().astype("float32")
     out["lobt_iobt_s"] = delay.fillna(0.0).astype("float32")
+
+    out["wake_class"] = _level(frame["WK_TBL_CAT_flt"])
+    out["aircraft_type"] = _level(frame["AIRCRAFT_TYPE_mvt"])
 
     for c in FEATURE_COLUMNS:
         if c in CATEGORICAL_FEATURES:

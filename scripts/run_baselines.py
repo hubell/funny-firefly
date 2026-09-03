@@ -67,6 +67,7 @@ from taxiout.models import (  # noqa: E402
     booster_backend,
 )
 from taxiout.unimpeded import (  # noqa: E402
+    MIN_CLASS_ROWS,
     MIN_PAIR_COUNT,
     PRU_PERCENTILE,
     calibration,
@@ -241,7 +242,10 @@ def fit_and_predict(
                 return ref.predict(features.loc[mask])
         else:
             geo = fit_geometric(
-                features, ref, lower_tail(features, y, ref, mask=fit_rows)
+                features,
+                ref,
+                lower_tail(features, y, ref, mask=fit_rows),
+                **dict(rung.options),
             )
             info["geometric"] = geo
 
@@ -441,45 +445,65 @@ def section_setup(
 
 
 def section_unimpeded(results, features, splits) -> list[str]:
-    """Speeds, coefficients, and the calibration against the PRU reference."""
-    key = (splits[0].name, "geometric", "valid")
-    info = results[key]["info"]
-    ref, geo = info["reference"], info["geometric"]
+    """Intercepts, speeds, modulators, and the calibration against the reference."""
+    split = splits[0]
+    plain = results[(split.name, "geometric", "valid")]["info"]
+    ref = plain["reference"]
+    geo_plain = plain["geometric"]
+    with_class = results.get((split.name, "geometric-class", "valid"))
+    geo = with_class["info"]["geometric"] if with_class else geo_plain
+
+    # -- intercepts: one row per airport, one column per class the fit kept
+    classes = sorted({c for (_, c) in geo.class_intercept})
+    icaos = sorted({a for (a, _) in geo.class_intercept})
+    int_rows = []
+    for ap in icaos:
+        cells = [ap, f"{geo_plain.airport_intercept.get(ap, float('nan')):,.0f}"]
+        for c in classes:
+            v = geo.class_intercept.get((ap, c))
+            cells.append("--" if v is None else f"{v:,.0f}")
+        int_rows.append(cells)
 
     speed_rows = [
-        [ap, f"{v:.2f}", f"{3.6 * v:.1f}"] for ap, v in sorted(geo.speed.items())
+        [ap, f"{v:.2f}", f"{3.6 * v:.1f}", f"{geo_plain.speed.get(ap, float('nan')):.2f}"]
+        for ap, v in sorted(geo.speed.items())
     ]
     speed_rows.append(
-        ["all", f"{geo.default_speed:.2f}", f"{3.6 * geo.default_speed:.1f}"]
+        [
+            "all",
+            f"{geo.default_speed:.2f}",
+            f"{3.6 * geo.default_speed:.1f}",
+            f"{geo_plain.default_speed:.2f}",
+        ]
     )
+    s0 = geo.default_inverse_speed
     coef_rows = [
-        [f"`{c}`", f"{b:+.4f}", f"{np.exp(abs(b)):.3f}"]
+        [f"`{c}`", f"{1000 * b:+.2f}", f"{(s0 + b) / s0:.3f}"]
         for c, b in sorted(geo.coef.items(), key=lambda kv: -abs(kv[1]))
     ]
 
-    train = splits[0].train
-    cal = calibration(
-        features[train],
-        ref,
-        geo,
-        weights=pd.Series(1.0, index=features.index)[train],
-    )
-    cal_rows = [
-        [
-            r["icao"],
-            f"{r['pairs']:,}",
-            num(r["ref_median_s"]),
-            num(r["rmse_s"]),
-            num(r["mae_s"]),
-            f"{r['bias_s']:+,.0f}",
-            f"{r['ratio_p10']:.2f}",
-            f"{r['ratio_p50']:.2f}",
-            f"{r['ratio_p90']:.2f}",
-            f"{r['corr']:.2f}",
-        ]
-        for _, r in cal.iterrows()
-    ]
+    train = split.train
+    w = pd.Series(1.0, index=features.index)[train]
+    cal = calibration(features[train], ref, geo, weights=w)
+    cal_plain = calibration(features[train], ref, geo_plain, weights=w)
+    cal_rows = []
+    for (_, r), (_, r0) in zip(cal.iterrows(), cal_plain.iterrows()):
+        cal_rows.append(
+            [
+                r["icao"],
+                f"{r['pairs']:,}",
+                num(r["ref_median_s"]),
+                num(r0["rmse_s"]),
+                num(r["rmse_s"]),
+                f"{r['bias_s']:+,.0f}",
+                f"{r['ratio_p10']:.2f}",
+                f"{r['ratio_p50']:.2f}",
+                f"{r['ratio_p90']:.2f}",
+                f"{r['corr']:.2f}",
+            ]
+        )
     overall = cal[cal["icao"] == "all"].iloc[0]
+    overall0 = cal_plain[cal_plain["icao"] == "all"].iloc[0]
     levels = ref.level(features[train]).value_counts(normalize=True)
 
     return [
@@ -488,9 +512,10 @@ def section_unimpeded(results, features, splits) -> list[str]:
         "Two estimates of the same quantity. The PRU reference is the organisers'",
         f"own: the {100 * PRU_PERCENTILE:.0f}th percentile of observed taxi-out per",
         f"(airport, stand, runway), over pairs seen at least {MIN_PAIR_COUNT} times in",
-        "the training side of the split. The geometric version turns `taxi_m` into",
-        "seconds through a per-airport speed and modulates it by route shape, and",
-        "so is defined for every pair the matrix can route, seen or not.",
+        "the training side of the split. The geometric version is an intercept per",
+        "airport and wake class plus `taxi_m` over a per-airport speed, modulated",
+        "by route shape, and so is defined for every pair the matrix can route,",
+        "seen or not.",
         "",
         "On the December split's training rows the reference answers at pair level",
         f"for {pct(levels.get('pair', 0.0))} of departures, falls back to (airport,",
@@ -498,41 +523,78 @@ def section_unimpeded(results, features, splits) -> list[str]:
         f"{pct(levels.get('airport', 0.0))}. The fallbacks are the gap the geometry",
         "exists to fill.",
         "",
-        "### The fitted speeds",
+        "### The fit",
         "",
-        "Least squares of the pair's reference on `taxi_m`, over the unflagged",
-        f"lower tail -- the {geo.n_fit:,} rows at or below their own pair's",
-        "reference, restricted to pairs that have one and to rows whose geometry",
-        "is a real matrix cell.",
+        "One least squares of the pair's reference on an intercept per (airport,",
+        "wake class), `taxi_m` per airport, and `taxi_m` times each standardised",
+        f"route descriptor, pooled -- over the unflagged lower tail, the {geo.n_fit:,}",
+        "rows at or below their own pair's reference, restricted to pairs that have",
+        "one and to rows whose geometry is a real matrix cell. A class with fewer",
+        f"than {MIN_CLASS_ROWS} such rows at an airport is pooled into `other`.",
         "",
-        *table(["ICAO", "m/s", "km/h"], speed_rows, "-rr"),
+        *(
+            [
+                f"{len(geo.pooled_airports)} airport(s) had fewer than 5 distinct pairs"
+                " among the fit rows and take the pooled intercept and speed: "
+                + ", ".join(geo.pooled_airports)
+                + ". On the full training year no airport does; this line exists"
+                " for development runs on a subsample.",
+                "",
+            ]
+            if geo.pooled_airports
+            else []
+        ),
+        "The intercept is the pushback, start-up and line-up that no distance",
+        "explains, and it is the reason the Gate 1 speeds -- fitted through the",
+        "origin -- came out at 3 to 6 m/s, below any aircraft's taxi speed: they",
+        "were carrying it. `reports/geometry_gaps.md` measured it, and measured",
+        "that it differs by wake class at the same stand and runway. Seconds, per",
+        "airport; the first column is the intercept with no class distinction:",
+        "",
+        *table(
+            ["ICAO", "one intercept"] + [f"`{c}`" for c in classes],
+            int_rows,
+            "-" + "r" * (1 + len(classes)),
+        ),
+        "",
+        "### The speeds",
+        "",
+        "With the intercept carrying the fixed component, the slope is a marginal",
+        "taxi speed. The last column is the same airport's speed from the fit with",
+        "one intercept, to show how little the class distinction moves it.",
+        "",
+        *table(["ICAO", "m/s", "km/h", "m/s, one intercept"], speed_rows, "-rrr"),
         "",
         "### The modulators",
         "",
-        "Coefficients on standardised route descriptors, in log space, pooled",
-        "across airports. Five of them against thousands of pairs: too few to",
-        "memorise a pair, which is what makes the held-out-pair split below mean",
-        "something. The last column is the factor one standard deviation of the",
-        "descriptor moves the unimpeded time by.",
+        "Coefficients on standardised route descriptors, pooled across airports,",
+        "as seconds per kilometre of route per standard deviation of the",
+        "descriptor: a positive value says the route runs slower by that much for",
+        "each standard deviation. The last column is the factor one standard",
+        "deviation moves the pooled inverse speed by. Five of them against",
+        "thousands of pairs: too few to memorise a pair, which is what makes the",
+        "held-out-pair split below mean something.",
         "",
-        *table(["descriptor", "coefficient", "factor per sd"], coef_rows, "-rr"),
+        *table(["descriptor", "s per km per sd", "factor per sd"], coef_rows, "-rr"),
         "",
         "### Calibration against the PRU reference",
         "",
-        "**The calibration check.** How closely `taxi_m / speed`, modulated,",
-        "reproduces the reference on the pairs where the reference exists. One row",
-        "per distinct pair, so a busy pair does not outvote a quiet one. Both",
-        "quantities are fitted on the same training rows, so this measures whether",
-        "the geometry can express the reference at all -- not whether it holds up",
-        "out of sample, which is what the held-out-pair split is for.",
+        "**The calibration check.** How closely the geometric term reproduces the",
+        "reference on the pairs where the reference exists. One row per distinct",
+        "pair, so a busy pair does not outvote a quiet one. Both quantities are",
+        "fitted on the same training rows, so this measures whether the geometry",
+        "can express the reference at all -- not whether it holds up out of",
+        "sample, which is what the held-out-pair split is for. `RMSE, one",
+        "intercept` is the fit without the class distinction; every other column",
+        "is the fit with it.",
         "",
         *table(
             [
                 "ICAO",
                 "pairs",
                 "reference p50",
-                "RMSE",
-                "MAE",
+                "RMSE, one intercept",
+                "RMSE, per class",
                 "bias",
                 "ratio p10",
                 "p50",
@@ -543,10 +605,11 @@ def section_unimpeded(results, features, splits) -> list[str]:
             "-rrrrrrrrr",
         ),
         "",
-        f"Pooled: {num(overall['rmse_s'])} s RMSE against a median reference of",
-        f"{num(overall['ref_median_s'])} s, a "
-        f"{abs(overall['rmse_s'] / overall['ref_median_s']):.0%} relative error, with",
-        f"the middle 80% of pairs between {overall['ratio_p10']:.2f} and",
+        f"Pooled: {num(overall['rmse_s'])} s RMSE with the per-class intercept, against",
+        f"{num(overall0['rmse_s'])} s with one, on a median reference of",
+        f"{num(overall['ref_median_s'])} s -- a "
+        f"{abs(overall['rmse_s'] / overall['ref_median_s']):.0%} relative error, with the",
+        f"middle 80% of pairs between {overall['ratio_p10']:.2f} and",
         f"{overall['ratio_p90']:.2f} times the reference.",
     ]
 
@@ -858,7 +921,7 @@ def section_pairs(results, splits, features, y, tails: Tails) -> list[str]:
             " told from zero is not a finding.",
             "",
             *table(
-                ["ICAO", "held-out rows", "difference [95%]", "clear of zero"],
+                ["ICAO", "held-out rows, all folds", "difference [95%]", "clear of zero"],
                 arow,
                 "-rr-",
             ),

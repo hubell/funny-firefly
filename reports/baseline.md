@@ -52,9 +52,10 @@ what the stated scoring rule counts.
 Two estimates of the same quantity. The PRU reference is the organisers'
 own: the 10th percentile of observed taxi-out per
 (airport, stand, runway), over pairs seen at least 30 times in
-the training side of the split. The geometric version turns `taxi_m` into
-seconds through a per-airport speed and modulates it by route shape, and
-so is defined for every pair the matrix can route, seen or not.
+the training side of the split. The geometric version is an intercept per
+airport and wake class plus `taxi_m` over a per-airport speed, modulated
+by route shape, and so is defined for every pair the matrix can route,
+seen or not.
 
 On the December split's training rows the reference answers at pair level
 for 97.7% of departures, falls back to (airport,
@@ -62,70 +63,103 @@ runway) for 2.3% and to the airport for
 0.0%. The fallbacks are the gap the geometry
 exists to fill.
 
-### The fitted speeds
+### The fit
 
-Least squares of the pair's reference on `taxi_m`, over the unflagged
-lower tail -- the 185,084 rows at or below their own pair's
-reference, restricted to pairs that have one and to rows whose geometry
-is a real matrix cell.
+One least squares of the pair's reference on an intercept per (airport,
+wake class), `taxi_m` per airport, and `taxi_m` times each standardised
+route descriptor, pooled -- over the unflagged lower tail, the 185,084
+rows at or below their own pair's reference, restricted to pairs that have
+one and to rows whose geometry is a real matrix cell. A class with fewer
+than 30 such rows at an airport is pooled into `other`.
 
-| ICAO | m/s | km/h |
-| --- | ---: | ---: |
-| EDDF | 5.48 | 19.7 |
-| EDDM | 6.03 | 21.7 |
-| EGLL | 3.25 | 11.7 |
-| EHAM | 6.38 | 23.0 |
-| LEBL | 4.15 | 15.0 |
-| LEMD | 5.03 | 18.1 |
-| LFPG | 5.50 | 19.8 |
-| LIRF | 3.59 | 12.9 |
-| LSZH | 3.60 | 12.9 |
-| LTFM | 3.59 | 12.9 |
-| all | 4.75 | 17.1 |
+The intercept is the pushback, start-up and line-up that no distance
+explains, and it is the reason the Gate 1 speeds -- fitted through the
+origin -- came out at 3 to 6 m/s, below any aircraft's taxi speed: they
+were carrying it. `reports/geometry_gaps.md` measured it, and measured
+that it differs by wake class at the same stand and runway. Seconds, per
+airport; the first column is the intercept with no class distinction:
+
+| ICAO | one intercept | `H` | `J` | `L` | `M` | `none` | `other` |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| EDDF | 283 | 452 | -- | 245 | 261 | 324 | 446 |
+| EDDM | 342 | 452 | -- | 151 | 337 | 350 | 437 |
+| EGLL | 724 | 787 | 857 | -- | 686 | 734 | -- |
+| EHAM | 294 | 448 | -- | 66 | 265 | 261 | 493 |
+| LEBL | 284 | 351 | -- | 150 | 278 | 305 | 457 |
+| LEMD | 442 | 506 | 782 | 278 | 410 | 384 | -- |
+| LFPG | 406 | 517 | 740 | -- | 331 | 390 | 62 |
+| LIRF | 284 | 406 | -- | -- | 297 | -- | 522 |
+| LSZH | 261 | 397 | -- | 128 | 282 | 291 | 468 |
+| LTFM | 516 | 524 | -- | -- | 500 | 525 | 422 |
+
+### The speeds
+
+With the intercept carrying the fixed component, the slope is a marginal
+taxi speed. The last column is the same airport's speed from the fit with
+one intercept, to show how little the class distinction moves it.
+
+| ICAO | m/s | km/h | m/s, one intercept |
+| --- | ---: | ---: | ---: |
+| EDDF | 8.70 | 31.3 | 8.74 |
+| EDDM | 13.16 | 47.4 | 13.56 |
+| EGLL | 10.31 | 37.1 | 10.76 |
+| EHAM | 10.08 | 36.3 | 10.51 |
+| LEBL | 6.59 | 23.7 | 6.58 |
+| LEMD | 10.16 | 36.6 | 10.48 |
+| LFPG | 10.03 | 36.1 | 11.07 |
+| LIRF | 5.92 | 21.3 | 5.60 |
+| LSZH | 7.93 | 28.6 | 6.74 |
+| LTFM | 8.97 | 32.3 | 9.62 |
+| all | 12.38 | 44.6 | 12.38 |
 
 ### The modulators
 
-Coefficients on standardised route descriptors, in log space, pooled
-across airports. Five of them against thousands of pairs: too few to
-memorise a pair, which is what makes the held-out-pair split below mean
-something. The last column is the factor one standard deviation of the
-descriptor moves the unimpeded time by.
+Coefficients on standardised route descriptors, pooled across airports,
+as seconds per kilometre of route per standard deviation of the
+descriptor: a positive value says the route runs slower by that much for
+each standard deviation. The last column is the factor one standard
+deviation moves the pooled inverse speed by. Five of them against
+thousands of pairs: too few to memorise a pair, which is what makes the
+held-out-pair split below mean something.
 
-| descriptor | coefficient | factor per sd |
+| descriptor | s per km per sd | factor per sd |
 | --- | ---: | ---: |
-| `turn_deg_per_km` | +0.1589 | 1.172 |
-| `straight_frac` | -0.0602 | 1.062 |
-| `backtrack_frac` | +0.0567 | 1.058 |
-| `junctions_per_km` | +0.0394 | 1.040 |
-| `detour_ratio` | -0.0134 | 1.013 |
+| `turn_deg_per_km` | +6.79 | 1.084 |
+| `junctions_per_km` | +4.51 | 1.056 |
+| `straight_frac` | +4.19 | 1.052 |
+| `detour_ratio` | -0.71 | 0.991 |
+| `backtrack_frac` | -0.46 | 0.994 |
 
 ### Calibration against the PRU reference
 
-**The calibration check.** How closely `taxi_m / speed`, modulated,
-reproduces the reference on the pairs where the reference exists. One row
-per distinct pair, so a busy pair does not outvote a quiet one. Both
-quantities are fitted on the same training rows, so this measures whether
-the geometry can express the reference at all -- not whether it holds up
-out of sample, which is what the held-out-pair split is for.
+**The calibration check.** How closely the geometric term reproduces the
+reference on the pairs where the reference exists. One row per distinct
+pair, so a busy pair does not outvote a quiet one. Both quantities are
+fitted on the same training rows, so this measures whether the geometry
+can express the reference at all -- not whether it holds up out of
+sample, which is what the held-out-pair split is for. `RMSE, one
+intercept` is the fit without the class distinction; every other column
+is the fit with it.
 
-| ICAO | pairs | reference p50 | RMSE | MAE | bias | ratio p10 | p50 | p90 | corr |
+| ICAO | pairs | reference p50 | RMSE, one intercept | RMSE, per class | bias | ratio p10 | p50 | p90 | corr |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| EDDF | 527 | 620 | 172 | 145 | -73 | 0.55 | 0.87 | 1.32 | 0.70 |
-| EDDM | 437 | 594 | 188 | 143 | +133 | 0.99 | 1.19 | 1.69 | 0.58 |
-| EGLL | 525 | 976 | 280 | 234 | -33 | 0.54 | 0.97 | 1.32 | 0.65 |
-| EHAM | 756 | 584 | 141 | 113 | -17 | 0.67 | 0.97 | 1.27 | 0.82 |
-| LEBL | 304 | 711 | 270 | 207 | +150 | 0.86 | 1.14 | 1.71 | 0.41 |
-| LEMD | 873 | 759 | 278 | 227 | +108 | 0.65 | 1.16 | 1.58 | 0.78 |
-| LFPG | 1,118 | 782 | 241 | 184 | +72 | 0.75 | 1.05 | 1.46 | 0.70 |
-| LIRF | 243 | 892 | 304 | 221 | +189 | 0.93 | 1.16 | 1.62 | 0.76 |
-| LSZH | 308 | 580 | 214 | 169 | +95 | 0.77 | 1.16 | 1.86 | 0.57 |
-| LTFM | 831 | 785 | 345 | 276 | +205 | 0.80 | 1.26 | 1.64 | 0.76 |
-| all | 5,922 | 728 | 252 | 194 | +77 | 0.69 | 1.08 | 1.53 | 0.73 |
+| EDDF | 527 | 620 | 150 | 137 | +32 | 0.80 | 1.01 | 1.67 | 0.76 |
+| EDDM | 437 | 594 | 90 | 85 | +17 | 0.88 | 1.01 | 1.36 | 0.70 |
+| EGLL | 525 | 976 | 108 | 92 | +23 | 0.91 | 1.02 | 1.16 | 0.80 |
+| EHAM | 756 | 584 | 116 | 80 | +6 | 0.88 | 1.01 | 1.18 | 0.92 |
+| LEBL | 304 | 711 | 184 | 181 | +52 | 0.84 | 1.07 | 1.56 | 0.49 |
+| LEMD | 873 | 759 | 135 | 131 | +35 | 0.88 | 1.00 | 1.37 | 0.82 |
+| LFPG | 1,118 | 782 | 139 | 107 | -10 | 0.85 | 0.99 | 1.15 | 0.84 |
+| LIRF | 243 | 892 | 126 | 111 | +18 | 0.88 | 1.01 | 1.26 | 0.82 |
+| LSZH | 308 | 580 | 125 | 112 | +14 | 0.84 | 0.96 | 1.55 | 0.73 |
+| LTFM | 831 | 785 | 121 | 118 | +14 | 0.86 | 1.01 | 1.22 | 0.77 |
+| all | 5,922 | 728 | 130 | 115 | +16 | 0.87 | 1.00 | 1.31 | 0.86 |
 
-Pooled: 252 s RMSE against a median reference of
-728 s, a 35% relative error, with
-the middle 80% of pairs between 0.69 and
-1.53 times the reference.
+Pooled: 115 s RMSE with the per-class intercept, against
+130 s with one, on a median reference of
+728 s -- a 16% relative error, with the
+middle 80% of pairs between 0.87 and
+1.31 times the reference.
 
 ## The ablation ladder
 
@@ -153,9 +187,11 @@ Train January-November 2025, validate December, all ten airports -- the winter p
 | --- | ---: | ---: | ---: | ---: | ---: |
 | airport mean | 488.0 | +0.0 | n/a | 391.1 | 380.0 |
 | PRU reference | 534.4 | +46.4 | 451.3 | 445.5 | 435.8 |
-| geometric unimpeded | 555.1 | +67.1 | 487.4 | 471.4 | 462.3 |
+| geometric unimpeded | 544.3 | +56.3 | 466.4 | 457.7 | 448.2 |
+| geometric unimpeded + wake class | 533.4 | +45.5 | 458.5 | 446.3 | 436.5 |
 | identifiers + time | 442.2 | -45.8 | n/a | 335.5 | 322.3 |
 | identifiers + time + geometry | 443.1 | -44.9 | n/a | 336.2 | 323.1 |
+| identifiers + time + geometry + aircraft | 442.6 | -45.3 | n/a | 334.7 | 321.5 |
 
 ### July split
 
@@ -165,9 +201,11 @@ Train January-June 2025, validate July -- the three airports the July test set c
 | --- | ---: | ---: | ---: | ---: | ---: |
 | airport mean | 717.2 | +0.0 | n/a | 499.1 | 466.5 |
 | PRU reference | 771.6 | +54.4 | 692.4 | 569.5 | 541.3 |
-| geometric unimpeded | 771.3 | +54.1 | 710.5 | 570.4 | 542.2 |
+| geometric unimpeded | 774.7 | +57.5 | 700.3 | 573.6 | 545.6 |
+| geometric unimpeded + wake class | 765.4 | +48.3 | 693.5 | 564.4 | 535.9 |
 | identifiers + time | 677.2 | -40.0 | n/a | 447.3 | 410.6 |
 | identifiers + time + geometry | 675.3 | -41.9 | n/a | 443.9 | 406.9 |
+| identifiers + time + geometry + aircraft | 675.4 | -41.7 | n/a | 442.8 | 405.6 |
 
 ## Held-out pairs
 
@@ -209,11 +247,13 @@ gaps are at the end, for the record.
 | --- | ---: | ---: | ---: | ---: | --- |
 | airport mean | 381.2 | 393.6 | +12.5 s [-2.9, +29.8] | -1 / +11 / +27 | no |
 | PRU reference | 435.2 | 525.1 | +89.9 s [+76.6, +104.8] | +89 / +85 / +95 | no |
-| geometric unimpeded | 458.7 | 469.8 | +11.1 s [-3.7, +27.3] | +1 / +19 / +13 | yes |
+| geometric unimpeded | 448.6 | 459.3 | +10.7 s [-3.7, +27.3] | +6 / +9 / +17 | yes |
+| geometric unimpeded + wake class | 438.3 | 449.4 | +11.1 s [-4.0, +27.7] | +6 / +10 / +18 | yes |
 | identifiers + time | 303.3 | 351.6 | +48.3 s [+31.4, +67.3] | +36 / +46 / +63 | no |
 | identifiers + time + geometry | 302.5 | 336.3 | +33.8 s [+15.9, +53.1] | +23 / +31 / +47 | yes |
+| identifiers + time + geometry + aircraft | 299.6 | 329.9 | +30.3 s [+12.1, +50.0] | +20 / +27 / +44 | yes |
 
-The zero-parameter rung is the purest statement in the table. The geometric unimpeded term carries no identifier, so it has nothing to memorize and, if the geometry is doing what it claims, nothing to lose on a pair it has never seen. Net of the airport mean's own gap -- pure composition -- its gap is -1.4 s [-8.3, +5.6], which is indistinguishable from zero: it loses nothing.
+The zero-parameter rung is the purest statement in the table. The geometric unimpeded term carries no identifier, so it has nothing to memorize and, if the geometry is doing what it claims, nothing to lose on a pair it has never seen. Net of the airport mean's own gap -- pure composition -- its gap is -1.7 s [-6.2, +2.7], which is indistinguishable from zero: it loses nothing.
 
 ### What each block buys where the pair is new
 
@@ -225,9 +265,11 @@ never saw; zero means it is memorization dressed as a feature.
 | step | on seen pairs (s) | on held-out pairs (s) | difference [95%] |
 | --- | ---: | ---: | ---: |
 | airport mean → PRU reference | -54.0 | -131.5 | -77.5 s [-83.4, -71.5] |
-| PRU reference → geometric unimpeded | -23.5 | +55.3 | +78.8 s [+71.8, +86.2] |
-| geometric unimpeded → identifiers + time | +155.4 | +118.2 | -37.2 s [-44.7, -29.8] |
+| PRU reference → geometric unimpeded | -13.4 | +65.8 | +79.2 s [+75.3, +83.0] |
+| geometric unimpeded → geometric unimpeded + wake class | +10.3 | +9.9 | -0.4 s [-1.8, +1.0] |
+| geometric unimpeded + wake class → identifiers + time | +135.0 | +97.9 | -37.1 s [-42.3, -31.9] |
 | identifiers + time → identifiers + time + geometry **(the claim)** | +0.8 | +15.3 | +14.5 s [+13.0, +16.3] |
+| identifiers + time + geometry → identifiers + time + geometry + aircraft | +2.8 | +6.4 | +3.5 s [+2.7, +4.5] |
 
 The claim contrast, identifiers + time → identifiers + time + geometry. **+14.5 s [+13.0, +16.3].** The interval excludes zero: the geometry block buys more on a pair the model has never seen than on one it has, which is the claim.
 
@@ -235,7 +277,7 @@ The claim contrast, identifiers + time → identifiers + time + geometry. **+14.
 
 The same contrast, over each airport's held-out pairs alone. The intervals are wide where an airport is small, and that is the point of printing them: a per-airport difference that cannot be told from zero is not a finding.
 
-| ICAO | held-out rows | difference [95%] | clear of zero |
+| ICAO | held-out rows, all folds | difference [95%] | clear of zero |
 | --- | ---: | ---: | --- |
 | EDDF | 230,141 | +29.0 s [+22.3, +36.3] | yes |
 | EDDM | 167,334 | +8.5 s [+5.2, +12.9] | yes |
@@ -256,9 +298,11 @@ The gap per rung with the record-quality rows left in. Two hundred draws, becaus
 | --- | ---: |
 | airport mean | -69.5 s [-169.1, +18.6] |
 | PRU reference | -1.1 s [-95.9, +81.8] |
-| geometric unimpeded | -64.0 s [-156.5, +18.5] |
+| geometric unimpeded | -65.7 s [-159.2, +16.7] |
+| geometric unimpeded + wake class | -66.1 s [-160.6, +17.5] |
 | identifiers + time | -49.5 s [-155.1, +46.4] |
 | identifiers + time + geometry | -60.0 s [-165.8, +35.6] |
+| identifiers + time + geometry + aircraft | -63.1 s [-169.4, +32.7] |
 
 ## Error by pair frequency
 
@@ -276,9 +320,11 @@ reports that record rather than anything about the rungs.
 | --- | ---: | ---: | ---: | ---: |
 | airport mean | 348.3 | 519.0 | 454.9 | 371.7 |
 | PRU reference | 470.8 | 674.1 | 509.3 | 426.5 |
-| geometric unimpeded | 439.7 | 534.2 | 480.7 | 460.2 |
+| geometric unimpeded | 420.2 | 572.5 | 510.8 | 441.5 |
+| geometric unimpeded + wake class | 412.6 | 552.3 | 492.6 | 430.5 |
 | identifiers + time | 347.3 | 446.1 | 373.7 | 316.4 |
 | identifiers + time + geometry | 323.3 | 428.9 | 375.4 | 317.3 |
+| identifiers + time + geometry + aircraft | 311.9 | 426.4 | 375.5 | 315.6 |
 
 ## Per airport
 
@@ -287,39 +333,39 @@ contains -- Frankfurt, Heathrow and Schiphol, 53% of the test rows -- so
 a pooled-optimal model could be a Frankfurt-Heathrow-Schiphol-optimal
 model. The top rung, per airport, on each forward split.
 
-### December split, identifiers + time + geometry
+### December split, identifiers + time + geometry + aircraft
 
 | ICAO | rows | RMSE (s) | excluding flagged (s) | bias (s) |
 | --- | ---: | ---: | ---: | ---: |
-| all | 165,677 | 443.1 | 323.1 | +24 |
-| the three * | 56,782 | 303.9 | 303.9 | +31 |
-| EDDF * | 17,324 | 259.5 | 259.5 | +24 |
-| EDDM | 12,035 | 412.5 | 412.5 | -40 |
-| EGLL * | 20,000 | 384.3 | 384.3 | -7 |
-| EHAM * | 19,458 | 240.3 | 240.3 | +77 |
-| LEBL | 13,835 | 237.9 | 237.9 | -1 |
-| LEMD | 17,985 | 224.3 | 224.3 | +4 |
-| LFPG | 19,778 | 406.8 | 406.8 | +111 |
-| LIRF | 12,068 | 1,195.7 | 410.2 | -28 |
-| LSZH | 10,585 | 258.6 | 258.6 | +30 |
-| LTFM | 22,609 | 320.0 | 320.0 | +19 |
+| all | 165,677 | 442.6 | 321.5 | +30 |
+| the three * | 56,782 | 305.5 | 305.5 | +41 |
+| EDDF * | 17,324 | 256.2 | 256.2 | +32 |
+| EDDM | 12,035 | 403.9 | 403.9 | -41 |
+| EGLL * | 20,000 | 381.3 | 381.3 | -11 |
+| EHAM * | 19,458 | 254.0 | 254.0 | +103 |
+| LEBL | 13,835 | 238.9 | 238.9 | +5 |
+| LEMD | 17,985 | 220.9 | 220.9 | +4 |
+| LFPG | 19,778 | 402.6 | 402.6 | +118 |
+| LIRF | 12,068 | 1,198.1 | 406.4 | -21 |
+| LSZH | 10,585 | 254.2 | 254.2 | +21 |
+| LTFM | 22,609 | 320.2 | 320.2 | +29 |
 
-### July split, identifiers + time + geometry
+### July split, identifiers + time + geometry + aircraft
 
 | ICAO | rows | RMSE (s) | excluding flagged (s) | bias (s) |
 | --- | ---: | ---: | ---: | ---: |
-| all | 190,713 | 675.3 | 406.9 | -37 |
-| the three * | 64,613 | 325.1 | 325.1 | -19 |
-| EDDF * | 21,334 | 239.1 | 239.1 | -1 |
-| EDDM | 15,825 | 240.1 | 240.1 | -37 |
-| EGLL * | 20,790 | 475.9 | 475.9 | -44 |
-| EHAM * | 22,489 | 200.1 | 200.1 | -13 |
-| LEBL | 16,752 | 312.5 | 312.5 | -38 |
-| LEMD | 18,818 | 231.7 | 231.7 | -1 |
-| LFPG | 21,712 | 343.9 | 343.9 | -21 |
-| LIRF | 15,211 | 2,139.0 | 974.8 | -149 |
-| LSZH | 12,611 | 238.0 | 238.0 | +12 |
-| LTFM | 25,171 | 383.9 | 383.9 | -82 |
+| all | 190,713 | 675.4 | 405.6 | -37 |
+| the three * | 64,613 | 323.1 | 323.1 | -18 |
+| EDDF * | 21,334 | 234.4 | 234.4 | +2 |
+| EDDM | 15,825 | 236.4 | 236.4 | -23 |
+| EGLL * | 20,790 | 475.6 | 475.6 | -46 |
+| EHAM * | 22,489 | 196.5 | 196.5 | -10 |
+| LEBL | 16,752 | 315.9 | 315.9 | -38 |
+| LEMD | 18,818 | 229.5 | 229.5 | +8 |
+| LFPG | 21,712 | 348.4 | 348.4 | -53 |
+| LIRF | 15,211 | 2,140.9 | 971.5 | -152 |
+| LSZH | 12,611 | 241.7 | 241.7 | +10 |
+| LTFM | 25,171 | 379.4 | 379.4 | -71 |
 
 `*` an airport the July 2026 test month contains.
 
@@ -333,23 +379,23 @@ first evidence that the ambiguity bookkeeping was worth carrying.
 
 | feature | share of splits | block |
 | --- | ---: | --- |
-| `stand` | 37.2% | other |
-| `designator` | 10.9% | other |
-| `tko_doy_cos` | 8.2% | other |
-| `tko_hour_cos` | 7.4% | other |
-| `tko_minute_of_day` | 6.0% | other |
-| `tko_hour_sin` | 5.6% | other |
-| `tko_doy_sin` | 5.1% | other |
-| `icao` | 2.8% | other |
-| `tko_dow` | 2.5% | other |
-| `lobt_iobt_missing` | 2.5% | other |
-| `tko_month` | 1.3% | other |
-| `taxi_m` | 0.9% | geometry |
+| `stand` | 34.1% | other |
+| `aircraft_type` | 11.6% | other |
+| `designator` | 10.4% | other |
+| `tko_doy_cos` | 6.9% | other |
+| `tko_hour_cos` | 5.7% | other |
+| `tko_minute_of_day` | 5.3% | other |
+| `tko_hour_sin` | 4.7% | other |
+| `tko_doy_sin` | 4.1% | other |
+| `icao` | 2.9% | other |
+| `tko_dow` | 2.2% | other |
+| `lobt_iobt_missing` | 1.8% | other |
+| `tko_month` | 1.1% | other |
+| `wake_class` | 0.8% | other |
 | `junctions` | 0.8% | geometry |
-| `lobt_iobt_s` | 0.8% | other |
-| `backtrack_frac` | 0.8% | geometry |
+| `backtrack_frac` | 0.7% | geometry |
 
-The geometry block and its quality flags take 9.8% of the splits.
+The geometry block and its quality flags take 7.8% of the splits.
 
 ## What is not here yet
 

@@ -22,6 +22,7 @@ np = pytest.importorskip("numpy")
 
 from taxiout.challenge import FORBIDDEN_FEATURE_INPUTS  # noqa: E402
 from taxiout.features import (  # noqa: E402
+    AIRCRAFT_FEATURES,
     CATEGORICAL_FEATURES,
     FEATURE_COLUMNS,
     FEATURE_SOURCES,
@@ -72,6 +73,8 @@ def _movements(stands: list[str], **overrides) -> pd.DataFrame:
             "MVT_TIME_UTC_mvt": pd.to_datetime(["2025-03-04T08:30:00Z"] * n, utc=True),
             "LOBT_flt": pd.to_datetime(["2025-03-04T08:10:00Z"] * n, utc=True),
             "IOBT_flt": pd.to_datetime(["2025-03-04T08:00:00Z"] * n, utc=True),
+            "WK_TBL_CAT_flt": ["M"] * n,
+            "AIRCRAFT_TYPE_mvt": ["A320"] * n,
         }
     )
     for k, v in overrides.items():
@@ -264,3 +267,38 @@ def test_feature_block_selects_in_frame_order():
     assert feature_block(("tko_dow", "icao")) == ["icao", "tko_dow"]
     with pytest.raises(KeyError):
         feature_block(("not_a_feature",))
+
+
+# --------------------------------------------------------------------------
+# the aircraft
+
+
+def test_aircraft_columns_are_categorical_and_come_from_the_exposed_fields():
+    m = _matrix([("ZZZZ", "B5", "27", 1000.0)])
+    frame = _movements(
+        ["B5", "B5"], WK_TBL_CAT_flt=["H", "M"], AIRCRAFT_TYPE_mvt=["B77W", "A320"]
+    )
+    f = build_features(frame, m)
+    assert set(AIRCRAFT_FEATURES) <= set(CATEGORICAL_FEATURES)
+    assert f["wake_class"].tolist() == ["H", "M"]
+    assert f["aircraft_type"].tolist() == ["B77W", "A320"]
+    assert str(f["wake_class"].dtype) == "category"
+
+
+def test_a_null_class_is_a_level_not_a_hole():
+    """A null wake class is the unjoined block, which is information."""
+    m = _matrix([("ZZZZ", "B5", "27", 1000.0)])
+    frame = _movements(["B5", "B5"])
+    frame["WK_TBL_CAT_flt"] = pd.Categorical(["M", None])
+    frame["AIRCRAFT_TYPE_mvt"] = pd.Categorical(["A320", None])
+    f = build_features(frame, m)
+    assert f["wake_class"].tolist() == ["M", "none"]
+    assert f["aircraft_type"].tolist() == ["A320", "none"]
+    assert not f[list(AIRCRAFT_FEATURES)].isna().any().any()
+
+
+def test_aircraft_sources_are_the_two_exposed_columns():
+    from taxiout.features import FEATURE_SOURCES
+
+    assert FEATURE_SOURCES["wake_class"] == ("WK_TBL_CAT_flt",)
+    assert FEATURE_SOURCES["aircraft_type"] == ("AIRCRAFT_TYPE_mvt",)
