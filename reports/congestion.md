@@ -381,10 +381,10 @@ gap between the two take-offs:
 
 | rung | rows | 0-2 min, pairs | corr | 2-5 min, pairs | corr | 5-15 min, pairs | corr |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| + weather | 165,589 | 81,543 | 0.20 | 57,099 | 0.19 | 20,854 | 0.15 |
-| + runway saturation | 165,589 | 81,543 | 0.20 | 57,099 | 0.19 | 20,854 | 0.15 |
+| + weather | 165,589 | 81,543 | 0.19 | 57,099 | 0.19 | 20,854 | 0.15 |
+| + runway saturation | 165,589 | 81,543 | 0.19 | 57,099 | 0.19 | 20,854 | 0.15 |
 | + weather (without plan lags) | 165,589 | 81,543 | 0.32 | 57,099 | 0.35 | 20,854 | 0.28 |
-| + runway saturation (without plan lags) | 165,589 | 81,543 | 0.32 | 57,099 | 0.35 | 20,854 | 0.28 |
+| + runway saturation (without plan lags) | 165,589 | 81,543 | 0.31 | 57,099 | 0.35 | 20,854 | 0.28 |
 
 The oracle: RMSE over the same rows before and after regressing the
 residual on its neighbours' mean residual. The last column is the
@@ -392,26 +392,26 @@ ceiling -- the most any queue model reading the sequence could add:
 
 | rung | rows with a neighbour | slope | RMSE (s) | after the oracle (s) | ceiling (s) |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| + weather | 98.8% | 0.59 | 237.9 | 227.2 | 10.7 |
-| + runway saturation | 98.8% | 0.59 | 237.7 | 227.1 | 10.6 |
-| + weather (without plan lags) | 98.8% | 0.77 | 293.9 | 261.4 | 32.5 |
-| + runway saturation (without plan lags) | 98.8% | 0.77 | 293.8 | 261.3 | 32.5 |
+| + weather | 98.8% | 0.58 | 235.7 | 225.6 | 10.1 |
+| + runway saturation | 98.8% | 0.58 | 236.2 | 226.2 | 10.0 |
+| + weather (without plan lags) | 98.8% | 0.77 | 293.9 | 261.2 | 32.6 |
+| + runway saturation (without plan lags) | 98.8% | 0.77 | 293.4 | 261.2 | 32.2 |
 
 Per airport, + runway saturation: the 0-2 min autocorrelation
 and the oracle from the pooled fit:
 
 | ICAO | rows | corr, 0-2 min | RMSE (s) | after (s) | ceiling (s) |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| EDDF | 17,324 | 0.18 | 200.9 | 193.1 | 7.8 |
-| EDDM | 12,035 | 0.25 | 269.5 | 250.1 | 19.5 |
-| EGLL | 20,000 | 0.14 | 273.1 | 257.3 | 15.8 |
-| EHAM | 19,458 | 0.20 | 180.4 | 174.4 | 6.0 |
-| LEBL | 13,835 | 0.26 | 191.6 | 178.1 | 13.6 |
-| LEMD | 17,985 | 0.26 | 182.3 | 175.7 | 6.6 |
-| LFPG | 19,778 | 0.19 | 284.8 | 275.9 | 8.9 |
-| LIRF | 11,980 | 0.09 | 336.7 | 338.4 | -1.7 |
-| LSZH | 10,585 | 0.32 | 203.2 | 192.9 | 10.2 |
-| LTFM | 22,609 | 0.35 | 225.6 | 206.0 | 19.7 |
+| EDDF | 17,324 | 0.17 | 201.3 | 193.6 | 7.7 |
+| EDDM | 12,035 | 0.23 | 267.4 | 248.9 | 18.5 |
+| EGLL | 20,000 | 0.14 | 271.1 | 256.2 | 14.9 |
+| EHAM | 19,458 | 0.19 | 181.1 | 175.3 | 5.8 |
+| LEBL | 13,835 | 0.26 | 189.8 | 177.3 | 12.5 |
+| LEMD | 17,985 | 0.26 | 180.6 | 174.1 | 6.5 |
+| LFPG | 19,778 | 0.16 | 283.7 | 275.8 | 7.9 |
+| LIRF | 11,980 | 0.09 | 334.0 | 335.6 | -1.5 |
+| LSZH | 10,585 | 0.30 | 201.0 | 192.2 | 8.7 |
+| LTFM | 22,609 | 0.35 | 223.2 | 204.1 | 19.0 |
 
 ### July split
 
@@ -421,9 +421,9 @@ gap between the two take-offs:
 | rung | rows | 0-2 min, pairs | corr | 2-5 min, pairs | corr | 5-15 min, pairs | corr |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | + weather | 190,378 | 98,455 | 0.09 | 65,331 | 0.20 | 21,022 | 0.14 |
-| + runway saturation | 190,378 | 98,455 | 0.09 | 65,331 | 0.20 | 21,022 | 0.14 |
-| + weather (without plan lags) | 190,378 | 98,455 | 0.17 | 65,331 | 0.35 | 21,022 | 0.26 |
-| + runway saturation (without plan lags) | 190,378 | 98,455 | 0.17 | 65,331 | 0.35 | 21,022 | 0.27 |
+| + runway saturation | 190,378 | 98,455 | 0.09 | 65,331 | 0.19 | 21,022 | 0.14 |
+| + weather (without plan lags) | 190,378 | 98,455 | 0.17 | 65,331 | 0.34 | 21,022 | 0.25 |
+| + runway saturation (without plan lags) | 190,378 | 98,455 | 0.17 | 65,331 | 0.34 | 21,022 | 0.25 |
 
 The oracle: RMSE over the same rows before and after regressing the
 residual on its neighbours' mean residual. The last column is the
@@ -431,26 +431,26 @@ ceiling -- the most any queue model reading the sequence could add:
 
 | rung | rows with a neighbour | slope | RMSE (s) | after the oracle (s) | ceiling (s) |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| + weather | 99.0% | 0.53 | 349.1 | 340.4 | 8.7 |
-| + runway saturation | 99.0% | 0.53 | 349.3 | 340.7 | 8.7 |
-| + weather (without plan lags) | 99.0% | 0.74 | 398.0 | 368.2 | 29.8 |
-| + runway saturation (without plan lags) | 99.0% | 0.74 | 398.2 | 368.3 | 29.9 |
+| + weather | 99.0% | 0.53 | 346.2 | 337.6 | 8.6 |
+| + runway saturation | 99.0% | 0.53 | 347.0 | 338.5 | 8.5 |
+| + weather (without plan lags) | 99.0% | 0.73 | 397.3 | 369.0 | 28.3 |
+| + runway saturation (without plan lags) | 99.0% | 0.73 | 398.1 | 369.4 | 28.6 |
 
 Per airport, + runway saturation: the 0-2 min autocorrelation
 and the oracle from the pooled fit:
 
 | ICAO | rows | corr, 0-2 min | RMSE (s) | after (s) | ceiling (s) |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| EDDF | 21,334 | 0.26 | 200.5 | 186.8 | 13.8 |
-| EDDM | 15,825 | 0.25 | 200.0 | 188.8 | 11.1 |
-| EGLL | 20,790 | 0.10 | 362.4 | 350.4 | 12.0 |
-| EHAM | 22,489 | 0.18 | 185.9 | 180.2 | 5.7 |
-| LEBL | 16,752 | 0.20 | 284.1 | 267.1 | 17.0 |
-| LEMD | 18,818 | 0.33 | 207.8 | 194.3 | 13.6 |
-| LFPG | 21,712 | 0.17 | 308.9 | 298.1 | 10.8 |
-| LIRF | 14,876 | 0.01 | 870.8 | 878.0 | -7.1 |
-| LSZH | 12,611 | 0.29 | 215.5 | 207.5 | 8.0 |
-| LTFM | 25,171 | 0.39 | 290.9 | 256.7 | 34.2 |
+| EDDF | 21,334 | 0.26 | 200.0 | 186.4 | 13.6 |
+| EDDM | 15,825 | 0.25 | 200.1 | 189.2 | 11.0 |
+| EGLL | 20,790 | 0.10 | 362.3 | 350.3 | 12.0 |
+| EHAM | 22,489 | 0.18 | 186.9 | 181.2 | 5.7 |
+| LEBL | 16,752 | 0.21 | 277.9 | 260.7 | 17.2 |
+| LEMD | 18,818 | 0.33 | 208.1 | 194.1 | 14.0 |
+| LFPG | 21,712 | 0.19 | 304.4 | 292.6 | 11.7 |
+| LIRF | 14,876 | 0.01 | 862.8 | 870.9 | -8.1 |
+| LSZH | 12,611 | 0.30 | 220.8 | 212.3 | 8.5 |
+| LTFM | 25,171 | 0.38 | 289.5 | 256.7 | 32.8 |
 
 Distance matrices and edge sets derived from OpenStreetMap: data (c)
 OpenStreetMap contributors, ODbL 1.0. Movement and flight data supplied

@@ -85,6 +85,15 @@ modelling stage, measured against the target.
       [`reports/congestion.md`](reports/congestion.md)
 - [x] Weather as a regime indicator, from a scripted, cached, attributed
       METAR fetch
+- [x] Plan lags — take-off against the planning values fixed before
+      departure, the subject's own and its runway's; the ladder read net of
+      them and kept without them
+- [x] The ceiling — an oracle bound on what any queue model could add,
+      in [`reports/congestion.md`](reports/congestion.md)
+- [x] Runway saturation, the cheap Gate 3, measured against the ceiling:
+      worth nothing; the simulation is not started without a decision
+- [x] The one parameter sweep, on October 2025, recorded in
+      `src/taxiout/models.py` with the number that chose it
 - [ ] Write-up
 
 ## What the data turned out to contain
@@ -216,6 +225,7 @@ data review and everything after it need `pip install -e ".[modelling]"`.
 | `scripts/report_geometry_gaps.py` | `data/challenge/`, `data/processed/taxi_distance/`, `data/raw/` | `reports/geometry_gaps.md` |
 | `scripts/report_congestion.py` | `data/challenge/`, `data/processed/taxi_distance/` | `reports/congestion.md` |
 | `scripts/run_baselines.py` | `data/challenge/`, `data/processed/taxi_distance/` | `reports/baseline.md` |
+| `scripts/sweep_params.py` | challenge data, matrices, edge sets, METAR cache | `data/processed/sweep_october.csv` (gitignored) |
 | `scripts/make_submission.py` | `data/challenge/`, `data/processed/taxi_distance/` | `data/submissions/<team>_v<n>.parquet` (gitignored) |
 
 Only `fetch_osm.py`, `fetch_metar.py` and `check_runways_ourairports.py` touch the network. `build_taxi_graph.py` runs all 11
@@ -315,6 +325,9 @@ src/taxiout/
   congestion.py  throughput, arrivals, demand and configuration from the movements around a subject
   corridor.py    the shared-corridor load, from the routes' taxiway edge sets
   metar.py       weather as three regime flags per airport-hour
+  planlags.py    take-off against the planning values fixed before departure
+  saturation.py  runway saturation, from other departures' take-off times
+  ceiling.py     the oracle diagnostic: what any queue model could still add
   synthetic.py   the worked airport: a field where every number is known, and
                  worked traffic in the challenge schema
   features.py    the feature frame, and a registry of what every column reads
@@ -336,6 +349,7 @@ scripts/
   report_geometry_gaps.py      reports/geometry_gaps.md (needs challenge data + OSM cache)
   report_congestion.py         reports/congestion.md (needs challenge data)
   run_baselines.py             reports/baseline.md (needs challenge data)
+  sweep_params.py              the one parameter sweep, on October 2025
   make_submission.py           a submission file (needs challenge data)
   check_licence_hygiene.py     verifies no OSM or challenge content is tracked
   commit_geometry.sh           one-shot commit batch (geometry stage)

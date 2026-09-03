@@ -393,6 +393,26 @@ seconds on a 238-second error, and the cheap features cannot reach it. A
 queueing simulation is bounded by the same ten seconds. It is not started
 without a decision; the numbers that decide it are above.
 
+**The one parameter sweep, 3 September.** Permitted once, on October 2025
+alone, and never reported: `scripts/sweep_params.py` fits January to
+September and scores October — a month none of the ladder's splits reads —
+over one grid of trees, learning rate, leaves and minimum child samples on
+the top rung's features, by the RMSE over the rows the record-quality term
+leaves to the physical model. The grid ran from 235.0 to 244.8 s and its
+top eight cells lie within 0.8 s of each other; the cell that scored 235.0
+s — 1,000 trees, learning rate 0.03, 127 leaves, 50 minimum child samples
+— is written into `src/taxiout/models.py` with that number beside it, and
+the grid's own numbers stay gitignored under `data/processed/`. Nothing
+else is tuned, and nothing was chosen on December, July or the held-out
+pairs.
+
+Refitted and the ladder run once more, the top rung stands at 236.2 s in
+December and 347.0 s in July (from 237.7 and 349.3), 222.5 and 260.0 s on
+the three July airports; the rung below it, without the saturation block,
+at 235.7 and 346.2. The geometry claim is +14.7 s [+13.2, +16.5], the plan
+lags' held-out contrast −1.1 s [−6.0, +3.6], the ceiling 10.0 s in December
+and 8.5 in July. The ladder now takes eighty minutes.
+
 **Gate 3 — the queueing layer, only if Gate 2's ablation says congestion is
 binding** (~20–30 h). This is the piece where the geometry stops being a side
 feature. *Revised 2 September:* the forward simulation as first written —

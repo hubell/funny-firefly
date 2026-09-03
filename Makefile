@@ -6,7 +6,7 @@
 PYTHON ?= python3
 
 .PHONY: all data metar reports crosscheck data-review synthetic tails geometry-gaps \
-        congestion baseline submission test lint licence-check clean help
+        congestion baseline sweep submission test lint licence-check clean help
 
 help:
 	@echo "make data     fetch and cache OSM geometry      -> data/raw/<ICAO>.json.gz"
@@ -18,6 +18,7 @@ help:
 	@echo "make geometry-gaps  the unimpeded term against the data -> reports/geometry_gaps.md"
 	@echo "make congestion   how the excess term was built -> reports/congestion.md"
 	@echo "make baseline     run the ablation ladder      -> reports/baseline.md"
+	@echo "make sweep        the one parameter sweep, October 2025 -> data/processed/sweep_october.csv"
 	@echo "make submission TEAM=<name>  fit and write     -> data/submissions/<name>_v<n>.parquet"
 	@echo "make test     run the unit tests                (no network, no challenge data)"
 	@echo "make lint     ruff check and format check"
@@ -86,6 +87,13 @@ congestion:
 # ablation ladder. Needs the modelling extras; takes a few minutes.
 baseline:
 	$(PYTHON) scripts/run_baselines.py
+
+# The one parameter sweep: fit January to September 2025, score October, on
+# the top rung's features. Its numbers stay under data/processed/, gitignored;
+# the chosen parameters are written into taxiout.models by hand with the
+# October number that chose them. Takes half an hour or more.
+sweep:
+	$(PYTHON) scripts/sweep_params.py
 
 # Reads data/challenge/ and the matrices; writes a submission file to
 # data/submissions/, which is gitignored and which the script verifies is

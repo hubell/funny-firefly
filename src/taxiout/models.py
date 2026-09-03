@@ -59,10 +59,14 @@ underneath stays legible and the two can never be confused for one another.
 Every rung here is fitted with those rows excluded and evaluated with them in.
 
 **No submission-driven tuning.** The booster's hyperparameters are written out
-below and were chosen once, for a compute budget, before any RMSE existed.
+below. They were set once, for a compute budget, before any RMSE existed, and
+then chosen once more by the one permitted sweep: fitted on January to
+September 2025 and scored on October 2025, a month none of the ladder's
+splits reads, over one grid, with the October number recorded beside them.
 There is no early stopping on the validation set, because stopping on the set
 you report is tuning on it; the number of rounds is fixed. Nothing here has
-been or will be chosen by a leaderboard score.
+been or will be chosen by a leaderboard score, and nothing was chosen on
+December, July or the held-out pairs.
 """
 
 from __future__ import annotations
@@ -101,12 +105,24 @@ IDENTIFIER_BLOCK: tuple[str, ...] = ("icao", "stand", "designator")
 
 # Fixed once, for a compute budget, before any RMSE existed. L2 because the
 # metric is RMSE. No early stopping: see the module docstring.
+# Chosen once by the one permitted sweep (scripts/sweep_params.py): fit
+# January to September 2025, score October 2025 -- a month the ladder never
+# reads -- over a grid of trees (300, 600, 1000), learning rate (0.03, 0.06,
+# 0.1), leaves (31, 63, 127) and minimum child samples (50, 200, 500), on
+# the top rung's features, RMSE over the rows the record-quality term
+# leaves to the physical model. The cell below scored 235.0 s on
+# October; the grid ran from 235.0 to 244.8 s and its top eight cells
+# lie within 0.8 s of each other. The parameters that stood before it
+# (500 trees, 0.06, 63 leaves, 200) sit between the 238.2 s of their
+# 300-tree and the 236.8 s of their 600-tree neighbours in the grid.
+# The grid's numbers stay under data/processed/, gitignored, and are not
+# reported anywhere else.
 BOOSTER_PARAMS: dict[str, object] = {
     "objective": "regression",
-    "n_estimators": 500,
-    "learning_rate": 0.06,
-    "num_leaves": 63,
-    "min_child_samples": 200,
+    "n_estimators": 1000,
+    "learning_rate": 0.03,
+    "num_leaves": 127,
+    "min_child_samples": 50,
     "colsample_bytree": 0.9,
     "subsample": 0.8,
     "subsample_freq": 1,

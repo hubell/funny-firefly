@@ -19,7 +19,7 @@ is registered in `FEATURE_SOURCES` against the raw columns it reads, and
 columns does not move the frame.
 
 Boosted rungs use lightgbm with the fixed parameters in
-`taxiout.models.BOOSTER_PARAMS` -- `n_estimators=500`, `learning_rate=0.06`, `num_leaves=63`, `min_child_samples=200`. There is no early stopping, because stopping on the set being
+`taxiout.models.BOOSTER_PARAMS` -- `n_estimators=1000`, `learning_rate=0.03`, `num_leaves=127`, `min_child_samples=50`. There is no early stopping, because stopping on the set being
 reported is tuning on it, and nothing here was chosen by a leaderboard
 score.
 
@@ -200,24 +200,24 @@ Train January-November 2025, validate December, all ten airports -- the winter p
 | PRU reference | 534.4 | +46.4 | 451.3 | 445.5 | 435.8 |
 | geometric unimpeded | 544.3 | +56.3 | 466.4 | 457.7 | 448.2 |
 | geometric unimpeded + wake class | 533.4 | +45.5 | 458.5 | 446.3 | 436.5 |
-| identifiers + time | 442.2 | -45.8 | n/a | 335.5 | 322.3 |
-| identifiers + time + geometry | 443.1 | -44.9 | n/a | 336.2 | 323.1 |
-| identifiers + time + geometry + aircraft | 442.6 | -45.3 | n/a | 334.7 | 321.5 |
-| + plan lags | 385.8 | -102.1 | n/a | 261.9 | 244.8 |
-| + runway throughput | 383.8 | -104.2 | n/a | 259.4 | 242.2 |
-| + arrivals | 382.3 | -105.7 | n/a | 258.6 | 241.3 |
-| + demand | 382.0 | -106.0 | n/a | 258.1 | 240.7 |
-| + configuration | 381.1 | -106.9 | n/a | 257.9 | 240.5 |
-| + shared corridor | 381.9 | -106.0 | n/a | 257.4 | 240.0 |
-| + weather | 381.5 | -106.5 | n/a | 255.4 | 237.9 |
-| + runway saturation | 379.8 | -108.2 | n/a | 255.2 | 237.7 |
-| + runway throughput (without plan lags) | 439.1 | -48.8 | n/a | 330.3 | 316.9 |
-| + arrivals (without plan lags) | 433.9 | -54.1 | n/a | 322.6 | 308.9 |
-| + demand (without plan lags) | 429.6 | -58.3 | n/a | 317.4 | 303.5 |
-| + configuration (without plan lags) | 430.4 | -57.6 | n/a | 318.7 | 304.9 |
-| + shared corridor (without plan lags) | 431.3 | -56.7 | n/a | 319.9 | 306.1 |
-| + weather (without plan lags) | 423.4 | -64.6 | n/a | 308.3 | 293.9 |
-| + runway saturation (without plan lags) | 423.1 | -64.9 | n/a | 308.1 | 293.8 |
+| identifiers + time | 439.7 | -48.3 | n/a | 335.3 | 322.2 |
+| identifiers + time + geometry | 440.9 | -47.1 | n/a | 335.2 | 322.1 |
+| identifiers + time + geometry + aircraft | 439.3 | -48.7 | n/a | 331.7 | 318.5 |
+| + plan lags | 384.1 | -103.8 | n/a | 261.0 | 243.9 |
+| + runway throughput | 382.3 | -105.7 | n/a | 257.6 | 240.2 |
+| + arrivals | 381.6 | -106.4 | n/a | 257.1 | 239.7 |
+| + demand | 381.9 | -106.0 | n/a | 256.5 | 239.0 |
+| + configuration | 382.0 | -106.0 | n/a | 257.1 | 239.7 |
+| + shared corridor | 380.7 | -107.3 | n/a | 256.2 | 238.7 |
+| + weather | 380.6 | -107.4 | n/a | 253.4 | 235.7 |
+| + runway saturation | 380.1 | -107.9 | n/a | 253.8 | 236.2 |
+| + runway throughput (without plan lags) | 435.8 | -52.2 | n/a | 328.2 | 314.8 |
+| + arrivals (without plan lags) | 433.3 | -54.7 | n/a | 324.4 | 310.8 |
+| + demand (without plan lags) | 430.2 | -57.8 | n/a | 318.7 | 304.9 |
+| + configuration (without plan lags) | 428.4 | -59.5 | n/a | 317.0 | 303.1 |
+| + shared corridor (without plan lags) | 428.3 | -59.6 | n/a | 316.8 | 302.9 |
+| + weather (without plan lags) | 422.9 | -65.1 | n/a | 308.2 | 293.9 |
+| + runway saturation (without plan lags) | 422.4 | -65.5 | n/a | 307.8 | 293.4 |
 
 ### July split
 
@@ -229,24 +229,24 @@ Train January-June 2025, validate July -- the three airports the July test set c
 | PRU reference | 771.6 | +54.4 | 692.4 | 569.5 | 541.3 |
 | geometric unimpeded | 774.7 | +57.5 | 700.3 | 573.6 | 545.6 |
 | geometric unimpeded + wake class | 765.4 | +48.3 | 693.5 | 564.4 | 535.9 |
-| identifiers + time | 677.2 | -40.0 | n/a | 447.3 | 410.6 |
-| identifiers + time + geometry | 675.3 | -41.9 | n/a | 443.9 | 406.9 |
-| identifiers + time + geometry + aircraft | 675.4 | -41.7 | n/a | 442.8 | 405.6 |
-| + plan lags | 638.6 | -78.6 | n/a | 395.2 | 352.9 |
-| + runway throughput | 637.0 | -80.2 | n/a | 393.2 | 350.7 |
-| + arrivals | 636.3 | -80.9 | n/a | 392.4 | 349.8 |
-| + demand | 636.9 | -80.2 | n/a | 392.3 | 349.7 |
-| + configuration | 637.9 | -79.3 | n/a | 392.7 | 350.1 |
-| + shared corridor | 637.3 | -79.8 | n/a | 392.0 | 349.3 |
-| + weather | 636.8 | -80.3 | n/a | 391.8 | 349.1 |
-| + runway saturation | 637.6 | -79.6 | n/a | 392.0 | 349.3 |
-| + runway throughput (without plan lags) | 674.8 | -42.4 | n/a | 441.4 | 404.1 |
-| + arrivals (without plan lags) | 672.5 | -44.7 | n/a | 439.2 | 401.6 |
-| + demand (without plan lags) | 671.3 | -45.9 | n/a | 437.1 | 399.4 |
-| + configuration (without plan lags) | 672.0 | -45.2 | n/a | 437.6 | 399.9 |
-| + shared corridor (without plan lags) | 671.4 | -45.8 | n/a | 437.0 | 399.3 |
-| + weather (without plan lags) | 670.6 | -46.6 | n/a | 435.8 | 398.0 |
-| + runway saturation (without plan lags) | 670.8 | -46.4 | n/a | 436.0 | 398.2 |
+| identifiers + time | 678.6 | -38.6 | n/a | 449.6 | 413.1 |
+| identifiers + time + geometry | 677.3 | -39.9 | n/a | 447.3 | 410.5 |
+| identifiers + time + geometry + aircraft | 677.3 | -39.9 | n/a | 445.3 | 408.4 |
+| + plan lags | 639.4 | -77.7 | n/a | 394.3 | 351.9 |
+| + runway throughput | 637.8 | -79.4 | n/a | 392.0 | 349.4 |
+| + arrivals | 636.9 | -80.3 | n/a | 390.7 | 347.9 |
+| + demand | 636.7 | -80.4 | n/a | 390.5 | 347.6 |
+| + configuration | 637.5 | -79.7 | n/a | 390.6 | 347.7 |
+| + shared corridor | 634.7 | -82.4 | n/a | 389.2 | 346.2 |
+| + weather | 636.2 | -80.9 | n/a | 389.3 | 346.2 |
+| + runway saturation | 636.0 | -81.2 | n/a | 389.9 | 347.0 |
+| + runway throughput (without plan lags) | 674.8 | -42.4 | n/a | 443.4 | 406.3 |
+| + arrivals (without plan lags) | 673.7 | -43.5 | n/a | 439.7 | 402.2 |
+| + demand (without plan lags) | 671.2 | -46.0 | n/a | 437.3 | 399.6 |
+| + configuration (without plan lags) | 670.0 | -47.2 | n/a | 436.7 | 398.9 |
+| + shared corridor (without plan lags) | 670.7 | -46.4 | n/a | 436.3 | 398.4 |
+| + weather (without plan lags) | 669.9 | -47.3 | n/a | 435.3 | 397.3 |
+| + runway saturation (without plan lags) | 668.9 | -48.2 | n/a | 435.9 | 398.1 |
 
 ## Held-out pairs
 
@@ -290,24 +290,24 @@ gaps are at the end, for the record.
 | PRU reference | 435.2 | 525.1 | +89.9 s [+76.6, +104.8] | +89 / +85 / +95 | no |
 | geometric unimpeded | 448.6 | 459.3 | +10.7 s [-3.7, +27.3] | +6 / +9 / +17 | yes |
 | geometric unimpeded + wake class | 438.3 | 449.4 | +11.1 s [-4.0, +27.7] | +6 / +10 / +18 | yes |
-| identifiers + time | 303.3 | 351.6 | +48.3 s [+31.4, +67.3] | +36 / +46 / +63 | no |
-| identifiers + time + geometry | 302.5 | 336.3 | +33.8 s [+15.9, +53.1] | +23 / +31 / +47 | yes |
-| identifiers + time + geometry + aircraft | 299.6 | 329.9 | +30.3 s [+12.1, +50.0] | +20 / +27 / +44 | yes |
-| + plan lags | 243.4 | 274.9 | +31.5 s [+10.6, +52.9] | +14 / +33 / +48 | yes |
-| + runway throughput | 241.9 | 274.0 | +32.1 s [+11.5, +53.6] | +15 / +33 / +49 | yes |
-| + arrivals | 241.3 | 273.5 | +32.2 s [+11.5, +53.9] | +14 / +34 / +49 | yes |
-| + demand | 241.3 | 273.5 | +32.2 s [+11.3, +53.8] | +14 / +34 / +49 | yes |
-| + configuration | 240.9 | 273.2 | +32.4 s [+11.7, +54.2] | +14 / +33 / +50 | yes |
-| + shared corridor | 240.9 | 273.2 | +32.3 s [+11.4, +54.1] | +14 / +34 / +49 | yes |
-| + weather | 240.4 | 272.4 | +32.0 s [+11.0, +54.0] | +14 / +33 / +49 | yes |
-| + runway saturation | 240.1 | 272.6 | +32.5 s [+11.8, +54.3] | +14 / +34 / +50 | yes |
-| + runway throughput (without plan lags) | 296.9 | 326.5 | +29.6 s [+11.2, +49.5] | +18 / +27 / +44 | yes |
-| + arrivals (without plan lags) | 294.0 | 324.0 | +30.1 s [+11.4, +50.3] | +19 / +27 / +44 | yes |
-| + demand (without plan lags) | 291.9 | 322.7 | +30.8 s [+12.1, +50.8] | +19 / +28 / +45 | yes |
-| + configuration (without plan lags) | 291.5 | 321.8 | +30.3 s [+11.5, +50.5] | +19 / +28 / +44 | yes |
-| + shared corridor (without plan lags) | 292.0 | 322.8 | +30.8 s [+12.1, +51.3] | +19 / +29 / +45 | yes |
-| + weather (without plan lags) | 289.1 | 319.8 | +30.7 s [+11.6, +51.7] | +19 / +28 / +45 | yes |
-| + runway saturation (without plan lags) | 289.0 | 320.5 | +31.5 s [+12.5, +52.6] | +19 / +29 / +46 | yes |
+| identifiers + time | 299.0 | 349.0 | +50.1 s [+32.7, +69.1] | +37 / +48 / +65 | no |
+| identifiers + time + geometry | 297.8 | 333.1 | +35.4 s [+17.3, +54.7] | +25 / +32 / +49 | yes |
+| identifiers + time + geometry + aircraft | 296.2 | 327.4 | +31.2 s [+12.9, +51.1] | +20 / +28 / +46 | yes |
+| + plan lags | 241.2 | 273.6 | +32.4 s [+11.9, +54.1] | +15 / +34 / +48 | yes |
+| + runway throughput | 238.9 | 272.5 | +33.6 s [+13.2, +55.2] | +16 / +35 / +50 | yes |
+| + arrivals | 238.1 | 271.9 | +33.8 s [+13.0, +55.6] | +16 / +36 / +50 | yes |
+| + demand | 238.2 | 271.9 | +33.7 s [+13.1, +55.6] | +15 / +35 / +51 | yes |
+| + configuration | 238.2 | 271.6 | +33.4 s [+12.7, +55.4] | +15 / +35 / +50 | yes |
+| + shared corridor | 238.3 | 271.3 | +33.1 s [+12.0, +55.1] | +14 / +35 / +50 | yes |
+| + weather | 237.7 | 270.4 | +32.7 s [+11.8, +54.6] | +13 / +34 / +50 | yes |
+| + runway saturation | 237.8 | 270.6 | +32.8 s [+11.9, +54.9] | +14 / +34 / +50 | yes |
+| + runway throughput (without plan lags) | 292.9 | 323.4 | +30.5 s [+11.8, +50.9] | +19 / +27 / +46 | yes |
+| + arrivals (without plan lags) | 290.4 | 321.4 | +31.0 s [+12.1, +51.3] | +19 / +28 / +45 | yes |
+| + demand (without plan lags) | 287.6 | 319.3 | +31.8 s [+12.7, +52.1] | +20 / +28 / +47 | yes |
+| + configuration (without plan lags) | 287.3 | 318.7 | +31.5 s [+12.6, +51.8] | +20 / +28 / +46 | yes |
+| + shared corridor (without plan lags) | 288.5 | 321.2 | +32.7 s [+13.1, +53.6] | +19 / +33 / +46 | yes |
+| + weather (without plan lags) | 286.7 | 318.5 | +31.8 s [+12.1, +52.9] | +18 / +32 / +45 | yes |
+| + runway saturation (without plan lags) | 286.2 | 323.9 | +37.7 s [+16.8, +61.8] | +19 / +49 / +46 | yes |
 
 The zero-parameter rung is the purest statement in the table. The geometric unimpeded term carries no identifier, so it has nothing to memorize and, if the geometry is doing what it claims, nothing to lose on a pair it has never seen. Net of the airport mean's own gap -- pure composition -- its gap is -1.7 s [-6.2, +2.7], which is indistinguishable from zero: it loses nothing.
 
@@ -323,26 +323,26 @@ never saw; zero means it is memorization dressed as a feature.
 | airport mean → PRU reference | -54.0 | -131.5 | -77.5 s [-83.4, -71.5] |
 | PRU reference → geometric unimpeded | -13.4 | +65.8 | +79.2 s [+75.3, +83.0] |
 | geometric unimpeded → geometric unimpeded + wake class | +10.3 | +9.9 | -0.4 s [-1.8, +1.0] |
-| geometric unimpeded + wake class → identifiers + time | +135.0 | +97.9 | -37.1 s [-42.3, -31.9] |
-| identifiers + time → identifiers + time + geometry **(the claim)** | +0.8 | +15.3 | +14.5 s [+13.0, +16.3] |
-| identifiers + time + geometry → identifiers + time + geometry + aircraft | +2.8 | +6.4 | +3.5 s [+2.7, +4.5] |
-| identifiers + time + geometry + aircraft → + plan lags | +56.2 | +55.0 | -1.2 s [-5.8, +3.2] |
-| + plan lags → + runway throughput | +1.5 | +0.9 | -0.6 s [-1.2, +0.0] |
-| + runway throughput → + arrivals | +0.6 | +0.5 | -0.2 s [-0.6, +0.4] |
-| + arrivals → + demand | -0.0 | -0.0 | -0.0 s [-0.5, +0.4] |
-| + demand → + configuration | +0.4 | +0.3 | -0.1 s [-0.6, +0.3] |
-| + configuration → + shared corridor | -0.0 | +0.1 | +0.1 s [-0.4, +0.6] |
-| + shared corridor → + weather | +0.5 | +0.8 | +0.3 s [-0.2, +0.9] |
-| + weather → + runway saturation | +0.3 | -0.2 | -0.5 s [-1.0, -0.0] |
-| identifiers + time + geometry + aircraft → + runway throughput (without plan lags) | +2.7 | +3.4 | +0.6 s [+0.2, +1.1] |
-| + runway throughput (without plan lags) → + arrivals (without plan lags) | +2.9 | +2.5 | -0.4 s [-1.0, +0.1] |
-| + arrivals (without plan lags) → + demand (without plan lags) | +2.1 | +1.4 | -0.7 s [-1.2, -0.2] |
-| + demand (without plan lags) → + configuration (without plan lags) | +0.4 | +0.9 | +0.5 s [+0.2, +0.9] |
-| + configuration (without plan lags) → + shared corridor (without plan lags) | -0.5 | -1.0 | -0.5 s [-1.4, +0.2] |
-| + shared corridor (without plan lags) → + weather (without plan lags) | +3.0 | +3.0 | +0.0 s [-0.6, +0.6] |
-| + weather (without plan lags) → + runway saturation (without plan lags) | +0.1 | -0.7 | -0.8 s [-1.1, -0.5] |
+| geometric unimpeded + wake class → identifiers + time | +139.3 | +100.4 | -38.9 s [-44.1, -33.4] |
+| identifiers + time → identifiers + time + geometry **(the claim)** | +1.2 | +15.9 | +14.7 s [+13.2, +16.5] |
+| identifiers + time + geometry → identifiers + time + geometry + aircraft | +1.6 | +5.8 | +4.2 s [+3.2, +5.1] |
+| identifiers + time + geometry + aircraft → + plan lags | +55.0 | +53.8 | -1.1 s [-6.0, +3.6] |
+| + plan lags → + runway throughput | +2.3 | +1.1 | -1.2 s [-1.9, -0.6] |
+| + runway throughput → + arrivals | +0.8 | +0.6 | -0.2 s [-0.7, +0.4] |
+| + arrivals → + demand | -0.0 | +0.0 | +0.1 s [-0.4, +0.6] |
+| + demand → + configuration | -0.0 | +0.3 | +0.3 s [-0.1, +0.7] |
+| + configuration → + shared corridor | -0.1 | +0.3 | +0.3 s [-0.2, +0.9] |
+| + shared corridor → + weather | +0.6 | +1.0 | +0.4 s [-0.1, +1.0] |
+| + weather → + runway saturation | -0.1 | -0.2 | -0.2 s [-0.7, +0.3] |
+| identifiers + time + geometry + aircraft → + runway throughput (without plan lags) | +3.2 | +4.0 | +0.7 s [+0.2, +1.3] |
+| + runway throughput (without plan lags) → + arrivals (without plan lags) | +2.5 | +2.0 | -0.5 s [-1.1, +0.1] |
+| + arrivals (without plan lags) → + demand (without plan lags) | +2.9 | +2.1 | -0.8 s [-1.2, -0.3] |
+| + demand (without plan lags) → + configuration (without plan lags) | +0.3 | +0.6 | +0.3 s [-0.1, +0.6] |
+| + configuration (without plan lags) → + shared corridor (without plan lags) | -1.3 | -2.4 | -1.2 s [-5.0, +1.4] |
+| + shared corridor (without plan lags) → + weather (without plan lags) | +1.8 | +2.7 | +0.9 s [+0.3, +1.5] |
+| + weather (without plan lags) → + runway saturation (without plan lags) | +0.5 | -5.4 | -5.9 s [-14.6, -0.2] |
 
-The claim contrast, identifiers + time → identifiers + time + geometry. **+14.5 s [+13.0, +16.3].** The interval excludes zero: the geometry block buys more on a pair the model has never seen than on one it has, which is the claim.
+The claim contrast, identifiers + time → identifiers + time + geometry. **+14.7 s [+13.2, +16.5].** The interval excludes zero: the geometry block buys more on a pair the model has never seen than on one it has, which is the claim.
 
 ### The claim, per airport
 
@@ -350,16 +350,16 @@ The same contrast, over each airport's held-out pairs alone. The intervals are w
 
 | ICAO | held-out rows, all folds | difference [95%] | clear of zero |
 | --- | ---: | ---: | --- |
-| EDDF | 230,141 | +29.0 s [+22.3, +36.3] | yes |
-| EDDM | 167,334 | +8.5 s [+5.2, +12.9] | yes |
-| EGLL | 239,546 | +14.9 s [+12.2, +17.7] | yes |
-| EHAM | 247,951 | +7.2 s [+4.0, +10.2] | yes |
-| LEBL | 179,705 | +3.8 s [-0.3, +8.0] | no |
-| LEMD | 212,242 | +13.9 s [+9.9, +17.9] | yes |
-| LFPG | 239,552 | +18.7 s [+15.5, +23.1] | yes |
-| LIRF | 159,219 | +13.9 s [+10.2, +18.0] | yes |
-| LSZH | 134,907 | +8.7 s [+5.2, +14.6] | yes |
-| LTFM | 272,965 | +21.9 s [+16.4, +27.2] | yes |
+| EDDF | 230,141 | +29.9 s [+22.5, +37.6] | yes |
+| EDDM | 167,334 | +10.1 s [+6.6, +14.6] | yes |
+| EGLL | 239,546 | +14.0 s [+11.2, +17.0] | yes |
+| EHAM | 247,951 | +5.5 s [+2.6, +8.6] | yes |
+| LEBL | 179,705 | +4.3 s [-0.9, +9.4] | no |
+| LEMD | 212,242 | +15.6 s [+11.6, +19.8] | yes |
+| LFPG | 239,552 | +19.3 s [+15.4, +24.2] | yes |
+| LIRF | 159,219 | +16.4 s [+12.5, +21.1] | yes |
+| LSZH | 134,907 | +11.7 s [+7.3, +19.1] | yes |
+| LTFM | 272,965 | +18.6 s [+14.2, +23.2] | yes |
 
 ### Every row, for the record
 
@@ -371,24 +371,24 @@ The gap per rung with the record-quality rows left in. Two hundred draws, becaus
 | PRU reference | -1.1 s [-95.9, +81.8] |
 | geometric unimpeded | -65.7 s [-159.2, +16.7] |
 | geometric unimpeded + wake class | -66.1 s [-160.6, +17.5] |
-| identifiers + time | -49.5 s [-155.1, +46.4] |
-| identifiers + time + geometry | -60.0 s [-165.8, +35.6] |
-| identifiers + time + geometry + aircraft | -63.1 s [-169.4, +32.7] |
-| + plan lags | -66.3 s [-178.8, +39.1] |
-| + runway throughput | -67.3 s [-180.1, +38.4] |
-| + arrivals | -67.4 s [-179.9, +38.9] |
-| + demand | -67.9 s [-181.3, +37.3] |
-| + configuration | -67.0 s [-179.9, +38.5] |
-| + shared corridor | -67.3 s [-179.5, +37.9] |
-| + weather | -68.0 s [-181.2, +37.6] |
-| + runway saturation | -67.6 s [-181.1, +37.7] |
-| + runway throughput (without plan lags) | -64.2 s [-170.8, +32.1] |
-| + arrivals (without plan lags) | -64.5 s [-171.4, +32.0] |
-| + demand (without plan lags) | -63.7 s [-171.0, +32.7] |
-| + configuration (without plan lags) | -64.5 s [-171.8, +32.0] |
-| + shared corridor (without plan lags) | -63.9 s [-171.5, +32.4] |
-| + weather (without plan lags) | -64.9 s [-172.8, +32.3] |
-| + runway saturation (without plan lags) | -64.3 s [-172.2, +32.4] |
+| identifiers + time | -48.5 s [-153.4, +47.9] |
+| identifiers + time + geometry | -59.0 s [-164.9, +37.1] |
+| identifiers + time + geometry + aircraft | -62.4 s [-169.0, +34.0] |
+| + plan lags | -65.8 s [-178.4, +38.7] |
+| + runway throughput | -65.1 s [-178.3, +38.9] |
+| + arrivals | -65.7 s [-179.8, +38.7] |
+| + demand | -66.1 s [-179.2, +37.9] |
+| + configuration | -66.7 s [-180.2, +38.0] |
+| + shared corridor | -65.8 s [-179.6, +37.5] |
+| + weather | -67.1 s [-181.8, +37.1] |
+| + runway saturation | -67.1 s [-181.6, +37.0] |
+| + runway throughput (without plan lags) | -62.6 s [-169.6, +34.3] |
+| + arrivals (without plan lags) | -63.4 s [-170.1, +34.3] |
+| + demand (without plan lags) | -63.3 s [-170.6, +34.0] |
+| + configuration (without plan lags) | -63.6 s [-171.2, +34.4] |
+| + shared corridor (without plan lags) | -62.7 s [-170.3, +34.4] |
+| + weather (without plan lags) | -64.6 s [-172.4, +32.8] |
+| + runway saturation (without plan lags) | -60.0 s [-170.1, +39.2] |
 
 ## Error by pair frequency
 
@@ -408,24 +408,24 @@ reports that record rather than anything about the rungs.
 | PRU reference | 470.8 | 674.1 | 509.3 | 426.5 |
 | geometric unimpeded | 420.2 | 572.5 | 510.8 | 441.5 |
 | geometric unimpeded + wake class | 412.6 | 552.3 | 492.6 | 430.5 |
-| identifiers + time | 347.3 | 446.1 | 373.7 | 316.4 |
-| identifiers + time + geometry | 323.3 | 428.9 | 375.4 | 317.3 |
-| identifiers + time + geometry + aircraft | 311.9 | 426.4 | 375.5 | 315.6 |
-| + plan lags | 237.2 | 360.8 | 286.8 | 239.8 |
-| + runway throughput | 240.5 | 358.6 | 283.5 | 237.3 |
-| + arrivals | 238.9 | 356.5 | 283.7 | 236.3 |
-| + demand | 238.5 | 356.1 | 284.3 | 235.6 |
-| + configuration | 237.4 | 355.1 | 283.8 | 235.4 |
-| + shared corridor | 240.7 | 357.1 | 283.2 | 234.8 |
-| + weather | 233.2 | 354.1 | 276.4 | 233.2 |
-| + runway saturation | 229.2 | 352.2 | 277.9 | 232.9 |
-| + runway throughput (without plan lags) | 309.5 | 417.8 | 365.4 | 311.6 |
-| + arrivals (without plan lags) | 302.1 | 415.2 | 358.9 | 303.3 |
-| + demand (without plan lags) | 297.0 | 411.6 | 351.8 | 298.1 |
-| + configuration (without plan lags) | 297.0 | 418.9 | 352.8 | 299.4 |
-| + shared corridor (without plan lags) | 304.3 | 417.6 | 359.2 | 300.1 |
-| + weather (without plan lags) | 295.3 | 403.7 | 335.9 | 289.1 |
-| + runway saturation (without plan lags) | 297.9 | 405.6 | 335.8 | 288.9 |
+| identifiers + time | 351.0 | 436.9 | 373.8 | 316.3 |
+| identifiers + time + geometry | 320.4 | 420.6 | 370.9 | 316.7 |
+| identifiers + time + geometry + aircraft | 311.4 | 422.4 | 364.3 | 313.3 |
+| + plan lags | 249.9 | 362.2 | 285.9 | 238.8 |
+| + runway throughput | 251.0 | 361.2 | 281.3 | 235.2 |
+| + arrivals | 248.1 | 354.0 | 281.5 | 234.7 |
+| + demand | 246.7 | 354.9 | 281.3 | 233.9 |
+| + configuration | 242.4 | 354.2 | 282.3 | 234.6 |
+| + shared corridor | 244.8 | 361.8 | 281.8 | 233.5 |
+| + weather | 235.4 | 353.4 | 274.4 | 231.0 |
+| + runway saturation | 235.4 | 351.2 | 275.7 | 231.4 |
+| + runway throughput (without plan lags) | 312.5 | 419.2 | 360.3 | 309.7 |
+| + arrivals (without plan lags) | 298.6 | 415.1 | 361.1 | 305.2 |
+| + demand (without plan lags) | 296.8 | 410.1 | 352.5 | 299.6 |
+| + configuration (without plan lags) | 299.7 | 404.3 | 350.7 | 297.8 |
+| + shared corridor (without plan lags) | 303.6 | 410.3 | 350.2 | 297.5 |
+| + weather (without plan lags) | 295.7 | 403.7 | 337.4 | 288.9 |
+| + runway saturation (without plan lags) | 292.6 | 403.0 | 337.4 | 288.4 |
 
 ## Per airport
 
@@ -438,35 +438,35 @@ model. The top rung, per airport, on each forward split.
 
 | ICAO | rows | RMSE (s) | excluding flagged (s) | bias (s) |
 | --- | ---: | ---: | ---: | ---: |
-| all | 165,677 | 379.8 | 237.7 | +6 |
-| the three * | 56,782 | 223.0 | 223.0 | +13 |
-| EDDF * | 17,324 | 200.9 | 200.9 | +11 |
-| EDDM | 12,035 | 269.5 | 269.5 | +11 |
-| EGLL * | 20,000 | 273.1 | 273.1 | +19 |
-| EHAM * | 19,458 | 180.4 | 180.4 | +9 |
-| LEBL | 13,835 | 191.6 | 191.6 | -3 |
-| LEMD | 17,985 | 182.3 | 182.3 | +9 |
-| LFPG | 19,778 | 284.8 | 284.8 | +6 |
-| LIRF | 12,068 | 1,148.1 | 336.7 | -53 |
-| LSZH | 10,585 | 203.2 | 203.2 | +8 |
-| LTFM | 22,609 | 225.6 | 225.6 | +19 |
+| all | 165,677 | 380.1 | 236.2 | +7 |
+| the three * | 56,782 | 222.5 | 222.5 | +15 |
+| EDDF * | 17,324 | 201.3 | 201.3 | +13 |
+| EDDM | 12,035 | 267.4 | 267.4 | +14 |
+| EGLL * | 20,000 | 271.1 | 271.1 | +22 |
+| EHAM * | 19,458 | 181.1 | 181.1 | +11 |
+| LEBL | 13,835 | 189.8 | 189.8 | -1 |
+| LEMD | 17,985 | 180.6 | 180.6 | +8 |
+| LFPG | 19,778 | 283.7 | 283.7 | +6 |
+| LIRF | 12,068 | 1,152.7 | 334.0 | -52 |
+| LSZH | 10,585 | 201.0 | 201.0 | +13 |
+| LTFM | 22,609 | 223.2 | 223.2 | +17 |
 
 ### July split, + runway saturation
 
 | ICAO | rows | RMSE (s) | excluding flagged (s) | bias (s) |
 | --- | ---: | ---: | ---: | ---: |
-| all | 190,713 | 637.6 | 349.3 | -6 |
-| the three * | 64,613 | 259.9 | 259.9 | +12 |
-| EDDF * | 21,334 | 200.5 | 200.5 | +12 |
-| EDDM | 15,825 | 200.0 | 200.0 | -8 |
-| EGLL * | 20,790 | 362.4 | 362.4 | +17 |
-| EHAM * | 22,489 | 185.9 | 185.9 | +9 |
-| LEBL | 16,752 | 284.1 | 284.1 | -9 |
-| LEMD | 18,818 | 207.8 | 207.8 | +10 |
-| LFPG | 21,712 | 308.9 | 308.9 | -6 |
-| LIRF | 15,211 | 2,076.3 | 870.8 | -103 |
-| LSZH | 12,611 | 215.5 | 215.5 | -0 |
-| LTFM | 25,171 | 290.9 | 290.9 | -3 |
+| all | 190,713 | 636.0 | 347.0 | -5 |
+| the three * | 64,613 | 260.0 | 260.0 | +14 |
+| EDDF * | 21,334 | 200.0 | 200.0 | +11 |
+| EDDM | 15,825 | 200.1 | 200.1 | -8 |
+| EGLL * | 20,790 | 362.3 | 362.3 | +19 |
+| EHAM * | 22,489 | 186.9 | 186.9 | +11 |
+| LEBL | 16,752 | 277.9 | 277.9 | -9 |
+| LEMD | 18,818 | 208.1 | 208.1 | +14 |
+| LFPG | 21,712 | 304.4 | 304.4 | -10 |
+| LIRF | 15,211 | 2,071.9 | 862.8 | -100 |
+| LSZH | 12,611 | 220.8 | 220.8 | +1 |
+| LTFM | 25,171 | 289.5 | 289.5 | -3 |
 
 `*` an airport the July 2026 test month contains.
 
@@ -480,23 +480,23 @@ first evidence that the ambiguity bookkeeping was worth carrying.
 
 | feature | share of splits | block |
 | --- | ---: | --- |
-| `stand` | 32.3% | other |
-| `lag_eobt_s` | 10.2% | other |
-| `lag_lobt_s` | 7.9% | other |
-| `lag_sched_s` | 7.2% | other |
-| `aircraft_type` | 7.0% | other |
-| `designator` | 6.4% | other |
-| `lag_eobt_rwy15m` | 2.4% | other |
-| `icao` | 1.6% | other |
-| `lag_sched_rwy15m` | 1.5% | other |
-| `tko_doy_cos` | 1.2% | other |
-| `tko_minute_of_day` | 1.0% | other |
-| `lag_lobt_rwy15m` | 1.0% | other |
-| `tko_hour_cos` | 0.9% | other |
-| `tko_hour_sin` | 0.9% | other |
-| `tko_doy_sin` | 0.8% | other |
+| `stand` | 23.8% | other |
+| `lag_eobt_s` | 8.7% | other |
+| `lag_sched_s` | 6.5% | other |
+| `lag_lobt_s` | 6.3% | other |
+| `aircraft_type` | 5.1% | other |
+| `designator` | 4.3% | other |
+| `lag_eobt_rwy15m` | 2.7% | other |
+| `tko_doy_cos` | 1.9% | other |
+| `lag_sched_rwy15m` | 1.8% | other |
+| `lag_lobt_rwy15m` | 1.6% | other |
+| `tko_hour_cos` | 1.3% | other |
+| `tko_minute_of_day` | 1.3% | other |
+| `tko_hour_sin` | 1.3% | other |
+| `tko_doy_sin` | 1.2% | other |
+| `txi_mean_5m` | 1.2% | other |
 
-The geometry block and its quality flags take 4.2% of the splits.
+The geometry block and its quality flags take 7.2% of the splits.
 
 ## What is not here yet
 
