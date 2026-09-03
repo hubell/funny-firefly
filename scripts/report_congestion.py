@@ -77,8 +77,9 @@ from taxiout.ceiling import (  # noqa: E402
     lag1_autocorrelation,
     oracle,
 )
-from taxiout.models import LADDER_BY_KEY, TOP_RUNG  # noqa: E402
+from taxiout.models import LADDER_BY_KEY, TOP_RUNG, base_of  # noqa: E402
 from taxiout.planlags import PLAN_LAG_FEATURES  # noqa: E402
+from taxiout.saturation import SATURATION_FEATURES  # noqa: E402
 from taxiout.metar import (  # noqa: E402
     MAX_CARRY_H,
     VIS_HIGH_M,
@@ -110,9 +111,21 @@ OUT = REPO / "reports" / "congestion.md"
 
 # The forward splits whose validation residuals the ladder keeps.
 FORWARD_SPLITS = ("december", "july")
-# The rungs the ceiling is read on: the top of the ladder, and the top of the
-# chain kept without the plan lags.
-CEILING_RUNGS = (TOP_RUNG.key, f"{TOP_RUNG.key}-nolag")
+# The rungs the ceiling is read on: the rung before the top of the ladder and
+# the top itself, so the saturation rung is read against the ceiling of the
+# rung it was added to; then the same two on the chain kept without the plan
+# lags.
+_BASE = base_of(TOP_RUNG)
+CEILING_RUNGS = tuple(
+    k
+    for k in (
+        _BASE.key if _BASE else None,
+        TOP_RUNG.key,
+        f"{_BASE.key}-nolag" if _BASE else None,
+        f"{TOP_RUNG.key}-nolag",
+    )
+    if k and k in LADDER_BY_KEY
+)
 
 BLOCKS = (
     ("identifiers", IDENTIFIER_FEATURES),
@@ -129,6 +142,7 @@ BLOCKS = (
     ("coverage", COVERAGE_FEATURES),
     ("corridor", CORRIDOR_FEATURES),
     ("weather", WEATHER_FEATURES),
+    ("saturation", SATURATION_FEATURES),
 )
 
 # The columns whose two-sided shape is printed. One per block, the widest
@@ -144,6 +158,8 @@ COMPARED = (
     "cfg_n_runways",
     "corr_dep_15m",
     "corr_arr_15m",
+    "sat_gap90_15m",
+    "sat_span3_s",
 )
 
 
@@ -546,8 +562,10 @@ def section_ceiling() -> list[str]:
         "subject excluded -- one least-squares fit, pooled, in sample. That is",
         "what a model could reach if it knew its neighbours' outcomes exactly, and",
         "it bounds what any queue model built from the runway sequence could add.",
-        "Read on the top rung of the ladder and on the top of the chain kept",
-        "without the plan lags.",
+        "Read on the rung before the top of the ladder and on the top itself --",
+        "so the saturation rung is measured against the ceiling of the rung it",
+        "was added to -- and on the same two of the chain kept without the plan",
+        "lags.",
     ]
     any_found = False
     for split in FORWARD_SPLITS:
@@ -612,7 +630,7 @@ def section_ceiling() -> list[str]:
             "",
         ]
         # -- per airport, top rung
-        top = CEILING_RUNGS[0]
+        top = TOP_RUNG.key
         if top in loaded:
             r = loaded[top]
             ac = lag1_autocorrelation(r, by_airport=True)

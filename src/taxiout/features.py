@@ -2,7 +2,7 @@
 """The Gate 1 feature frame, and a registry of what every column reads.
 
 One frame per movement, built from ``taxiout.challenge``'s loaders and
-``taxiout.join.join_stands``. Ten blocks:
+``taxiout.join.join_stands``. Eleven blocks:
 
 - **Identifiers.** Airport, stand, runway, and the pair. These are what the
   ablation ladder's saturated rung uses and what the held-out-pair split
@@ -46,6 +46,11 @@ One frame per movement, built from ``taxiout.challenge``'s loaders and
   precipitation, freezing -- from the Mesonet's METAR archive
   (``taxiout.metar``), the one block that reads outside the challenge data,
   and registered under its own prefix so the audit can say so.
+- **Runway saturation.** From the other departures' take-off times on the
+  subject's runway alone: the share of consecutive gaps under ninety
+  seconds in the trailing five and fifteen minutes, the smallest gap in
+  the trailing five, and the time spanned by the last three gaps
+  (``taxiout.saturation``). The cheap Gate 3, measured against the ceiling.
 
 Stands that do not join fall back to airport level rather than carrying nulls
 -- 3.7% of training departures and 3.3% of ranking departures are stands
@@ -97,6 +102,11 @@ from taxiout.planlags import (
     planlag_features,
 )
 from taxiout.routing import AGGREGATED_FIELDS
+from taxiout.saturation import (
+    SATURATION_FEATURES,
+    SOURCES as SATURATION_SOURCES,
+    saturation_features,
+)
 
 TARGET = "TAXITIME_SEC_mvt"
 
@@ -159,6 +169,7 @@ FEATURE_COLUMNS: tuple[str, ...] = (
     + CONGESTION_FEATURES
     + CORRIDOR_FEATURES
     + WEATHER_FEATURES
+    + SATURATION_FEATURES
 )
 
 # Every feature column against the raw columns it reads. Checked against
@@ -184,6 +195,8 @@ FEATURE_SOURCES: dict[str, tuple[str, ...]] = {
     # The weather block reads an external dataset, and says so: its sources
     # carry the ``METAR.`` prefix and name the archive's own fields.
     **WEATHER_SOURCES,
+    # Runway saturation reads other departures' take-off times and nothing else.
+    **SATURATION_SOURCES,
 }
 
 # Prefixes that name an external dataset rather than a phase of the challenge
@@ -450,6 +463,9 @@ def build_features(
             out[c] = values
 
     for c, values in weather_features(frame, weather).items():
+        out[c] = values
+
+    for c, values in saturation_features(frame, movements).items():
         out[c] = values
 
     for c in FEATURE_COLUMNS:

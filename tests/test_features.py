@@ -441,7 +441,15 @@ def test_the_ladder_reads_the_congestion_blocks_net_of_the_plan_lags_and_keeps_t
         k
         for k in keys
         if k
-        in ("throughput", "arrivals", "demand", "configuration", "corridor", "weather")
+        in (
+            "throughput",
+            "arrivals",
+            "demand",
+            "configuration",
+            "corridor",
+            "weather",
+            "saturation",
+        )
     ]
     for k in net:
         assert set(PLAN_LAG_FEATURES) <= set(LADDER_BY_KEY[k].features), k
@@ -459,5 +467,7 @@ def test_the_ladder_reads_the_congestion_blocks_net_of_the_plan_lags_and_keeps_t
     assert base_of(LADDER_BY_KEY["throughput"]).key == "plan-lags"
     assert base_of(LADDER[0]) is None
     # the submission model is the top of the ladder proper, with the lags
-    assert TOP_RUNG.key == "weather" and set(PLAN_LAG_FEATURES) <= set(TOP_RUNG.features)
+    assert TOP_RUNG.key == "saturation"
+    assert set(PLAN_LAG_FEATURES) <= set(TOP_RUNG.features)
+    assert base_of(TOP_RUNG).key == "weather"
     assert len(set(keys)) == len(keys)

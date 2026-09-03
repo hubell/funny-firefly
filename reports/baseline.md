@@ -210,12 +210,14 @@ Train January-November 2025, validate December, all ten airports -- the winter p
 | + configuration | 381.1 | -106.9 | n/a | 257.9 | 240.5 |
 | + shared corridor | 381.9 | -106.0 | n/a | 257.4 | 240.0 |
 | + weather | 381.5 | -106.5 | n/a | 255.4 | 237.9 |
+| + runway saturation | 379.8 | -108.2 | n/a | 255.2 | 237.7 |
 | + runway throughput (without plan lags) | 439.1 | -48.8 | n/a | 330.3 | 316.9 |
 | + arrivals (without plan lags) | 433.9 | -54.1 | n/a | 322.6 | 308.9 |
 | + demand (without plan lags) | 429.6 | -58.3 | n/a | 317.4 | 303.5 |
 | + configuration (without plan lags) | 430.4 | -57.6 | n/a | 318.7 | 304.9 |
 | + shared corridor (without plan lags) | 431.3 | -56.7 | n/a | 319.9 | 306.1 |
 | + weather (without plan lags) | 423.4 | -64.6 | n/a | 308.3 | 293.9 |
+| + runway saturation (without plan lags) | 423.1 | -64.9 | n/a | 308.1 | 293.8 |
 
 ### July split
 
@@ -237,12 +239,14 @@ Train January-June 2025, validate July -- the three airports the July test set c
 | + configuration | 637.9 | -79.3 | n/a | 392.7 | 350.1 |
 | + shared corridor | 637.3 | -79.8 | n/a | 392.0 | 349.3 |
 | + weather | 636.8 | -80.3 | n/a | 391.8 | 349.1 |
+| + runway saturation | 637.6 | -79.6 | n/a | 392.0 | 349.3 |
 | + runway throughput (without plan lags) | 674.8 | -42.4 | n/a | 441.4 | 404.1 |
 | + arrivals (without plan lags) | 672.5 | -44.7 | n/a | 439.2 | 401.6 |
 | + demand (without plan lags) | 671.3 | -45.9 | n/a | 437.1 | 399.4 |
 | + configuration (without plan lags) | 672.0 | -45.2 | n/a | 437.6 | 399.9 |
 | + shared corridor (without plan lags) | 671.4 | -45.8 | n/a | 437.0 | 399.3 |
 | + weather (without plan lags) | 670.6 | -46.6 | n/a | 435.8 | 398.0 |
+| + runway saturation (without plan lags) | 670.8 | -46.4 | n/a | 436.0 | 398.2 |
 
 ## Held-out pairs
 
@@ -296,12 +300,14 @@ gaps are at the end, for the record.
 | + configuration | 240.9 | 273.2 | +32.4 s [+11.7, +54.2] | +14 / +33 / +50 | yes |
 | + shared corridor | 240.9 | 273.2 | +32.3 s [+11.4, +54.1] | +14 / +34 / +49 | yes |
 | + weather | 240.4 | 272.4 | +32.0 s [+11.0, +54.0] | +14 / +33 / +49 | yes |
+| + runway saturation | 240.1 | 272.6 | +32.5 s [+11.8, +54.3] | +14 / +34 / +50 | yes |
 | + runway throughput (without plan lags) | 296.9 | 326.5 | +29.6 s [+11.2, +49.5] | +18 / +27 / +44 | yes |
 | + arrivals (without plan lags) | 294.0 | 324.0 | +30.1 s [+11.4, +50.3] | +19 / +27 / +44 | yes |
 | + demand (without plan lags) | 291.9 | 322.7 | +30.8 s [+12.1, +50.8] | +19 / +28 / +45 | yes |
 | + configuration (without plan lags) | 291.5 | 321.8 | +30.3 s [+11.5, +50.5] | +19 / +28 / +44 | yes |
 | + shared corridor (without plan lags) | 292.0 | 322.8 | +30.8 s [+12.1, +51.3] | +19 / +29 / +45 | yes |
 | + weather (without plan lags) | 289.1 | 319.8 | +30.7 s [+11.6, +51.7] | +19 / +28 / +45 | yes |
+| + runway saturation (without plan lags) | 289.0 | 320.5 | +31.5 s [+12.5, +52.6] | +19 / +29 / +46 | yes |
 
 The zero-parameter rung is the purest statement in the table. The geometric unimpeded term carries no identifier, so it has nothing to memorize and, if the geometry is doing what it claims, nothing to lose on a pair it has never seen. Net of the airport mean's own gap -- pure composition -- its gap is -1.7 s [-6.2, +2.7], which is indistinguishable from zero: it loses nothing.
 
@@ -327,12 +333,14 @@ never saw; zero means it is memorization dressed as a feature.
 | + demand → + configuration | +0.4 | +0.3 | -0.1 s [-0.6, +0.3] |
 | + configuration → + shared corridor | -0.0 | +0.1 | +0.1 s [-0.4, +0.6] |
 | + shared corridor → + weather | +0.5 | +0.8 | +0.3 s [-0.2, +0.9] |
+| + weather → + runway saturation | +0.3 | -0.2 | -0.5 s [-1.0, -0.0] |
 | identifiers + time + geometry + aircraft → + runway throughput (without plan lags) | +2.7 | +3.4 | +0.6 s [+0.2, +1.1] |
 | + runway throughput (without plan lags) → + arrivals (without plan lags) | +2.9 | +2.5 | -0.4 s [-1.0, +0.1] |
 | + arrivals (without plan lags) → + demand (without plan lags) | +2.1 | +1.4 | -0.7 s [-1.2, -0.2] |
 | + demand (without plan lags) → + configuration (without plan lags) | +0.4 | +0.9 | +0.5 s [+0.2, +0.9] |
 | + configuration (without plan lags) → + shared corridor (without plan lags) | -0.5 | -1.0 | -0.5 s [-1.4, +0.2] |
 | + shared corridor (without plan lags) → + weather (without plan lags) | +3.0 | +3.0 | +0.0 s [-0.6, +0.6] |
+| + weather (without plan lags) → + runway saturation (without plan lags) | +0.1 | -0.7 | -0.8 s [-1.1, -0.5] |
 
 The claim contrast, identifiers + time → identifiers + time + geometry. **+14.5 s [+13.0, +16.3].** The interval excludes zero: the geometry block buys more on a pair the model has never seen than on one it has, which is the claim.
 
@@ -373,12 +381,14 @@ The gap per rung with the record-quality rows left in. Two hundred draws, becaus
 | + configuration | -67.0 s [-179.9, +38.5] |
 | + shared corridor | -67.3 s [-179.5, +37.9] |
 | + weather | -68.0 s [-181.2, +37.6] |
+| + runway saturation | -67.6 s [-181.1, +37.7] |
 | + runway throughput (without plan lags) | -64.2 s [-170.8, +32.1] |
 | + arrivals (without plan lags) | -64.5 s [-171.4, +32.0] |
 | + demand (without plan lags) | -63.7 s [-171.0, +32.7] |
 | + configuration (without plan lags) | -64.5 s [-171.8, +32.0] |
 | + shared corridor (without plan lags) | -63.9 s [-171.5, +32.4] |
 | + weather (without plan lags) | -64.9 s [-172.8, +32.3] |
+| + runway saturation (without plan lags) | -64.3 s [-172.2, +32.4] |
 
 ## Error by pair frequency
 
@@ -408,12 +418,14 @@ reports that record rather than anything about the rungs.
 | + configuration | 237.4 | 355.1 | 283.8 | 235.4 |
 | + shared corridor | 240.7 | 357.1 | 283.2 | 234.8 |
 | + weather | 233.2 | 354.1 | 276.4 | 233.2 |
+| + runway saturation | 229.2 | 352.2 | 277.9 | 232.9 |
 | + runway throughput (without plan lags) | 309.5 | 417.8 | 365.4 | 311.6 |
 | + arrivals (without plan lags) | 302.1 | 415.2 | 358.9 | 303.3 |
 | + demand (without plan lags) | 297.0 | 411.6 | 351.8 | 298.1 |
 | + configuration (without plan lags) | 297.0 | 418.9 | 352.8 | 299.4 |
 | + shared corridor (without plan lags) | 304.3 | 417.6 | 359.2 | 300.1 |
 | + weather (without plan lags) | 295.3 | 403.7 | 335.9 | 289.1 |
+| + runway saturation (without plan lags) | 297.9 | 405.6 | 335.8 | 288.9 |
 
 ## Per airport
 
@@ -422,39 +434,39 @@ contains -- Frankfurt, Heathrow and Schiphol, 53% of the test rows -- so
 a pooled-optimal model could be a Frankfurt-Heathrow-Schiphol-optimal
 model. The top rung, per airport, on each forward split.
 
-### December split, + weather
+### December split, + runway saturation
 
 | ICAO | rows | RMSE (s) | excluding flagged (s) | bias (s) |
 | --- | ---: | ---: | ---: | ---: |
-| all | 165,677 | 381.5 | 237.9 | +8 |
-| the three * | 56,782 | 223.7 | 223.7 | +15 |
-| EDDF * | 17,324 | 201.2 | 201.2 | +13 |
-| EDDM | 12,035 | 268.8 | 268.8 | +12 |
-| EGLL * | 20,000 | 273.6 | 273.6 | +22 |
-| EHAM * | 19,458 | 181.8 | 181.8 | +9 |
-| LEBL | 13,835 | 191.5 | 191.5 | -1 |
-| LEMD | 17,985 | 182.8 | 182.8 | +9 |
-| LFPG | 19,778 | 284.0 | 284.0 | +10 |
-| LIRF | 12,068 | 1,155.3 | 337.5 | -51 |
-| LSZH | 10,585 | 203.6 | 203.6 | +11 |
-| LTFM | 22,609 | 225.7 | 225.7 | +20 |
+| all | 165,677 | 379.8 | 237.7 | +6 |
+| the three * | 56,782 | 223.0 | 223.0 | +13 |
+| EDDF * | 17,324 | 200.9 | 200.9 | +11 |
+| EDDM | 12,035 | 269.5 | 269.5 | +11 |
+| EGLL * | 20,000 | 273.1 | 273.1 | +19 |
+| EHAM * | 19,458 | 180.4 | 180.4 | +9 |
+| LEBL | 13,835 | 191.6 | 191.6 | -3 |
+| LEMD | 17,985 | 182.3 | 182.3 | +9 |
+| LFPG | 19,778 | 284.8 | 284.8 | +6 |
+| LIRF | 12,068 | 1,148.1 | 336.7 | -53 |
+| LSZH | 10,585 | 203.2 | 203.2 | +8 |
+| LTFM | 22,609 | 225.6 | 225.6 | +19 |
 
-### July split, + weather
+### July split, + runway saturation
 
 | ICAO | rows | RMSE (s) | excluding flagged (s) | bias (s) |
 | --- | ---: | ---: | ---: | ---: |
-| all | 190,713 | 636.8 | 349.1 | -7 |
-| the three * | 64,613 | 260.1 | 260.1 | +11 |
-| EDDF * | 21,334 | 200.8 | 200.8 | +10 |
-| EDDM | 15,825 | 199.8 | 199.8 | -9 |
-| EGLL * | 20,790 | 362.1 | 362.1 | +13 |
-| EHAM * | 22,489 | 186.7 | 186.7 | +9 |
-| LEBL | 16,752 | 283.7 | 283.7 | -9 |
-| LEMD | 18,818 | 208.8 | 208.8 | +12 |
-| LFPG | 21,712 | 307.9 | 307.9 | -12 |
-| LIRF | 15,211 | 2,073.2 | 869.0 | -103 |
-| LSZH | 12,611 | 216.9 | 216.9 | -1 |
-| LTFM | 25,171 | 292.0 | 292.0 | -6 |
+| all | 190,713 | 637.6 | 349.3 | -6 |
+| the three * | 64,613 | 259.9 | 259.9 | +12 |
+| EDDF * | 21,334 | 200.5 | 200.5 | +12 |
+| EDDM | 15,825 | 200.0 | 200.0 | -8 |
+| EGLL * | 20,790 | 362.4 | 362.4 | +17 |
+| EHAM * | 22,489 | 185.9 | 185.9 | +9 |
+| LEBL | 16,752 | 284.1 | 284.1 | -9 |
+| LEMD | 18,818 | 207.8 | 207.8 | +10 |
+| LFPG | 21,712 | 308.9 | 308.9 | -6 |
+| LIRF | 15,211 | 2,076.3 | 870.8 | -103 |
+| LSZH | 12,611 | 215.5 | 215.5 | -0 |
+| LTFM | 25,171 | 290.9 | 290.9 | -3 |
 
 `*` an airport the July 2026 test month contains.
 
@@ -468,23 +480,23 @@ first evidence that the ambiguity bookkeeping was worth carrying.
 
 | feature | share of splits | block |
 | --- | ---: | --- |
-| `stand` | 32.7% | other |
-| `lag_eobt_s` | 10.3% | other |
-| `lag_lobt_s` | 8.1% | other |
-| `lag_sched_s` | 7.4% | other |
-| `aircraft_type` | 6.9% | other |
-| `designator` | 6.5% | other |
-| `lag_eobt_rwy15m` | 2.3% | other |
-| `icao` | 1.5% | other |
-| `lag_sched_rwy15m` | 1.4% | other |
-| `tko_doy_cos` | 1.3% | other |
-| `tko_minute_of_day` | 1.1% | other |
+| `stand` | 32.3% | other |
+| `lag_eobt_s` | 10.2% | other |
+| `lag_lobt_s` | 7.9% | other |
+| `lag_sched_s` | 7.2% | other |
+| `aircraft_type` | 7.0% | other |
+| `designator` | 6.4% | other |
+| `lag_eobt_rwy15m` | 2.4% | other |
+| `icao` | 1.6% | other |
+| `lag_sched_rwy15m` | 1.5% | other |
+| `tko_doy_cos` | 1.2% | other |
+| `tko_minute_of_day` | 1.0% | other |
 | `lag_lobt_rwy15m` | 1.0% | other |
 | `tko_hour_cos` | 0.9% | other |
-| `tko_doy_sin` | 0.9% | other |
-| `tko_hour_sin` | 0.8% | other |
+| `tko_hour_sin` | 0.9% | other |
+| `tko_doy_sin` | 0.8% | other |
 
-The geometry block and its quality flags take 4.3% of the splits.
+The geometry block and its quality flags take 4.2% of the splits.
 
 ## What is not here yet
 

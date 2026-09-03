@@ -11,7 +11,7 @@ refuses to write a literal stand identifier from either source.
 ## In one paragraph
 
 2,085,047 training departures and 215,876 ranking departures
-get the same 49 congestion columns, from windows of 5, 15, 30, 60 minutes anchored on the subject's take-off, built by one function
+get the same 54 congestion columns, from windows of 5, 15, 30, 60 minutes anchored on the subject's take-off, built by one function
 from each side's own movement frame with the subject removed from its
 own count by identity. The same calendar month a year apart has the
 same shape on both sides. 10 training rows and 16 ranking rows have a window
@@ -51,6 +51,7 @@ held to that archive's field list.
 | coverage | 2 | `MVT_TIME_UTC_mvt`, `SCHED_TIME_UTC_mvt` | -- | -- | -- |
 | corridor | 5 | `ADEP_mvt`, `MVT_ID_mvt`, `MVT_TIME_UTC_mvt`, `RUNWAY_mvt`, `STAND_mvt` | `ADEP_mvt`, `MVT_ID_mvt`, `MVT_TIME_UTC_mvt`, `RUNWAY_mvt`, `STAND_mvt` | `ADES_mvt`, `BLOCK_TIME_UTC_mvt`, `RUNWAY_mvt`, `STAND_mvt` | -- |
 | weather | 5 | `ADEP_mvt`, `MVT_TIME_UTC_mvt` | -- | -- | `METAR.p01i`, `METAR.tmpf`, `METAR.valid`, `METAR.vsby`, `METAR.wxcodes` |
+| saturation | 5 | `ADEP_mvt`, `MVT_ID_mvt`, `MVT_TIME_UTC_mvt`, `RUNWAY_mvt` | `ADEP_mvt`, `MVT_ID_mvt`, `MVT_TIME_UTC_mvt`, `RUNWAY_mvt` | -- | -- |
 
 The arrivals block is the one that reads a departure-hidden column --
 `BLOCK_TIME_UTC_mvt` and `TAXITIME_SEC_mvt`, from arrivals. The poison
@@ -205,6 +206,32 @@ Median and 90th percentile, the same calendar month a year apart:
 | `corr_arr_15m` | July | EDDF | 0.4 | 0.4 | 1.5 | 1.7 |
 | `corr_arr_15m` | July | EGLL | 0.1 | 0.1 | 0.9 | 0.7 |
 | `corr_arr_15m` | July | EHAM | 0.1 | 0.1 | 0.6 | 0.6 |
+| `sat_gap90_15m` | January | EDDF | 0.2 | 0.2 | 0.6 | 0.6 |
+| `sat_gap90_15m` | January | EDDM | 0.0 | 0.0 | 0.5 | 0.5 |
+| `sat_gap90_15m` | January | EGLL | 0.6 | 0.6 | 0.8 | 0.8 |
+| `sat_gap90_15m` | January | EHAM | 0.3 | 0.3 | 0.7 | 0.7 |
+| `sat_gap90_15m` | January | LEBL | 0.3 | 0.3 | 0.7 | 0.7 |
+| `sat_gap90_15m` | January | LEMD | 0.0 | 0.2 | 0.6 | 0.6 |
+| `sat_gap90_15m` | January | LFPG | 0.2 | 0.2 | 0.5 | 0.5 |
+| `sat_gap90_15m` | January | LIRF | 0.3 | 0.3 | 0.7 | 0.7 |
+| `sat_gap90_15m` | January | LSZH | 0.0 | 0.0 | 0.5 | 0.4 |
+| `sat_gap90_15m` | January | LTFM | 0.3 | 0.2 | 0.6 | 0.6 |
+| `sat_gap90_15m` | July | EDDF | 0.3 | 0.3 | 0.7 | 0.7 |
+| `sat_gap90_15m` | July | EGLL | 0.6 | 0.6 | 0.8 | 0.8 |
+| `sat_gap90_15m` | July | EHAM | 0.4 | 0.4 | 0.7 | 0.8 |
+| `sat_span3_s` | January | EDDF | 489.0 | 494.0 | 1,514.0 | 1,464.0 |
+| `sat_span3_s` | January | EDDM | 777.0 | 772.0 | 1,800.0 | 1,800.0 |
+| `sat_span3_s` | January | EGLL | 247.0 | 248.0 | 421.0 | 422.0 |
+| `sat_span3_s` | January | EHAM | 370.0 | 376.0 | 1,028.0 | 1,243.0 |
+| `sat_span3_s` | January | LEBL | 400.0 | 400.0 | 971.4 | 1,055.0 |
+| `sat_span3_s` | January | LEMD | 544.0 | 542.0 | 1,489.0 | 1,488.0 |
+| `sat_span3_s` | January | LFPG | 531.0 | 483.0 | 1,439.1 | 1,441.0 |
+| `sat_span3_s` | January | LIRF | 480.0 | 534.0 | 1,325.4 | 1,448.0 |
+| `sat_span3_s` | January | LSZH | 529.0 | 551.0 | 1,800.0 | 1,800.0 |
+| `sat_span3_s` | January | LTFM | 428.0 | 476.0 | 1,617.0 | 1,388.0 |
+| `sat_span3_s` | July | EDDF | 408.0 | 410.0 | 1,027.7 | 1,081.1 |
+| `sat_span3_s` | July | EGLL | 244.0 | 245.0 | 368.0 | 368.0 |
+| `sat_span3_s` | July | EHAM | 343.0 | 333.0 | 949.0 | 1,009.0 |
 
 A window that reaches before the first instant of its covered block
 -- the first hour of January 2025 on the training side, of January and
@@ -342,8 +369,10 @@ of the other same-runway departures within 15 minutes either side, the
 subject excluded -- one least-squares fit, pooled, in sample. That is
 what a model could reach if it knew its neighbours' outcomes exactly, and
 it bounds what any queue model built from the runway sequence could add.
-Read on the top rung of the ladder and on the top of the chain kept
-without the plan lags.
+Read on the rung before the top of the ladder and on the top itself --
+so the saturation rung is measured against the ceiling of the rung it
+was added to -- and on the same two of the chain kept without the plan
+lags.
 
 ### December split
 
@@ -353,7 +382,9 @@ gap between the two take-offs:
 | rung | rows | 0-2 min, pairs | corr | 2-5 min, pairs | corr | 5-15 min, pairs | corr |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | + weather | 165,589 | 81,543 | 0.20 | 57,099 | 0.19 | 20,854 | 0.15 |
+| + runway saturation | 165,589 | 81,543 | 0.20 | 57,099 | 0.19 | 20,854 | 0.15 |
 | + weather (without plan lags) | 165,589 | 81,543 | 0.32 | 57,099 | 0.35 | 20,854 | 0.28 |
+| + runway saturation (without plan lags) | 165,589 | 81,543 | 0.32 | 57,099 | 0.35 | 20,854 | 0.28 |
 
 The oracle: RMSE over the same rows before and after regressing the
 residual on its neighbours' mean residual. The last column is the
@@ -362,23 +393,25 @@ ceiling -- the most any queue model reading the sequence could add:
 | rung | rows with a neighbour | slope | RMSE (s) | after the oracle (s) | ceiling (s) |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | + weather | 98.8% | 0.59 | 237.9 | 227.2 | 10.7 |
+| + runway saturation | 98.8% | 0.59 | 237.7 | 227.1 | 10.6 |
 | + weather (without plan lags) | 98.8% | 0.77 | 293.9 | 261.4 | 32.5 |
+| + runway saturation (without plan lags) | 98.8% | 0.77 | 293.8 | 261.3 | 32.5 |
 
-Per airport, + weather: the 0-2 min autocorrelation
+Per airport, + runway saturation: the 0-2 min autocorrelation
 and the oracle from the pooled fit:
 
 | ICAO | rows | corr, 0-2 min | RMSE (s) | after (s) | ceiling (s) |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| EDDF | 17,324 | 0.18 | 201.2 | 193.3 | 7.9 |
-| EDDM | 12,035 | 0.24 | 268.8 | 250.5 | 18.4 |
-| EGLL | 20,000 | 0.14 | 273.6 | 257.3 | 16.4 |
-| EHAM | 19,458 | 0.20 | 181.8 | 175.5 | 6.3 |
-| LEBL | 13,835 | 0.26 | 191.5 | 178.4 | 13.1 |
-| LEMD | 17,985 | 0.26 | 182.8 | 175.6 | 7.2 |
-| LFPG | 19,778 | 0.18 | 284.0 | 274.4 | 9.6 |
-| LIRF | 11,980 | 0.09 | 337.5 | 339.2 | -1.7 |
-| LSZH | 10,585 | 0.31 | 203.6 | 193.9 | 9.7 |
-| LTFM | 22,609 | 0.35 | 225.7 | 206.0 | 19.7 |
+| EDDF | 17,324 | 0.18 | 200.9 | 193.1 | 7.8 |
+| EDDM | 12,035 | 0.25 | 269.5 | 250.1 | 19.5 |
+| EGLL | 20,000 | 0.14 | 273.1 | 257.3 | 15.8 |
+| EHAM | 19,458 | 0.20 | 180.4 | 174.4 | 6.0 |
+| LEBL | 13,835 | 0.26 | 191.6 | 178.1 | 13.6 |
+| LEMD | 17,985 | 0.26 | 182.3 | 175.7 | 6.6 |
+| LFPG | 19,778 | 0.19 | 284.8 | 275.9 | 8.9 |
+| LIRF | 11,980 | 0.09 | 336.7 | 338.4 | -1.7 |
+| LSZH | 10,585 | 0.32 | 203.2 | 192.9 | 10.2 |
+| LTFM | 22,609 | 0.35 | 225.6 | 206.0 | 19.7 |
 
 ### July split
 
@@ -388,7 +421,9 @@ gap between the two take-offs:
 | rung | rows | 0-2 min, pairs | corr | 2-5 min, pairs | corr | 5-15 min, pairs | corr |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | + weather | 190,378 | 98,455 | 0.09 | 65,331 | 0.20 | 21,022 | 0.14 |
+| + runway saturation | 190,378 | 98,455 | 0.09 | 65,331 | 0.20 | 21,022 | 0.14 |
 | + weather (without plan lags) | 190,378 | 98,455 | 0.17 | 65,331 | 0.35 | 21,022 | 0.26 |
+| + runway saturation (without plan lags) | 190,378 | 98,455 | 0.17 | 65,331 | 0.35 | 21,022 | 0.27 |
 
 The oracle: RMSE over the same rows before and after regressing the
 residual on its neighbours' mean residual. The last column is the
@@ -397,23 +432,25 @@ ceiling -- the most any queue model reading the sequence could add:
 | rung | rows with a neighbour | slope | RMSE (s) | after the oracle (s) | ceiling (s) |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | + weather | 99.0% | 0.53 | 349.1 | 340.4 | 8.7 |
+| + runway saturation | 99.0% | 0.53 | 349.3 | 340.7 | 8.7 |
 | + weather (without plan lags) | 99.0% | 0.74 | 398.0 | 368.2 | 29.8 |
+| + runway saturation (without plan lags) | 99.0% | 0.74 | 398.2 | 368.3 | 29.9 |
 
-Per airport, + weather: the 0-2 min autocorrelation
+Per airport, + runway saturation: the 0-2 min autocorrelation
 and the oracle from the pooled fit:
 
 | ICAO | rows | corr, 0-2 min | RMSE (s) | after (s) | ceiling (s) |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| EDDF | 21,334 | 0.26 | 200.8 | 186.8 | 14.1 |
-| EDDM | 15,825 | 0.25 | 199.8 | 188.2 | 11.6 |
-| EGLL | 20,790 | 0.09 | 362.1 | 351.2 | 10.9 |
-| EHAM | 22,489 | 0.18 | 186.7 | 180.7 | 5.9 |
-| LEBL | 16,752 | 0.20 | 283.7 | 266.8 | 16.8 |
-| LEMD | 18,818 | 0.33 | 208.8 | 194.7 | 14.1 |
-| LFPG | 21,712 | 0.17 | 307.9 | 296.8 | 11.0 |
-| LIRF | 14,876 | 0.01 | 869.0 | 876.4 | -7.4 |
-| LSZH | 12,611 | 0.29 | 216.9 | 208.3 | 8.6 |
-| LTFM | 25,171 | 0.40 | 292.0 | 256.6 | 35.4 |
+| EDDF | 21,334 | 0.26 | 200.5 | 186.8 | 13.8 |
+| EDDM | 15,825 | 0.25 | 200.0 | 188.8 | 11.1 |
+| EGLL | 20,790 | 0.10 | 362.4 | 350.4 | 12.0 |
+| EHAM | 22,489 | 0.18 | 185.9 | 180.2 | 5.7 |
+| LEBL | 16,752 | 0.20 | 284.1 | 267.1 | 17.0 |
+| LEMD | 18,818 | 0.33 | 207.8 | 194.3 | 13.6 |
+| LFPG | 21,712 | 0.17 | 308.9 | 298.1 | 10.8 |
+| LIRF | 14,876 | 0.01 | 870.8 | 878.0 | -7.1 |
+| LSZH | 12,611 | 0.29 | 215.5 | 207.5 | 8.0 |
+| LTFM | 25,171 | 0.39 | 290.9 | 256.7 | 34.2 |
 
 Distance matrices and edge sets derived from OpenStreetMap: data (c)
 OpenStreetMap contributors, ODbL 1.0. Movement and flight data supplied

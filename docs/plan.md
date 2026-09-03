@@ -368,6 +368,31 @@ sequence carries, and what they leave to a queue model is ten seconds on
 a 238-second error. The cheap runway-saturation features are measured
 against that bound next; the simulation is not started without a decision.
 
+**Runway saturation, the cheap Gate 3, 3 September — and the stop.** From
+the other departures' take-off times on the subject's runway and nothing
+else: the share of consecutive take-off gaps under ninety seconds over the
+trailing five and fifteen minutes, the smallest gap in the trailing five,
+and the time spanned by the last three gaps, capped at thirty minutes and
+flagged when fewer than three precede. Registered and tested like every
+block; physical on the real year (Heathrow's median share of short gaps is
+0.6, Munich's and Zurich's on their parallel runways 0.0; the same shape on
+both sides a year apart). One rung at the top of the ladder, measured
+against the ceiling.
+
+It is worth nothing. December goes from 237.9 s to 237.7, July from 349.1
+to 349.3; without the plan lags, 293.9 to 293.8 and 398.0 to 398.2. The
+held-out contrast is −0.5 s [−1.0, −0.0]. And the ceiling is untouched:
+after the rung the oracle still finds 10.6 s in December and 8.7 in July
+net of the plan lags, 32.5 and 29.9 without them — the saturation columns
+took none of what the sequence carries. No saturation column is among the
+top rung's split shares.
+
+The reading. The plan lags already carry the lag the runway is running at,
+measured after the fact; what the runway sequence holds beyond that is ten
+seconds on a 238-second error, and the cheap features cannot reach it. A
+queueing simulation is bounded by the same ten seconds. It is not started
+without a decision; the numbers that decide it are above.
+
 **Gate 3 — the queueing layer, only if Gate 2's ablation says congestion is
 binding** (~20–30 h). This is the piece where the geometry stops being a side
 feature. *Revised 2 September:* the forward simulation as first written —

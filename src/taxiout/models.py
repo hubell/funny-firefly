@@ -43,6 +43,10 @@ reports:
 9. **plus weather** -- the regime flags per airport-hour (Gate 2b), the one
    block from outside the challenge data. Skipped by the runner when the
    archive is not cached, and said so, rather than fitted on a missing column.
+10. **plus runway saturation** -- the cheap Gate 3: from the other departures'
+   take-off times on the subject's runway, the share of consecutive gaps
+   under ninety seconds, the smallest gap, and the span of the last three.
+   Measured against the ceiling in ``reports/congestion.md``.
 
 Each rung is scored twice, once plain and once with the record-quality term on
 top. That term lives in ``taxiout.tails`` and is deliberately not reimplemented
@@ -78,6 +82,7 @@ from taxiout.congestion import (
 from taxiout.corridor import CORRIDOR_FEATURES
 from taxiout.metar import WEATHER_FEATURES
 from taxiout.planlags import PLAN_LAG_FEATURES
+from taxiout.saturation import SATURATION_FEATURES
 from taxiout.features import (
     AIRCRAFT_FEATURES,
     CATEGORICAL_FEATURES,
@@ -328,6 +333,31 @@ LADDER: tuple[Rung, ...] = (
         + CORRIDOR_FEATURES
         + WEATHER_FEATURES,
         note="visibility band, precipitation and freezing, per airport-hour (Gate 2b)",
+    ),
+    Rung(
+        key="saturation",
+        label="+ runway saturation",
+        kind="booster",
+        features=IDENTIFIER_BLOCK
+        + TIME_FEATURES
+        + PLAN_FEATURES
+        + GEOMETRY_FEATURES
+        + QUALITY_FEATURES
+        + AIRCRAFT_FEATURES
+        + PLAN_LAG_FEATURES
+        + THROUGHPUT_FEATURES
+        + COVERAGE_FEATURES
+        + ARRIVAL_FEATURES
+        + DEMAND_FEATURES
+        + CONFIGURATION_FEATURES
+        + CORRIDOR_FEATURES
+        + WEATHER_FEATURES
+        + SATURATION_FEATURES,
+        note=(
+            "the share of consecutive take-off gaps under ninety seconds, the "
+            "smallest gap, and the span of the last three, from other departures' "
+            "take-off times on the subject's runway (the cheap Gate 3)"
+        ),
     ),
 )
 
