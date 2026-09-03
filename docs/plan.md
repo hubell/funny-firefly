@@ -344,6 +344,30 @@ rung is −0.1 s [−0.6, +0.3] net of the lags and +0.5 s [+0.2, +0.9]
 without them. A column that costs nothing to drop and was memorizing
 airport-hours is better dropped.
 
+**The ceiling, 3 September.** Before any queue model is built, how much
+of the top rung's residual sits in the runway sequence at all. An oracle
+diagnostic in [`../reports/congestion.md`](../reports/congestion.md),
+never a feature: on each forward split's validation rows, over the rows the
+record-quality term leaves to the physical model, the top rung's residuals
+are read against the residuals of the other departures on the same runway
+— their taxi times minus what the model already knew, which no admissible
+feature may read. The lag-1 autocorrelation of consecutive same-runway
+residuals at a take-off gap under two minutes is 0.20 in December and 0.09
+in July net of the plan lags, 0.32 and 0.17 without them. Regressing the
+residual on the mean residual of the other same-runway departures within
+fifteen minutes — one pooled least-squares fit, in sample, the subject
+excluded — takes the December RMSE from 237.9 s to 227.2 s and the July
+from 349.1 to 340.4: a ceiling of 10.7 s and 8.7 s on what any queue model
+reading the runway sequence could add, net of the plan lags. Without the
+plan lags the same ceiling is 32.5 s and 29.8 s. Per airport in December it
+runs from 6 s at Schiphol to 20 s at Istanbul and 18 at Munich, and is nil
+at Fiumicino, whose residual is the record-quality tail.
+
+The reading for Gate 3: the plan lags have already taken most of what the
+sequence carries, and what they leave to a queue model is ten seconds on
+a 238-second error. The cheap runway-saturation features are measured
+against that bound next; the simulation is not started without a decision.
+
 **Gate 3 — the queueing layer, only if Gate 2's ablation says congestion is
 binding** (~20–30 h). This is the piece where the geometry stops being a side
 feature. *Revised 2 September:* the forward simulation as first written —

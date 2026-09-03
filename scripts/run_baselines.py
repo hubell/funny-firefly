@@ -103,6 +103,9 @@ DATA = REPO / "data" / "challenge"
 MATRICES = REPO / "data" / "processed" / "taxi_distance"
 METAR = REPO / "data" / "raw" / "metar"
 OUT = REPO / "reports" / "baseline.md"
+# The forward splits' validation residuals, per booster rung, for the ceiling
+# diagnostic in scripts/report_congestion.py. Gitignored: they carry the target.
+RESIDUALS = REPO / "data" / "processed" / "residuals"
 
 # Loaded but never entered as a feature. The record-quality layer needs the
 # schedule to compute the lag its cells rest on, and the block time to measure
@@ -314,7 +317,30 @@ def fit_and_predict(
 # the run
 
 
-def run(features, y, raw, splits, tails: Tails) -> dict:
+def write_residuals(
+    split_name: str, rung_key: str, raw: pd.DataFrame, mask, y, pred, flagged
+) -> None:
+    """Keep a forward split's validation residuals for the ceiling diagnostic.
+
+    One file per (split, rung), under a gitignored directory: the residual
+    is the target minus the prediction, so the file carries the target and
+    is never tracked. ``scripts/report_congestion.py`` reads the top rung's.
+    """
+    RESIDUALS.mkdir(parents=True, exist_ok=True)
+    rows = raw.loc[mask]
+    out = pd.DataFrame(
+        {
+            "icao": rows["ADEP_mvt"].astype(str).to_numpy(),
+            "runway": rows["RUNWAY_mvt"].astype(str).to_numpy(),
+            "takeoff": pd.to_datetime(rows["MVT_TIME_UTC_mvt"], utc=True).to_numpy(),
+            "residual": np.asarray(y[mask], dtype=float) - np.asarray(pred, dtype=float),
+            "flagged": np.asarray(flagged[mask], dtype=bool),
+        }
+    )
+    out.to_parquet(RESIDUALS / f"{split_name}_{rung_key}.parquet", index=False)
+
+
+def run(features, y, raw, splits, tails: Tails, *, keep_residuals: bool = True) -> dict:
     """Every rung on every split. Returns the results the report reads.
 
     The record-quality term is refitted on each split's own training rows, and
@@ -378,6 +404,13 @@ def run(features, y, raw, splits, tails: Tails) -> dict:
                         flagged=flagged[mask],
                     )
                 results[(split.name, rung.key, name)] = entry
+                if (
+                    keep_residuals
+                    and name == "valid"
+                    and rung.kind == "booster"
+                    and not split.name.startswith("pairs-")
+                ):
+                    write_residuals(split.name, rung.key, raw, mask, y, pred, flagged)
             print(
                 f"  {split.name:>10s} {rung.key:<22s} "
                 f"RMSE {results[(split.name, rung.key, 'valid')]['rmse']:7.1f} s "
@@ -1244,7 +1277,7 @@ def main() -> int:
     )
 
     print("running the ladder ...")
-    results = run(features, y, dep, splits, tails)
+    results = run(features, y, dep, splits, tails, keep_residuals=not args.dry_run)
     references = {
         name: entry["info"]["reference"]
         for (name, rung, which), entry in results.items()

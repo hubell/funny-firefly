@@ -70,6 +70,14 @@ from taxiout.congestion import (  # noqa: E402
     WINDOWS_MIN,
 )
 from taxiout.corridor import CORRIDOR_FEATURES, degeneracy  # noqa: E402
+from taxiout.ceiling import (  # noqa: E402
+    GAP_BUCKETS_MIN,
+    HALF_WINDOW_S,
+    bucket_label,
+    lag1_autocorrelation,
+    oracle,
+)
+from taxiout.models import LADDER_BY_KEY, TOP_RUNG  # noqa: E402
 from taxiout.planlags import PLAN_LAG_FEATURES  # noqa: E402
 from taxiout.metar import (  # noqa: E402
     MAX_CARRY_H,
@@ -97,7 +105,14 @@ from taxiout.validation import month_of  # noqa: E402
 
 DATA = REPO / "data" / "challenge"
 METAR = REPO / "data" / "raw" / "metar"
+RESIDUALS = REPO / "data" / "processed" / "residuals"
 OUT = REPO / "reports" / "congestion.md"
+
+# The forward splits whose validation residuals the ladder keeps.
+FORWARD_SPLITS = ("december", "july")
+# The rungs the ceiling is read on: the top of the ladder, and the top of the
+# chain kept without the plan lags.
+CEILING_RUNGS = (TOP_RUNG.key, f"{TOP_RUNG.key}-nolag")
 
 BLOCKS = (
     ("identifiers", IDENTIFIER_FEATURES),
@@ -503,6 +518,152 @@ def section_weather(hourly: pd.DataFrame | None) -> list[str]:
     ]
 
 
+def load_residuals(split: str, rung: str) -> pd.DataFrame | None:
+    f = RESIDUALS / f"{split}_{rung}.parquet"
+    if not f.exists():
+        return None
+    r = pd.read_parquet(f)
+    return r[~r["flagged"].astype(bool)].reset_index(drop=True)
+
+
+def section_ceiling() -> list[str]:
+    lines = [
+        "## The ceiling: what any queue model could still add",
+        "",
+        "An oracle diagnostic, never a feature. On each forward split's validation",
+        "rows, over the rows the record-quality term leaves to the physical model,",
+        "the top rung's residuals are read against the residuals of the *other*",
+        "departures on the same runway -- which are their taxi times minus what",
+        "the model already knew, and which no admissible feature may read. Two",
+        "questions. First, the lag-1 autocorrelation: the correlation between a",
+        "departure's residual and the residual of the departure before it on the",
+        "same runway, by the take-off gap between them. A queue is a run of",
+        "departures late together; if the residuals of consecutive take-offs at",
+        "ninety-second spacing are uncorrelated, there is no queue signal left to",
+        "find. Second, the RMSE after regressing the residual on the mean residual",
+        "of the other same-runway departures within "
+        f"{HALF_WINDOW_S // 60} minutes either side, the",
+        "subject excluded -- one least-squares fit, pooled, in sample. That is",
+        "what a model could reach if it knew its neighbours' outcomes exactly, and",
+        "it bounds what any queue model built from the runway sequence could add.",
+        "Read on the top rung of the ladder and on the top of the chain kept",
+        "without the plan lags.",
+    ]
+    any_found = False
+    for split in FORWARD_SPLITS:
+        loaded = {k: load_residuals(split, k) for k in CEILING_RUNGS}
+        loaded = {k: v for k, v in loaded.items() if v is not None and len(v)}
+        if not loaded:
+            continue
+        any_found = True
+        lines += ["", f"### {split.title()} split", ""]
+        # -- autocorrelation by gap, both rungs
+        header = ["rung", "rows"]
+        for lo, hi in GAP_BUCKETS_MIN:
+            header += [f"{bucket_label(lo, hi)}, pairs", "corr"]
+        rows = []
+        for k, r in loaded.items():
+            ac = lag1_autocorrelation(r).set_index("bucket")
+            cells = [LADDER_BY_KEY[k].label, f"{len(r):,}"]
+            for lo, hi in GAP_BUCKETS_MIN:
+                b = ac.loc[bucket_label(lo, hi)]
+                cells += [f"{int(b['n']):,}", num(float(b["corr"]), 2)]
+            rows.append(cells)
+        lines += [
+            "Lag-1 autocorrelation of consecutive same-runway residuals, by the",
+            "gap between the two take-offs:",
+            "",
+            *table(header, rows, "-r" + "rr" * len(GAP_BUCKETS_MIN)),
+            "",
+        ]
+        # -- the oracle, both rungs
+        rows = []
+        oracles = {}
+        for k, r in loaded.items():
+            o = oracle(r)
+            oracles[k] = o
+            rows.append(
+                [
+                    LADDER_BY_KEY[k].label,
+                    pct(o["with_neighbour"]),
+                    num(o["slope"], 2),
+                    num(o["rmse_before"], 1),
+                    num(o["rmse_after"], 1),
+                    num(o["rmse_before"] - o["rmse_after"], 1),
+                ]
+            )
+        lines += [
+            "The oracle: RMSE over the same rows before and after regressing the",
+            "residual on its neighbours' mean residual. The last column is the",
+            "ceiling -- the most any queue model reading the sequence could add:",
+            "",
+            *table(
+                [
+                    "rung",
+                    "rows with a neighbour",
+                    "slope",
+                    "RMSE (s)",
+                    "after the oracle (s)",
+                    "ceiling (s)",
+                ],
+                rows,
+                "-rrrrr",
+            ),
+            "",
+        ]
+        # -- per airport, top rung
+        top = CEILING_RUNGS[0]
+        if top in loaded:
+            r = loaded[top]
+            ac = lag1_autocorrelation(r, by_airport=True)
+            first = bucket_label(*GAP_BUCKETS_MIN[0])
+            ac0 = ac[ac["bucket"] == first].set_index("icao")
+            per = oracles[top]["per_airport"].set_index("icao")
+            rows = []
+            for icao in per.index:
+                rows.append(
+                    [
+                        str(icao),
+                        f"{int(per.loc[icao, 'n']):,}",
+                        num(float(ac0.loc[icao, "corr"]), 2)
+                        if icao in ac0.index
+                        else "--",
+                        num(float(per.loc[icao, "rmse_before"]), 1),
+                        num(float(per.loc[icao, "rmse_after"]), 1),
+                        num(
+                            float(
+                                per.loc[icao, "rmse_before"] - per.loc[icao, "rmse_after"]
+                            ),
+                            1,
+                        ),
+                    ]
+                )
+            lines += [
+                f"Per airport, {LADDER_BY_KEY[top].label}: the {first} autocorrelation",
+                "and the oracle from the pooled fit:",
+                "",
+                *table(
+                    [
+                        "ICAO",
+                        "rows",
+                        f"corr, {first}",
+                        "RMSE (s)",
+                        "after (s)",
+                        "ceiling (s)",
+                    ],
+                    rows,
+                    "-rrrrr",
+                ),
+            ]
+    if not any_found:
+        lines += [
+            "",
+            "No residuals under `data/processed/residuals/`; `python scripts/run_baselines.py`",
+            "writes them, and this section reads them on the next run.",
+        ]
+    return lines
+
+
 def check_no_identifiers(text: str, stands: set[str], matrix: pd.DataFrame) -> None:
     values = {
         v.strip()
@@ -589,6 +750,8 @@ def main() -> int:
         + section_configuration(train)
         + [""]
         + section_weather(hourly)
+        + [""]
+        + section_ceiling()
         + [
             "",
             "Distance matrices and edge sets derived from OpenStreetMap: data (c)",

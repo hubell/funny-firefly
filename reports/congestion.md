@@ -325,6 +325,96 @@ ranking month ran in a regime the training year saw less of:
 | LTAI | 0.0% | 0.0% | 10.1% | 20.8% | 0.0% | 0.0% |
 | LTFM | 0.0% | 1.1% | 17.5% | 32.1% | 0.0% | 14.8% |
 
+## The ceiling: what any queue model could still add
+
+An oracle diagnostic, never a feature. On each forward split's validation
+rows, over the rows the record-quality term leaves to the physical model,
+the top rung's residuals are read against the residuals of the *other*
+departures on the same runway -- which are their taxi times minus what
+the model already knew, and which no admissible feature may read. Two
+questions. First, the lag-1 autocorrelation: the correlation between a
+departure's residual and the residual of the departure before it on the
+same runway, by the take-off gap between them. A queue is a run of
+departures late together; if the residuals of consecutive take-offs at
+ninety-second spacing are uncorrelated, there is no queue signal left to
+find. Second, the RMSE after regressing the residual on the mean residual
+of the other same-runway departures within 15 minutes either side, the
+subject excluded -- one least-squares fit, pooled, in sample. That is
+what a model could reach if it knew its neighbours' outcomes exactly, and
+it bounds what any queue model built from the runway sequence could add.
+Read on the top rung of the ladder and on the top of the chain kept
+without the plan lags.
+
+### December split
+
+Lag-1 autocorrelation of consecutive same-runway residuals, by the
+gap between the two take-offs:
+
+| rung | rows | 0-2 min, pairs | corr | 2-5 min, pairs | corr | 5-15 min, pairs | corr |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| + weather | 165,589 | 81,543 | 0.20 | 57,099 | 0.19 | 20,854 | 0.15 |
+| + weather (without plan lags) | 165,589 | 81,543 | 0.32 | 57,099 | 0.35 | 20,854 | 0.28 |
+
+The oracle: RMSE over the same rows before and after regressing the
+residual on its neighbours' mean residual. The last column is the
+ceiling -- the most any queue model reading the sequence could add:
+
+| rung | rows with a neighbour | slope | RMSE (s) | after the oracle (s) | ceiling (s) |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| + weather | 98.8% | 0.59 | 237.9 | 227.2 | 10.7 |
+| + weather (without plan lags) | 98.8% | 0.77 | 293.9 | 261.4 | 32.5 |
+
+Per airport, + weather: the 0-2 min autocorrelation
+and the oracle from the pooled fit:
+
+| ICAO | rows | corr, 0-2 min | RMSE (s) | after (s) | ceiling (s) |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| EDDF | 17,324 | 0.18 | 201.2 | 193.3 | 7.9 |
+| EDDM | 12,035 | 0.24 | 268.8 | 250.5 | 18.4 |
+| EGLL | 20,000 | 0.14 | 273.6 | 257.3 | 16.4 |
+| EHAM | 19,458 | 0.20 | 181.8 | 175.5 | 6.3 |
+| LEBL | 13,835 | 0.26 | 191.5 | 178.4 | 13.1 |
+| LEMD | 17,985 | 0.26 | 182.8 | 175.6 | 7.2 |
+| LFPG | 19,778 | 0.18 | 284.0 | 274.4 | 9.6 |
+| LIRF | 11,980 | 0.09 | 337.5 | 339.2 | -1.7 |
+| LSZH | 10,585 | 0.31 | 203.6 | 193.9 | 9.7 |
+| LTFM | 22,609 | 0.35 | 225.7 | 206.0 | 19.7 |
+
+### July split
+
+Lag-1 autocorrelation of consecutive same-runway residuals, by the
+gap between the two take-offs:
+
+| rung | rows | 0-2 min, pairs | corr | 2-5 min, pairs | corr | 5-15 min, pairs | corr |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| + weather | 190,378 | 98,455 | 0.09 | 65,331 | 0.20 | 21,022 | 0.14 |
+| + weather (without plan lags) | 190,378 | 98,455 | 0.17 | 65,331 | 0.35 | 21,022 | 0.26 |
+
+The oracle: RMSE over the same rows before and after regressing the
+residual on its neighbours' mean residual. The last column is the
+ceiling -- the most any queue model reading the sequence could add:
+
+| rung | rows with a neighbour | slope | RMSE (s) | after the oracle (s) | ceiling (s) |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| + weather | 99.0% | 0.53 | 349.1 | 340.4 | 8.7 |
+| + weather (without plan lags) | 99.0% | 0.74 | 398.0 | 368.2 | 29.8 |
+
+Per airport, + weather: the 0-2 min autocorrelation
+and the oracle from the pooled fit:
+
+| ICAO | rows | corr, 0-2 min | RMSE (s) | after (s) | ceiling (s) |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| EDDF | 21,334 | 0.26 | 200.8 | 186.8 | 14.1 |
+| EDDM | 15,825 | 0.25 | 199.8 | 188.2 | 11.6 |
+| EGLL | 20,790 | 0.09 | 362.1 | 351.2 | 10.9 |
+| EHAM | 22,489 | 0.18 | 186.7 | 180.7 | 5.9 |
+| LEBL | 16,752 | 0.20 | 283.7 | 266.8 | 16.8 |
+| LEMD | 18,818 | 0.33 | 208.8 | 194.7 | 14.1 |
+| LFPG | 21,712 | 0.17 | 307.9 | 296.8 | 11.0 |
+| LIRF | 14,876 | 0.01 | 869.0 | 876.4 | -7.4 |
+| LSZH | 12,611 | 0.29 | 216.9 | 208.3 | 8.6 |
+| LTFM | 25,171 | 0.40 | 292.0 | 256.6 | 35.4 |
+
 Distance matrices and edge sets derived from OpenStreetMap: data (c)
 OpenStreetMap contributors, ODbL 1.0. Movement and flight data supplied
 by EUROCONTROL PRC and the OpenSky Network under the terms of the PRC
