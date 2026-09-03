@@ -53,6 +53,7 @@ from taxiout.airports import AIRPORTS  # noqa: E402
 from taxiout.challenge import load_movements, to_pandas  # noqa: E402
 from taxiout.features import (  # noqa: E402
     GEOMETRY_FEATURES,
+    MOVEMENT_COLUMNS,
     QUALITY_FEATURES,
     REQUIRED_COLUMNS,
     TARGET,
@@ -199,6 +200,17 @@ def load_departures(sample_frac: float | None) -> pd.DataFrame:
     if sample_frac:
         frame = frame.sample(frac=sample_frac, random_state=0).sort_index()
     return frame.reset_index(drop=True)
+
+
+def load_all_movements() -> pd.DataFrame:
+    """Every movement of the training year, both phases, never sampled.
+
+    The congestion block counts the movements *around* a subject, so the
+    event source has to be the whole year even when the subjects are a
+    development sample -- a 2% sample of subjects against a 2% sample of
+    events would count 2% of the traffic.
+    """
+    return to_pandas(load_movements(DATA, list(MOVEMENT_COLUMNS))).reset_index(drop=True)
 
 
 # --------------------------------------------------------------------------
@@ -1161,7 +1173,11 @@ def main() -> int:
 
     print("building features ...")
     t0 = time.time()
-    features = build_features(dep, matrix, fallback=airport_fallback(matrix))
+    movements = load_all_movements()
+    features = build_features(
+        dep, matrix, fallback=airport_fallback(matrix), movements=movements
+    )
+    del movements
     print(f"  {len(features):,} rows in {time.time() - t0:.0f} s")
 
     month = month_of(dep["MVT_TIME_UTC_mvt"])

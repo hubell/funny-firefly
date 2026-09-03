@@ -20,19 +20,25 @@ import pytest
 pd = pytest.importorskip("pandas")
 np = pytest.importorskip("numpy")
 
-from taxiout.challenge import FORBIDDEN_FEATURE_INPUTS  # noqa: E402
+from taxiout.challenge import (  # noqa: E402
+    AVAILABLE_FOR_ARRIVALS,
+    FORBIDDEN_FEATURE_INPUTS,
+    SOURCE_PHASES,
+)
 from taxiout.features import (  # noqa: E402
     AIRCRAFT_FEATURES,
     CATEGORICAL_FEATURES,
     FEATURE_COLUMNS,
     FEATURE_SOURCES,
     GEOMETRY_FEATURES,
+    MOVEMENT_COLUMNS,
     QUALITY_FEATURES,
     REQUIRED_COLUMNS,
     TIME_FEATURES,
     airport_fallback,
     build_features,
     feature_block,
+    source_phase,
     time_features,
 )
 from taxiout.routing import AGGREGATED_FIELDS  # noqa: E402
@@ -67,10 +73,12 @@ def _movements(stands: list[str], **overrides) -> pd.DataFrame:
     n = len(stands)
     frame = pd.DataFrame(
         {
+            "MVT_ID_mvt": [float(1000 + i) for i in range(n)],
             "ADEP_mvt": ["ZZZZ"] * n,
             "STAND_mvt": stands,
             "RUNWAY_mvt": ["27"] * n,
             "MVT_TIME_UTC_mvt": pd.to_datetime(["2025-03-04T08:30:00Z"] * n, utc=True),
+            "SCHED_TIME_UTC_mvt": pd.to_datetime(["2025-03-04T08:00:00Z"] * n, utc=True),
             "LOBT_flt": pd.to_datetime(["2025-03-04T08:10:00Z"] * n, utc=True),
             "IOBT_flt": pd.to_datetime(["2025-03-04T08:00:00Z"] * n, utc=True),
             "WK_TBL_CAT_flt": ["M"] * n,
@@ -91,38 +99,115 @@ def test_registry_covers_the_frame_exactly():
     assert len(FEATURE_SOURCES) == len(FEATURE_COLUMNS)
 
 
-def test_no_feature_declares_a_forbidden_source():
+def test_every_source_names_a_known_phase_or_none():
+    for name, sources in FEATURE_SOURCES.items():
+        for src in sources:
+            phase, column = source_phase(src)
+            assert phase in (None, *SOURCE_PHASES), (name, src)
+            assert column and "." not in column, (name, src)
+
+
+def test_no_departure_source_is_a_hidden_field():
+    """The subject's own row and any other departure's: nothing hidden."""
     forbidden = set(FORBIDDEN_FEATURE_INPUTS)
-    offending = {
-        name: sorted(set(sources) & forbidden)
-        for name, sources in FEATURE_SOURCES.items()
-        if set(sources) & forbidden
-    }
+    offending = {}
+    for name, sources in FEATURE_SOURCES.items():
+        bad = [
+            src
+            for src in sources
+            if source_phase(src)[0] in (None, "DEP") and source_phase(src)[1] in forbidden
+        ]
+        if bad:
+            offending[name] = bad
     assert offending == {}
 
 
-def test_required_columns_are_the_union_of_the_sources():
-    union = {c for sources in FEATURE_SOURCES.values() for c in sources}
-    assert set(REQUIRED_COLUMNS) == union
-    assert not union & set(FORBIDDEN_FEATURE_INPUTS)
+def test_every_arrival_source_is_exposed_for_arrivals():
+    """An arrival's block time and taxi-in time are exposed, and read as such."""
+    offending = {}
+    for name, sources in FEATURE_SOURCES.items():
+        bad = [
+            src
+            for src in sources
+            if source_phase(src)[0] == "ARR"
+            and source_phase(src)[1] not in AVAILABLE_FOR_ARRIVALS
+        ]
+        if bad:
+            offending[name] = bad
+    assert offending == {}
+
+
+def test_the_excluded_field_is_read_under_no_phase():
+    for name, sources in FEATURE_SOURCES.items():
+        for src in sources:
+            assert source_phase(src)[1] != "AOBT_3_flt", (name, src)
+
+
+def test_required_columns_are_the_bare_sources_and_movement_columns_the_rest():
+    bare = {
+        source_phase(c)[1]
+        for s_ in FEATURE_SOURCES.values()
+        for c in s_
+        if source_phase(c)[0] is None
+    }
+    prefixed = {
+        source_phase(c)[1]
+        for s_ in FEATURE_SOURCES.values()
+        for c in s_
+        if source_phase(c)[0] is not None
+    }
+    assert set(REQUIRED_COLUMNS) == bare
+    assert set(MOVEMENT_COLUMNS) == prefixed | {"PHASE_mvt"}
+    assert not bare & set(FORBIDDEN_FEATURE_INPUTS)
 
 
 def test_every_feature_declares_at_least_one_source():
-    assert all(len(s) >= 1 for s in FEATURE_SOURCES.values())
+    assert all(len(s_) >= 1 for s_ in FEATURE_SOURCES.values())
 
 
 # --------------------------------------------------------------------------
 # what the builder actually reads
 
 
-def test_builder_ignores_the_forbidden_columns():
-    """Poison every forbidden field; the frame must not move.
+def _with_arrivals(departures: pd.DataFrame) -> pd.DataFrame:
+    """A movement frame: the departures plus two arrivals at the same airport."""
+    t = departures["MVT_TIME_UTC_mvt"].iloc[0]
+    minutes = pd.Timedelta(minutes=1)
+    arrivals = pd.DataFrame(
+        {
+            "MVT_ID_mvt": [5000.0, 5001.0],
+            "PHASE_mvt": ["ARR", "ARR"],
+            "ADEP_mvt": ["AAAA", "AAAA"],
+            "ADES_mvt": ["ZZZZ", "ZZZZ"],
+            "MVT_TIME_UTC_mvt": [t - 8 * minutes, t - 12 * minutes],
+            "BLOCK_TIME_UTC_mvt": [t - 2 * minutes, t - 4 * minutes],
+            "TAXITIME_SEC_mvt": [360.0, 480.0],
+            "SCHED_TIME_UTC_mvt": [t - 10 * minutes, t - 15 * minutes],
+            "RUNWAY_mvt": ["27", "27"],
+        }
+    )
+    dep = departures.assign(
+        PHASE_mvt="DEP",
+        ADES_mvt="AAAA",
+        BLOCK_TIME_UTC_mvt=pd.NaT,
+        TAXITIME_SEC_mvt=np.nan,
+    )
+    return pd.concat(
+        [dep[list(MOVEMENT_COLUMNS)], arrivals[list(MOVEMENT_COLUMNS)]],
+        ignore_index=True,
+    )
 
-    A registry entry is a claim about the code. This checks the code.
+
+def test_builder_ignores_the_forbidden_columns():
+    """Poison every hidden field of every departure; the frame must not move.
+
+    A registry entry is a claim about the code. This checks the code -- on
+    the subject's own row and on every other departure in the movement frame.
     """
     m = _matrix([("ZZZZ", "B5", "27", 1000.0)])
     base = _movements(["B5", "B5"])
-    clean = build_features(base, m)
+    moves = _with_arrivals(base)
+    clean = build_features(base, m, movements=moves)
 
     poisoned = base.copy()
     for c in FORBIDDEN_FEATURE_INPUTS:
@@ -133,8 +218,28 @@ def test_builder_ignores_the_forbidden_columns():
                 ["1999-01-01T00:00:00Z", "2031-12-31T23:59:00Z"], utc=True
             )
         )
-    after = build_features(poisoned, m)
+    poisoned_moves = moves.copy()
+    dep = poisoned_moves["PHASE_mvt"] == "DEP"
+    poisoned_moves.loc[dep, "BLOCK_TIME_UTC_mvt"] = pd.Timestamp("2031-12-31T23:59:00Z")
+    poisoned_moves.loc[dep, "TAXITIME_SEC_mvt"] = 99999.0
+    after = build_features(poisoned, m, movements=poisoned_moves)
     pd.testing.assert_frame_equal(clean, after)
+
+
+def test_builder_reads_arrivals_fields_and_only_arrivals():
+    """Change the arrivals' taxi-in times: the arrival features move, nothing else."""
+    m = _matrix([("ZZZZ", "B5", "27", 1000.0)])
+    base = _movements(["B5", "B5"])
+    moves = _with_arrivals(base)
+    clean = build_features(base, m, movements=moves)
+    changed = moves.copy()
+    arr = changed["PHASE_mvt"] == "ARR"
+    changed.loc[arr, "TAXITIME_SEC_mvt"] = 1.0
+    after = build_features(base, m, movements=changed)
+    assert (after["txi_mean_15m"] == 1.0).all()
+    assert (clean["txi_mean_15m"] == 420.0).all()
+    moved = [c for c in FEATURE_COLUMNS if not clean[c].equals(after[c])]
+    assert set(moved) == {c for c in FEATURE_COLUMNS if c.startswith("txi_mean_")}
 
 
 def test_time_features_are_anchored_on_take_off():

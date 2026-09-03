@@ -2,7 +2,7 @@
 """The Gate 1 feature frame, and a registry of what every column reads.
 
 One frame per movement, built from ``taxiout.challenge``'s loaders and
-``taxiout.join.join_stands``. Six blocks:
+``taxiout.join.join_stands``. Seven blocks:
 
 - **Identifiers.** Airport, stand, runway, and the pair. These are what the
   ablation ladder's saturated rung uses and what the held-out-pair split
@@ -29,6 +29,11 @@ One frame per movement, built from ``taxiout.challenge``'s loaders and
   heavy pushes back, starts and lines up more slowly than a medium on the
   same route; on a seen pair the stand identifier absorbs that, because
   heavies park at wide-body stands, and on a new pair nothing does.
+- **Congestion.** What the ranking set exposes about the movements around
+  the subject, in windows anchored on its take-off: runway throughput,
+  arrivals and their taxi-in times, scheduled demand, the runway
+  configuration in force. Built in ``taxiout.congestion`` from the whole
+  movement frame, and the one block whose sources name another row's phase.
 
 Stands that do not join fall back to airport level rather than carrying nulls
 -- 3.7% of training departures and 3.3% of ranking departures are stands
@@ -40,10 +45,16 @@ sides of every split and needs no fitting.
 
 ``FEATURE_SOURCES`` maps every feature column to the raw columns it reads.
 It exists so the leakage rule in ``docs/modelling_notes.md`` can be tested
-rather than asserted: ``tests/test_features.py`` checks that no source is in
-``taxiout.challenge.FORBIDDEN_FEATURE_INPUTS``, and that the registry and the
-built frame agree column for column, so a feature added without a source entry
-fails the suite instead of slipping past it.
+rather than asserted. A source is a bare column name for the subject's own
+row, or ``DEP.<column>`` / ``ARR.<column>`` for another movement's; the rule
+is phase-specific -- a feature may read what the ranking set exposes *for the
+rows it reads from* -- and the registry states the phase so the test can hold
+each to its own list. ``tests/test_features.py`` checks that no bare or
+``DEP.`` source is in ``taxiout.challenge.FORBIDDEN_FEATURE_INPUTS``, that
+every ``ARR.`` source is in ``AVAILABLE_FOR_ARRIVALS``, that ``AOBT_3_flt``
+appears under no prefix, and that the registry and the built frame agree
+column for column, so a feature added without a source entry fails the suite
+instead of slipping past it.
 """
 
 from __future__ import annotations
@@ -51,6 +62,13 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+from taxiout.congestion import (
+    CATEGORICAL as CONGESTION_CATEGORICAL,
+    CONGESTION_FEATURES,
+    MOVEMENT_COLUMNS,
+    SOURCES as CONGESTION_SOURCES,
+    congestion_features,
+)
 from taxiout.join import UNMATCHED, join_stands
 from taxiout.routing import AGGREGATED_FIELDS
 
@@ -111,6 +129,7 @@ FEATURE_COLUMNS: tuple[str, ...] = (
     + QUALITY_FEATURES
     + PLAN_FEATURES
     + AIRCRAFT_FEATURES
+    + CONGESTION_FEATURES
 )
 
 # Every feature column against the raw columns it reads. Checked against
@@ -125,16 +144,40 @@ FEATURE_SOURCES: dict[str, tuple[str, ...]] = {
     **{c: ("LOBT_flt", "IOBT_flt") for c in PLAN_FEATURES},
     "wake_class": ("WK_TBL_CAT_flt",),
     "aircraft_type": ("AIRCRAFT_TYPE_mvt",),
+    # The congestion block reads other movements' rows, and says so: its
+    # sources carry the phase they are read from (``DEP.`` or ``ARR.``), and
+    # a bare name is the subject's own row, as everywhere above.
+    **CONGESTION_SOURCES,
 }
 
-# What a caller has to load to build the frame. The target is not here: it is
-# read by the validation harness, never by a feature.
+
+def source_phase(source: str) -> tuple[str | None, str]:
+    """``("ARR", "BLOCK_TIME_UTC_mvt")`` for ``"ARR.BLOCK_TIME_UTC_mvt"``; ``(None, name)`` bare."""
+    if "." in source:
+        phase, column = source.split(".", 1)
+        return phase, column
+    return None, source
+
+
+# What a caller has to load to build the frame: the subject's own columns.
+# The target is not here: it is read by the validation harness, never by a
+# feature. Other movements' columns are ``MOVEMENT_COLUMNS``, re-exported
+# from ``taxiout.congestion``.
 REQUIRED_COLUMNS: tuple[str, ...] = tuple(
-    sorted({c for sources in FEATURE_SOURCES.values() for c in sources})
+    sorted(
+        {
+            source_phase(c)[1]
+            for sources in FEATURE_SOURCES.values()
+            for c in sources
+            if source_phase(c)[0] is None
+        }
+    )
 )
 
 # Columns the model treats as categorical rather than ordered.
-CATEGORICAL_FEATURES: tuple[str, ...] = IDENTIFIER_FEATURES + AIRCRAFT_FEATURES
+CATEGORICAL_FEATURES: tuple[str, ...] = (
+    IDENTIFIER_FEATURES + AIRCRAFT_FEATURES + CONGESTION_CATEGORICAL
+)
 
 # What a null categorical is called. Null-ness is information here -- a null
 # wake class is the unjoined block -- and a label keeps it a level rather
@@ -246,12 +289,19 @@ def build_features(
     matrix: pd.DataFrame,
     *,
     fallback: pd.DataFrame | None = None,
+    movements: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     """The feature frame for ``frame``, one row in, one row out, order kept.
 
     ``frame`` is departures as the challenge loaders return them, carrying at
     least ``REQUIRED_COLUMNS``. ``matrix`` is the concatenated distance
     matrices. ``fallback`` defaults to ``airport_fallback(matrix)``.
+
+    ``movements`` is every movement of the same side, both phases, carrying
+    ``MOVEMENT_COLUMNS``; the congestion block is counted from it. A caller
+    that has the data always passes it. Left as ``None``, the frame itself
+    stands in -- departures only, so no arrival is ever counted -- which is
+    what a unit test of the other blocks wants and what nothing else should.
 
     The result carries exactly ``FEATURE_COLUMNS`` and the original index, so
     it can be set beside the target and the split masks without a join.
@@ -261,6 +311,11 @@ def build_features(
         raise KeyError(f"feature frame needs {missing}")
     if fallback is None:
         fallback = airport_fallback(matrix)
+    if movements is None:
+        movements = frame.assign(PHASE_mvt="DEP")
+        for c in MOVEMENT_COLUMNS:
+            if c not in movements.columns:
+                movements[c] = None
 
     joined = join_stands(frame[list(_KEYS)], matrix)
     out = pd.DataFrame(index=frame.index)
@@ -311,6 +366,9 @@ def build_features(
 
     out["wake_class"] = _level(frame["WK_TBL_CAT_flt"])
     out["aircraft_type"] = _level(frame["AIRCRAFT_TYPE_mvt"])
+
+    for c, values in congestion_features(frame, movements).items():
+        out[c] = values
 
     for c in FEATURE_COLUMNS:
         if c in CATEGORICAL_FEATURES:

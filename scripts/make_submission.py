@@ -51,6 +51,7 @@ from taxiout.challenge import (  # noqa: E402
     to_pandas,
 )
 from taxiout.features import (  # noqa: E402
+    MOVEMENT_COLUMNS,
     REQUIRED_COLUMNS,
     TARGET,
     airport_fallback,
@@ -180,6 +181,16 @@ def main() -> int:
     )
     rank = to_pandas(load_ranking(DATA, rank_columns, phase="DEP")).reset_index(drop=True)
     template = to_pandas(load_submitting(DATA))
+    # The congestion block counts the movements around each subject, so each
+    # side gets its own movement frame: the training year's for the training
+    # departures, the ranking months' for the ranking departures. Nothing
+    # from one side is ever counted on the other.
+    train_moves = to_pandas(load_movements(DATA, list(MOVEMENT_COLUMNS))).reset_index(
+        drop=True
+    )
+    rank_moves = to_pandas(load_ranking(DATA, list(MOVEMENT_COLUMNS))).reset_index(
+        drop=True
+    )
     print(f"  {len(train):,} training departures, {len(rank):,} to predict")
 
     print("fitting the record-quality term ...")
@@ -192,14 +203,15 @@ def main() -> int:
 
     print(f"fitting {RUNG.label} ...")
     t0 = time.time()
-    X = build_features(train, matrix, fallback=fallback)
+    X = build_features(train, matrix, fallback=fallback, movements=train_moves)
+    del train_moves
     y = pd.to_numeric(train[TARGET], errors="coerce")
     fit_rows = (~covered) & y.notna()
     model = Booster(RUNG.features).fit(X.loc[fit_rows], y[fit_rows])
     print(f"  fitted on {int(fit_rows.sum()):,} rows in {time.time() - t0:.0f} s")
 
     print("predicting ...")
-    Xr = build_features(rank, matrix, fallback=fallback)
+    Xr = build_features(rank, matrix, fallback=fallback, movements=rank_moves)
     physical = model.predict(Xr)
     tail = tail_model.predict(rank)
     pred = tails.combine(physical, tail)

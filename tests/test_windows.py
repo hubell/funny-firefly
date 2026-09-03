@@ -207,3 +207,20 @@ def test_a_runway_forgotten_by_the_window_is_a_change():
     )
     assert cfg.tolist() == ["", "09", ""]
     assert since.tolist()[-1] == 0.0
+
+
+def test_seconds_is_the_same_whatever_resolution_the_stamps_arrive_at():
+    """The parquet files carry microseconds; a test that only builds nanoseconds would never know."""
+    ns = ts(at(0), at(3600))
+    us = ns.dt.as_unit("us")
+    ms = ns.dt.as_unit("ms")
+    assert seconds(us).tolist() == seconds(ns).tolist()
+    assert seconds(ms).tolist() == seconds(ns).tolist()
+    assert seconds(ns)[1] - seconds(ns)[0] == 3600
+
+
+def test_a_window_on_microsecond_stamps_is_an_hour_not_six_weeks():
+    stamps = ts(at(-7200), at(-3600), at(-1800), at(0)).dt.as_unit("us")
+    events = Sorted.build(["X"] * 4, stamps)
+    n = trailing_count(events, ["X"], stamps.tail(1), 3600)
+    assert n.tolist() == [3.0]  # -3600 (boundary), -1800, 0; not -7200

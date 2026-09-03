@@ -47,6 +47,30 @@ FORBIDDEN_FEATURE_INPUTS: tuple[str, ...] = (
     HIDDEN_FOR_TEST_DEPARTURES + EXCLUDED_BY_DECISION
 )
 
+# What an *arrival* row exposes in the ranking set, measured in
+# ``reports/data_review.md``: every one of these is null in 0.0% of ranking
+# arrivals. Two of them are the very fields hidden for departures. That is
+# not a contradiction but the rule -- a feature may read any field the
+# ranking set exposes for the rows it reads from -- and the feature registry
+# says which phase a source is read from so the test can hold each side to
+# its own list. ``AOBT_3_flt`` is excluded for every phase by decision.
+AVAILABLE_FOR_ARRIVALS: tuple[str, ...] = (
+    "MVT_TIME_UTC_mvt",
+    "BLOCK_TIME_UTC_mvt",
+    "TAXITIME_SEC_mvt",
+    "SCHED_TIME_UTC_mvt",
+    "RUNWAY_mvt",
+    "STAND_mvt",
+    "ADES_mvt",
+    "ADEP_mvt",
+    "PHASE_mvt",
+    "MVT_ID_mvt",
+)
+
+# Phase prefixes a registered source may carry. A bare column name is the
+# subject's own row; ``DEP.`` is another departure's; ``ARR.`` an arrival's.
+SOURCE_PHASES: tuple[str, ...] = ("DEP", "ARR")
+
 # ``RUNWAY_mvt`` values that name no runway. ``NA`` is documented by the
 # organisers; the other two mark helicopter movements.
 NON_RUNWAY_VALUES: frozenset[str] = frozenset({"NA", "HEL", "H"})

@@ -54,8 +54,17 @@ _TIME_SPAN = 1 << 40
 
 
 def seconds(t: pd.Series) -> np.ndarray:
-    """Timestamps as int64 seconds since the epoch; NaT becomes the minimum."""
-    ts = pd.to_datetime(t, utc=True)
+    """Timestamps as int64 seconds since the epoch; NaT becomes the minimum.
+
+    The unit is forced to nanoseconds before the integer view is taken. The
+    challenge parquet files carry microsecond timestamps, which pandas 2
+    keeps, and an integer view of those divided as if they were nanoseconds
+    puts a whole year into thirty thousand "seconds" -- every hour-long
+    window then spans six weeks, and every row is truncated. The unit tests
+    build their stamps at nanosecond resolution and never saw it; the sanity
+    check on the real year did.
+    """
+    ts = pd.to_datetime(t, utc=True).dt.as_unit("ns")
     out = (ts.astype("int64") // 1_000_000_000).to_numpy()
     return np.where(ts.isna().to_numpy(), np.iinfo(np.int64).min // 4, out)
 
@@ -282,6 +291,11 @@ def configuration(
     Returns, per input row: the configuration as a ``|``-joined string, the
     seconds since it last changed, and the number of runways in it. Rows with
     no designator contribute nothing to the sets and receive the current one.
+
+    The set is kept incrementally -- a designator enters it when its tally
+    crosses the floor upwards and leaves when it crosses downwards -- so the
+    string is rebuilt only at a change, and four million movements walk in
+    seconds rather than minutes.
     """
     g = pd.Series(np.asarray(group)).astype(str).to_numpy()
     tt = seconds(t)
@@ -302,26 +316,42 @@ def configuration(
         idx = order[i : j + 1]
         times = tt[idx]
         tally: dict[str, int] = {}
+        active: set[str] = set()
         lo = 0
+        current = ""
+        n_active = 0
         previous = None
         changed_at = times[0] if len(times) else 0
+        dirty = False
         for k in range(len(idx)):
             d = des[idx[k]]
             if d is not None:
-                tally[d] = tally.get(d, 0) + 1
+                c = tally.get(d, 0) + 1
+                tally[d] = c
+                if c == min_movements:
+                    active.add(d)
+                    dirty = True
             while times[lo] < times[k] - w:
                 old = des[idx[lo]]
                 if old is not None:
-                    tally[old] -= 1
-                    if tally[old] == 0:
+                    c = tally[old] - 1
+                    if c:
+                        tally[old] = c
+                    else:
                         del tally[old]
+                    if c == min_movements - 1:
+                        active.discard(old)
+                        dirty = True
                 lo += 1
-            current = "|".join(sorted(r for r, c in tally.items() if c >= min_movements))
+            if dirty:
+                current = "|".join(sorted(active))
+                n_active = len(active)
+                dirty = False
             if previous is not None and current != previous:
                 changed_at = times[k]
             previous = current
             config[idx[k]] = current
             since[idx[k]] = min(float(times[k] - changed_at), max_since_s)
-            count[idx[k]] = current.count("|") + 1 if current else 0
+            count[idx[k]] = n_active
         i = j + 1
     return config, since, count

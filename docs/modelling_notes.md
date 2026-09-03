@@ -365,6 +365,21 @@ comparison in either framing.
 Every congestion feature needs an explicit as-of time and a test that asserts
 it reads nothing in `FORBIDDEN_FEATURE_INPUTS`.
 
+**The registry names the phase a source is read from.** *Added 3 September,
+Gate 2.* The arrivals features read arrivals' on-block and taxi-in times,
+which are the very columns `FORBIDDEN_FEATURE_INPUTS` names — for departures.
+The rule above already distinguishes the two ("for the rows it reads from"),
+so the registry was made able to state it: a source is a bare column name for
+the subject's own row, `DEP.<column>` for another departure's, `ARR.<column>`
+for an arrival's. The test then holds each to its own list — nothing bare or
+`DEP.`-prefixed in `FORBIDDEN_FEATURE_INPUTS`, everything `ARR.`-prefixed in
+`taxiout.challenge.AVAILABLE_FOR_ARRIVALS`, which is the set of arrival fields
+the data review measured at 0.0% null in the ranking set, and `AOBT_3_flt`
+under no prefix at all. The poison test extends the same way: departures'
+hidden fields are poisoned and the frame must not move; arrivals' are poisoned
+and the arrivals features *must* move, which is the proof they read arrivals
+and not something else that happens to correlate.
+
 ## Tail handling
 
 Decided 2 September 2026, and revised the same day once the term was built

@@ -26,6 +26,11 @@ reports:
    stands; on a new pair nothing does, so this too is read on the held-out
    split. The geometric rung has a twin for the same reason: one intercept
    per airport, then one per (airport, wake class).
+7. **plus the excess term, one block at a time** -- runway throughput,
+   arrivals, scheduled demand, runway configuration (Gate 2). Each is its
+   own rung so the report shows what each is worth, and each is built from
+   what the ranking set exposes about surrounding movements: never a
+   departure's block time or taxi time.
 
 Each rung is scored twice, once plain and once with the record-quality term on
 top. That term lives in ``taxiout.tails`` and is deliberately not reimplemented
@@ -51,6 +56,13 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
+from taxiout.congestion import (
+    ARRIVAL_FEATURES,
+    CONFIGURATION_FEATURES,
+    COVERAGE_FEATURES,
+    DEMAND_FEATURES,
+    THROUGHPUT_FEATURES,
+)
 from taxiout.features import (
     AIRCRAFT_FEATURES,
     CATEGORICAL_FEATURES,
@@ -169,6 +181,70 @@ LADDER: tuple[Rung, ...] = (
         + QUALITY_FEATURES
         + AIRCRAFT_FEATURES,
         note="the same model with the wake class and the aircraft type",
+    ),
+    # Gate 2: the excess term, one block at a time, each on top of the last.
+    # The coverage flags ride with the first block that needs them.
+    Rung(
+        key="throughput",
+        label="+ runway throughput",
+        kind="booster",
+        features=IDENTIFIER_BLOCK
+        + TIME_FEATURES
+        + PLAN_FEATURES
+        + GEOMETRY_FEATURES
+        + QUALITY_FEATURES
+        + AIRCRAFT_FEATURES
+        + THROUGHPUT_FEATURES
+        + COVERAGE_FEATURES,
+        note="take-offs from the subject's runway and from all runways, trailing",
+    ),
+    Rung(
+        key="arrivals",
+        label="+ arrivals",
+        kind="booster",
+        features=IDENTIFIER_BLOCK
+        + TIME_FEATURES
+        + PLAN_FEATURES
+        + GEOMETRY_FEATURES
+        + QUALITY_FEATURES
+        + AIRCRAFT_FEATURES
+        + THROUGHPUT_FEATURES
+        + COVERAGE_FEATURES
+        + ARRIVAL_FEATURES,
+        note="landings, on-blocks, and arrivals' taxi-in times, trailing",
+    ),
+    Rung(
+        key="demand",
+        label="+ demand",
+        kind="booster",
+        features=IDENTIFIER_BLOCK
+        + TIME_FEATURES
+        + PLAN_FEATURES
+        + GEOMETRY_FEATURES
+        + QUALITY_FEATURES
+        + AIRCRAFT_FEATURES
+        + THROUGHPUT_FEATURES
+        + COVERAGE_FEATURES
+        + ARRIVAL_FEATURES
+        + DEMAND_FEATURES,
+        note="scheduled departures around the subject's schedule",
+    ),
+    Rung(
+        key="configuration",
+        label="+ configuration",
+        kind="booster",
+        features=IDENTIFIER_BLOCK
+        + TIME_FEATURES
+        + PLAN_FEATURES
+        + GEOMETRY_FEATURES
+        + QUALITY_FEATURES
+        + AIRCRAFT_FEATURES
+        + THROUGHPUT_FEATURES
+        + COVERAGE_FEATURES
+        + ARRIVAL_FEATURES
+        + DEMAND_FEATURES
+        + CONFIGURATION_FEATURES,
+        note="the runways in use in the trailing hour, and how long they have held",
     ),
 )
 
