@@ -193,6 +193,58 @@ The anchor is the subject's take-off time, which the challenge gives and the
 operational problem would not; the framing and its consequences are set out
 under *Leakage watch* in [`modelling_notes.md`](modelling_notes.md).
 
+*Outcome, 3 September.* Built as listed, each block a rung, plus the
+shared-corridor load the notes had named the strongest idea latent in the
+geometry. The construction is written up in
+[`../reports/congestion.md`](../reports/congestion.md) — the leakage audit
+by phase, the same counts on both sides a year apart, the corridor's
+degeneracy test — and what each block is worth is the ladder in
+[`../reports/baseline.md`](../reports/baseline.md). Four things it settled.
+
+**Congestion, as the ranking set exposes it, is worth about seventeen
+seconds in December and five in July.** Over the rows the record-quality
+term leaves to the physical model, the five blocks together take the
+December RMSE from 321.5 s to 304.5 s and the July RMSE from 405.6 to 400.3;
+on the three July airports, 323.1 to 316.7. Arrivals and demand carry it —
+the arrivals' taxi-in times and the scheduled departures around the subject
+are worth about five seconds each in December — with throughput about four;
+the runway configuration and the corridor buy nothing more on any split.
+Congestion is real and it is not large, and the write-up says so in those
+terms.
+
+**The shared corridor is a distinct column the model cannot use.** It
+correlates with the plain take-off count at 0.29 to 0.56 per airport, so it
+is not throughput renamed; and after throughput, arrivals, demand and
+configuration it moves the December RMSE by +0.4 s, the July by −1.1 s, and
+the held-out-pair contrast by −0.6 s [−1.0, −0.2]. Reported as it fell. The
+idea was worth building because it is the one thing here no other entry has;
+that the booster finds nothing in it is a finding about the routing model —
+a full-length route with no notion of where in the window the other aircraft
+was — and not a reason to drop it from the paper.
+
+**None of it moves the held-out-pair claim, which is what it should do.**
+Every congestion block's contrast on held-out pairs sits within 1.3 s of
+zero: congestion is not a property of the pair, so a block of it buys the
+same on a pair the model has seen as on one it has not. The claim contrast
+stays +14.5 s [+13.0, +16.3].
+
+**One column the booster splits on freely and learns nothing from.** The
+configuration set, a categorical with 12 to 533 levels per airport, takes
+12.3% of the top rung's splits and is worth nothing on any split — the
+signature of a high-cardinality categorical memorizing airport-hours. The
+count of runways in use and the time since the last change, which are what
+the set was meant to carry, stay; the write-up notes the set as a feature
+that should not be trusted for its split share.
+
+Two smaller things. The parquet files carry microsecond timestamps, which
+the window code first read as nanoseconds — a whole year became thirty
+thousand "seconds" and every hour-long window spanned six weeks — and the
+unit tests, built at nanosecond resolution, never saw it; the sanity check
+on the real year did, and a test now feeds microseconds. And the same
+calendar month a year apart has the same shape on both sides to within a
+count: 36 take-offs an hour at Frankfurt in both Januaries, 39 at Heathrow,
+which is the census the data review promised being kept.
+
 **Gate 2b — weather as a regime indicator** (~4–6 h; *added 2 September on
 review*). The organisers name airport procedures and load among the drivers,
 and the ranking set's first week of January 2026 at Schiphol has the
@@ -204,6 +256,38 @@ continuous driver, per the literature position in
 the OSM one is, because an external dataset that a reader cannot re-fetch
 fails the reproduction clause of the prize rules; it is documented as an
 additional open dataset in the README.
+
+*Outcome, 3 September.* Fetched, cached and attributed as planned:
+`scripts/fetch_metar.py` records the request and the Mesonet's stated terms
+— the materials "are in the public domain and may be used freely by anyone
+for any lawful purpose" — in a manifest beside the data, every station has
+its own report every hour, and the regime table's coverage and flag rates are
+in [`../reports/congestion.md`](../reports/congestion.md). Three flags per
+airport-hour and nothing continuous; present weather in the vicinity is
+dropped, because showers eight kilometres out are not rain on the taxiway.
+
+**Weather is worth ten seconds in December and nothing in July, and it is
+worth it where winter is.** The rung takes the December RMSE, over the rows
+the record-quality term leaves alone, from 304.5 s to 294.4 s, with the gain
+at the airports whose January is a winter: Munich 391 to 357 s, Paris 374 to
+352, Schiphol 221 to 202, and Frankfurt, Zurich and Istanbul within a few
+seconds. July moves from 400.3 to 400.1 s, and the three July airports from
+316.7 to 315.9, because a July has no regime to flag. The held-out-pair
+contrast is +0.2 s [−0.4, +0.8] — weather is not a property of the pair —
+and the freezing flag takes 2.1% of the top rung's splits, the only weather
+column in the top fifteen.
+
+The regime the ranking set will be scored in is the one the training year
+saw less of: January 2026 froze for 48% of Frankfurt's hours against 30% in
+January 2025, 65% of Zurich's against 41%, 70% of Munich's against 56%, and
+Istanbul, which had no freezing hour in January 2025, had them 15% of the
+time. That is the one place a model fitted on 2025 is asked to extrapolate,
+and the flags are what it extrapolates along.
+
+The top rung of the ladder, and the one `scripts/make_submission.py` writes
+from, now stands at 294.4 s in December and 400.1 s in July over the rows
+the physical model is answerable for — 277.3 and 315.9 s on the three July
+airports — against 322.0 and 407.9 s when Gate 1 closed.
 
 **Gate 3 — the queueing layer, only if Gate 2's ablation says congestion is
 binding** (~20–30 h). This is the piece where the geometry stops being a side
