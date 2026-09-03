@@ -75,12 +75,18 @@ from taxiout.unimpeded import (  # noqa: E402
     lower_tail,
 )
 from taxiout.validation import (  # noqa: E402
+    BOOTSTRAP_DRAWS,
     JULY_AIRPORTS,
     PAIR_FOLDS,
     SEEN_FRACTION,
+    cluster_bootstrap,
+    cluster_sums,
     december_split,
+    difference_in_differences,
     evaluate,
     evaluate_by_bucket,
+    fold_rmses,
+    gap,
     held_out_pair_splits,
     july_split,
     month_of,
@@ -603,147 +609,272 @@ def section_ladder(results, splits, tails: Tails) -> list[str]:
     return lines
 
 
-def section_pairs(results, splits, tails: Tails) -> list[str]:
+# The entry's central contrast: the block whose value on a new pair is the
+# claim. Everything above it on the ladder is measured against this same
+# machinery, but this is the one the write-up leads with.
+CLAIM = ("identifiers", "identifiers-geometry")
+
+
+def _fold_sums(results, features, y, folds, *, ex_flagged: bool, airport=None):
+    """Per-pair residual sums for every rung, per held-out fold and row set.
+
+    Rows the record-quality term covers are dropped when ``ex_flagged``;
+    ``airport`` restricts to one ICAO. A fold with an empty row set on either
+    side is left out, so a per-airport contrast never reads an empty fold.
+    """
+    out = []
+    icao = features["icao"].astype(str)
+    for s in folds:
+        meta = results.get(("meta", s.name, "tail"))
+        flagged = (
+            meta["mask"]
+            if (meta is not None and ex_flagged)
+            else pd.Series(False, index=y.index)
+        )
+        fold = {}
+        for side, mask, which in (
+            ("held", s.valid, "valid"),
+            ("seen", s.extra["seen"], "seen"),
+        ):
+            rows = mask & ~flagged
+            if airport is not None:
+                rows = rows & (icao == airport)
+            idx = y.index[rows]
+            resid = {}
+            for rung in LADDER:
+                e = results.get((s.name, rung.key, which))
+                if e is None:
+                    continue
+                resid[rung.key] = (y.loc[idx] - e["pred"].loc[idx]).to_numpy()
+            if not resid:
+                break
+            fold[side] = cluster_sums(resid, features.loc[idx, "pair"].to_numpy())
+        if len(fold) == 2 and all(len(next(iter(v.values())).n) for v in fold.values()):
+            out.append(fold)
+    return out
+
+
+def section_pairs(results, splits, features, y, tails: Tails) -> list[str]:
     folds = [s for s in splits if s.name.startswith("pairs-")]
     if not folds:
         return []
-
-    def pooled(entry, key: str) -> float:
-        """The entry's RMSE, or its RMSE over the rows the tail term leaves."""
-        if key == "rmse":
-            return entry["rmse"]
-        ev = entry["eval"]
-        return float(ev.loc[ev["icao"] == "all", "rmse_ex_flagged_s"].iloc[0])
-
-    gaps: dict[tuple[str, str], tuple[float, float]] = {}
-    for measure in ("rmse", "ex_flagged"):
-        for rung in LADDER:
-            seen, unseen = [], []
-            for s in folds:
-                e_un = results.get((s.name, rung.key, "valid"))
-                e_se = results.get((s.name, rung.key, "seen"))
-                if e_un and e_se:
-                    unseen.append(pooled(e_un, measure))
-                    seen.append(pooled(e_se, measure))
-            if seen and np.isfinite(seen).all() and np.isfinite(unseen).all():
-                gaps[(measure, rung.key)] = (
-                    float(np.mean(seen)),
-                    float(np.mean(unseen)),
-                )
-    if not gaps:
+    ex = tails.available
+    sums = _fold_sums(results, features, y, folds, ex_flagged=ex)
+    if not sums:
         return []
+    keys = [r.key for r in LADDER if all(r.key in f["held"] for f in sums)]
+    by_key = {r.key: r for r in LADDER}
+    per_fold = [fold_rmses(f) for f in sums]
 
-    def gap(measure: str, key: str) -> float:
-        s, u = gaps[(measure, key)]
-        return u - s
-
-    # The airport mean knows nothing about a pair, so whatever gap it shows is
-    # the held-out rows simply being different rows. Every other rung's gap is
-    # read net of it.
-    base = {
-        m: gap(m, "airport-mean") if (m, "airport-mean") in gaps else 0.0
-        for m in ("rmse", "ex_flagged")
-    }
-    has_ex = any(k[0] == "ex_flagged" for k in gaps)
+    # -- table 1: every rung, seen against held out, with per-fold gaps
     rows = []
-    for rung in LADDER:
-        if ("rmse", rung.key) not in gaps:
-            continue
-        m_seen, m_unseen = gaps[("rmse", rung.key)]
-        cells = [
-            rung.label,
-            f"{m_seen:,.1f}",
-            f"{m_unseen:,.1f}",
-            f"{gap('rmse', rung.key) - base['rmse']:+,.1f}",
-        ]
-        if has_ex:
-            e_seen, e_unseen = gaps[("ex_flagged", rung.key)]
-            cells += [
-                f"{e_seen:,.1f}",
-                f"{e_unseen:,.1f}",
-                f"{gap('ex_flagged', rung.key) - base['ex_flagged']:+,.1f}",
+    boot_gap = {}
+    for k in keys:
+        boot_gap[k] = cluster_bootstrap(sums, gap(k))
+        seen_m = float(np.mean([f["seen"][k] for f in per_fold]))
+        held_m = float(np.mean([f["held"][k] for f in per_fold]))
+        fold_gaps = [f["held"][k] - f["seen"][k] for f in per_fold]
+        rows.append(
+            [
+                by_key[k].label,
+                f"{seen_m:,.1f}",
+                f"{held_m:,.1f}",
+                str(boot_gap[k]),
+                " / ".join(f"{g:+,.0f}" for g in fold_gaps),
+                "yes" if by_key[k].uses_geometry else "no",
             ]
-        cells.append("yes" if rung.uses_geometry else "no")
-        rows.append(cells)
-
-    measure = "ex_flagged" if has_ex else "rmse"
-    verdict = ""
-    if all((measure, k) in gaps for k in ("identifiers", "identifiers-geometry")):
-        moved = gap(measure, "identifiers") - gap(measure, "identifiers-geometry")
-        verdict = (
-            f"Adding the geometry block changes the net gap by {-moved:+,.1f} s"
-            + (
-                " on the rows the record-quality term leaves to the physical model"
-                if has_ex
-                else ""
-            )
-            + ": "
-            + (
-                "the model that reads geometry loses less on a pair it has never "
-                "seen, which is the claim."
-                if moved > 0
-                else "the model that reads geometry loses no less on a pair it has "
-                "never seen, so on this evidence the physical layer is not buying "
-                "generalisation, and the write-up has to say so."
-            )
         )
-    return [
+
+    # -- table 2: every consecutive contrast on the ladder, as a difference in
+    # differences, and the claim contrast whether or not it is consecutive
+    contrasts = [(a, b) for a, b in zip(keys, keys[1:])]
+    if CLAIM[0] in keys and CLAIM[1] in keys and CLAIM not in contrasts:
+        contrasts.append(CLAIM)
+    crow = []
+    did = {}
+    for a, b in contrasts:
+        did[(a, b)] = cluster_bootstrap(sums, difference_in_differences(b, a))
+        seen_delta = float(np.mean([f["seen"][a] - f["seen"][b] for f in per_fold]))
+        held_delta = float(np.mean([f["held"][a] - f["held"][b] for f in per_fold]))
+        mark = " **(the claim)**" if (a, b) == CLAIM else ""
+        crow.append(
+            [
+                f"{by_key[a].label} → {by_key[b].label}{mark}",
+                f"{seen_delta:+,.1f}",
+                f"{held_delta:+,.1f}",
+                str(did[(a, b)]),
+            ]
+        )
+
+    # -- table 3: the claim contrast per airport
+    arow = []
+    if CLAIM[0] in keys and CLAIM[1] in keys:
+        for ap in sorted(features["icao"].astype(str).unique()):
+            ap_sums = _fold_sums(results, features, y, folds, ex_flagged=ex, airport=ap)
+            if len(ap_sums) < len(folds):
+                continue
+            n_held = int(sum(next(iter(f["held"].values())).n.sum() for f in ap_sums))
+            r = cluster_bootstrap(ap_sums, difference_in_differences(CLAIM[1], CLAIM[0]))
+            clear = "yes" if (r.low > 0 or r.high < 0) else "no"
+            arow.append([ap, f"{n_held:,}", str(r), clear])
+
+    # -- the raw, every-row gap, for the record
+    raw_sums = _fold_sums(results, features, y, folds, ex_flagged=False) if ex else sums
+    raw_rows = []
+    for k in keys:
+        r = cluster_bootstrap(raw_sums, gap(k), draws=200)
+        raw_rows.append([by_key[k].label, str(r)])
+
+    claim = did.get(CLAIM)
+    am = boot_gap.get("airport-mean")
+    # The geometric rung's gap net of the airport mean's: what a rung with no
+    # identifier to memorize loses on a new pair, once composition is out.
+    geo_net = (
+        cluster_bootstrap(sums, lambda r: gap("geometric")(r) - gap("airport-mean")(r))
+        if "geometric" in keys and "airport-mean" in keys
+        else None
+    )
+    lines = [
         "## Held-out pairs",
         "",
-        f"{len(folds)} folds, whole (airport, stand, runway) pairs dealt round-robin",
-        "within each airport so every fold holds out pairs everywhere. Each fold",
-        "fits one model and scores it twice: on the held-out pairs, and on a",
-        f"{SEEN_FRACTION:.0%} sample of rows whose pairs stayed in training and which",
-        "were themselves excluded from the fit. Same model, same period, same",
-        "airports; the only difference is whether the pair was seen. Figures are",
-        "means over the folds.",
+        f"{len(folds)} folds. Whole (airport, stand, runway) pairs are dealt round-robin",
+        "within each airport, so every fold holds out a random third of every",
+        "airport's pairs -- a volume-representative third, not the rare ones; the",
+        "rare-pair question is the strata table's below. Each fold fits one model",
+        "and scores it twice: on the held-out pairs, and on a",
+        f"{SEEN_FRACTION:.0%} sample of rows whose pairs stayed in training and which were",
+        "themselves excluded from the fit. Same model, same period, same airports;",
+        "the only difference is whether the pair was seen.",
         "",
-        "Two corrections have to be made before the gap means anything, and both",
-        "are in the table rather than in the prose.",
+        "**The held-out unit is the pair, not the stand.** Every stand and every",
+        "runway is still seen in other pairs, so the identifier model is never",
+        "asked about a stand it has not met -- only about a combination. This",
+        "bounds what the geometry buys on a new pair; it does not isolate what it",
+        "would buy on a new stand, which no split of this data can measure.",
         "",
-        "First, held-out pairs are *different* rows, not merely unfamiliar ones:",
-        "they are the rarer pairs, at the quieter stands, so part of the gap is",
-        "composition and none of that part is about generalising. The airport mean",
-        "knows nothing about a pair at all, so whatever gap it shows is pure",
-        f"composition: {base['rmse']:+,.1f} s raw"
-        + (f" and {base['ex_flagged']:+,.1f} s ex-flagged" if has_ex else "")
-        + ". Every rung's gap is",
-        "reported net of it.",
+        "**The claim is a difference in differences.** What a block buys on seen",
+        "pairs is one number; what it buys on held-out pairs is another; the",
+        "claim is that the second exceeds the first. Read that way, whatever",
+        "composition difference exists between the two row sets cancels, because",
+        "it enters both rungs alike -- and it is small regardless: the airport",
+        "mean, which knows nothing about a pair, moves by "
+        + (str(am) if am else "n/a")
+        + " between the two.",
+        "",
+        "**Intervals are a cluster bootstrap over pairs**, "
+        f"{BOOTSTRAP_DRAWS:,} draws, resampling pairs with replacement from the stored",
+        "residuals and recomputing every RMSE from them -- no model is refitted.",
+        "Rows within a pair share a stand, a runway and a route, so the pair is",
+        "the unit. The interval is the 95% percentile interval of the fold-mean.",
+        *(
+            [
+                "",
+                "All figures below are over the rows the record-quality term leaves to",
+                "the physical model: one defaulted block time in a 5% sample moves a",
+                "raw RMSE more than the whole geometry block does. The raw, every-row",
+                "gaps are at the end, for the record.",
+            ]
+            if ex
+            else []
+        ),
+        "",
+        "### Every rung, seen against held out",
+        "",
+        *table(
+            [
+                "rung",
+                "seen (s)",
+                "held out (s)",
+                "gap [95%]",
+                "gap per fold",
+                "reads geometry",
+            ],
+            rows,
+            "-rrrr-",
+        ),
         "",
         *(
             [
-                "Second, a raw RMSE over a 5% sample is dominated by whichever",
-                "record-matching artefacts happen to fall in it -- one defaulted",
-                "block time at Fiumicino moves it more than the whole geometry",
-                "block does. The ex-flagged columns are the same comparison over",
-                "the rows the record-quality term leaves to the physical model,",
-                "and they are the ones to read; the raw columns are kept beside",
-                "them because the scoring rule counts every row.",
-                "",
+                "The zero-parameter rung is the purest statement in the table. The"
+                " geometric unimpeded term carries no identifier, so it has nothing"
+                " to memorize and, if the geometry is doing what it claims, nothing"
+                " to lose on a pair it has never seen. Net of the airport mean's own"
+                f" gap -- pure composition -- its gap is {geo_net}"
+                + (
+                    ", which is indistinguishable from zero: it loses nothing."
+                    if geo_net.low <= 0 <= geo_net.high
+                    else (
+                        ", which is above zero: even the identifier-free term does"
+                        " worse on new pairs, and the geometry is not carrying over"
+                        " as cleanly as it should."
+                        if geo_net.low > 0
+                        else ", which is below zero: it does better on the new pairs"
+                        " than on the seen ones, which is composition the airport"
+                        " mean did not remove."
+                    )
+                ),
             ]
-            if has_ex
+            if geo_net is not None
             else []
         ),
-        *table(
-            ["rung", "seen (s)", "held out (s)", "net gap"]
-            + (
-                ["seen ex-flagged (s)", "held out ex-flagged (s)", "net gap ex-flagged"]
-                if has_ex
-                else []
-            )
-            + ["reads geometry"],
-            rows,
-            "-rrr" + ("rrr" if has_ex else "") + "-",
-        ),
         "",
-        "**This table is the entry's central claim, and it is reported whichever",
-        "way it falls.** The claim is that the rungs reading geometry lose less",
-        "when the pair is new than the rungs that can only memorise it. A net gap",
-        "no smaller for the geometry rungs would say the physical layer is",
-        "decoration -- which is still a finding, and the write-up would say so",
-        "rather than quietly dropping the table.",
-        *(["", verdict] if verdict else []),
+        "### What each block buys where the pair is new",
+        "",
+        "Each row is one step of the ladder read as a difference in differences:",
+        "how much more the added block improves RMSE on held-out pairs than on",
+        "seen ones. Positive means the block carries over to pairs the model",
+        "never saw; zero means it is memorization dressed as a feature.",
+        "",
+        *table(
+            ["step", "on seen pairs (s)", "on held-out pairs (s)", "difference [95%]"],
+            crow,
+            "-rrr",
+        ),
     ]
+    if claim is not None:
+        a, b = (by_key[CLAIM[0]].label, by_key[CLAIM[1]].label)
+        verdict = f"**{claim}.** " + (
+            "The interval excludes zero: the geometry block buys more on a pair the "
+            "model has never seen than on one it has, which is the claim."
+            if claim.low > 0
+            else (
+                "The interval includes zero: on this evidence the geometry block "
+                "buys no more on a new pair than on a seen one, and the write-up "
+                "has to say so."
+                if claim.high >= 0
+                else "The interval is entirely negative: the geometry block buys "
+                "*less* on a new pair, and the write-up has to say so."
+            )
+        )
+        lines += ["", f"The claim contrast, {a} → {b}. {verdict}"]
+    if arow:
+        lines += [
+            "",
+            "### The claim, per airport",
+            "",
+            "The same contrast, over each airport's held-out pairs alone. The"
+            " intervals are wide where an airport is small, and that is the"
+            " point of printing them: a per-airport difference that cannot be"
+            " told from zero is not a finding.",
+            "",
+            *table(
+                ["ICAO", "held-out rows", "difference [95%]", "clear of zero"],
+                arow,
+                "-rr-",
+            ),
+        ]
+    if ex:
+        lines += [
+            "",
+            "### Every row, for the record",
+            "",
+            "The gap per rung with the record-quality rows left in. Two hundred"
+            " draws, because the interval is dominated by which artifacts land in"
+            " the sample and a tighter one would be false precision.",
+            "",
+            *table(["rung", "gap, every row [95%]"], raw_rows, "-r"),
+        ]
+    return lines
 
 
 def section_frequency(results, features, y, splits, references) -> list[str]:
@@ -1006,7 +1137,7 @@ def main() -> int:
         + [""]
         + section_ladder(results, splits, tails)
         + [""]
-        + section_pairs(results, splits, tails)
+        + section_pairs(results, splits, features, y, tails)
         + [""]
         + section_frequency(results, features, y, splits, references)
         + [""]

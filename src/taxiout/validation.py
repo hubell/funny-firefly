@@ -22,19 +22,34 @@ the test rows. Never a random K-fold on rows: congestion is autocorrelated
 over hours, so neighbouring departures share queue state.
 
 **Held-out pairs.** Whole (airport, stand, runway) pairs are removed from
-training, balanced across airports so every fold holds out pairs everywhere.
-The fold then evaluates twice from *one* fitted model: on the held-out pairs,
-and on a random sample of rows whose pairs stayed in training and which were
-themselves excluded from the fit. Same model, same period, same airports --
-the only difference is whether the pair was seen. The gap between those two
-numbers is the entry's central claim, and running both from one fit is what
-makes it a clean comparison rather than two experiments differing in several
-things at once.
+training, dealt round-robin within each airport so every fold holds out a
+random third of every airport's pairs -- a volume-representative third, not
+the rare ones. The fold then evaluates twice from *one* fitted model: on the
+held-out pairs, and on a random sample of rows whose pairs stayed in training
+and which were themselves excluded from the fit. Same model, same period,
+same airports -- the only difference is whether the pair was seen.
+
+The claim is a difference in differences. What the geometry buys on seen
+pairs is one number; what it buys on held-out pairs is another; the claim is
+that the second exceeds the first, because on a seen pair an identifier model
+already knows everything the geometry could tell it. Read that way, whatever
+composition difference exists between the two row sets cancels, because it
+enters both rungs alike. The held-out unit is the *pair*: every stand and
+every runway is still seen in other pairs, so this bounds what the geometry
+buys on a new pair and does not isolate a new stand.
+
+**Uncertainty.** The difference in differences is a mean over three folds,
+and rows within a pair share a stand, a runway and a route, so they are not
+independent. ``cluster_bootstrap`` resamples *pairs* with replacement from the
+stored residuals -- no refit -- and reports a percentile interval on the
+fold-mean statistic. It is the same machinery for every contrast the report
+makes, on every rung the ladder will ever have.
 
 **Pair frequency.** Test rows bucketed by how often their pair appeared in
 training: 0, 1-10, 11-100, more than 100. Geometry should buy most in the
 first two buckets. If it does not, the physical layer is decoration, and the
-write-up says so rather than burying it.
+write-up says so rather than burying it. The rare-pair question is answered
+here, by the strata, and not by the held-out folds, which are not rare.
 
 Every metric is reported per airport beside the pooled figure, and with and
 without the record-quality flags, so the physical model's contribution stays
@@ -43,6 +58,7 @@ visible underneath the record-quality component's.
 
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -63,6 +79,13 @@ JULY_AIRPORTS = ("EDDF", "EGLL", "EHAM")
 PAIR_FOLDS = 3
 SEEN_FRACTION = 0.05
 SEED = 20260902
+
+# Draws for the cluster bootstrap. A thousand puts the 2.5th and 97.5th
+# percentiles on about 25 draws each, which is coarse but honest for an
+# interval that is read to the nearest second; it costs nothing, since no
+# model is refitted.
+BOOTSTRAP_DRAWS = 1000
+BOOTSTRAP_LEVEL = 0.95
 
 FREQUENCY_BUCKETS = ("0", "1-10", "11-100", ">100")
 
@@ -302,3 +325,154 @@ def evaluate_by_bucket(
             }
         )
     return pd.DataFrame(rows)
+
+
+# --------------------------------------------------------------------------
+# cluster bootstrap over pairs
+
+
+@dataclass
+class ClusterSums:
+    """One rung's residuals on one row set, reduced to per-pair sums.
+
+    ``sse[k]`` and ``n[k]`` are the squared-residual sum and row count of the
+    ``k``-th pair, in the same pair order for every rung of the same row set.
+    A bootstrap draw is then a draw of pair indices, and an RMSE is
+    ``sqrt(sse[draw].sum() / n[draw].sum())`` -- the whole resample costs one
+    fancy-index per rung rather than a pass over the rows.
+    """
+
+    sse: np.ndarray
+    n: np.ndarray
+
+    @property
+    def rmse(self) -> float:
+        total = float(self.n.sum())
+        return float(np.sqrt(self.sse.sum() / total)) if total else float("nan")
+
+    def resampled(self, draw: np.ndarray) -> float:
+        total = float(self.n[draw].sum())
+        return float(np.sqrt(self.sse[draw].sum() / total)) if total else float("nan")
+
+
+def cluster_sums(
+    residuals: Mapping[str, np.ndarray | pd.Series], clusters: np.ndarray | pd.Series
+) -> dict[str, ClusterSums]:
+    """Per-pair sums of squared residuals for each rung on one row set.
+
+    Rows where any rung's residual is not finite are dropped for every rung,
+    so the rungs are compared on the same rows.
+    """
+    codes, _ = pd.factorize(pd.Series(np.asarray(clusters)), use_na_sentinel=True)
+    keep = codes >= 0
+    arrays = {k: np.asarray(v, dtype=float) for k, v in residuals.items()}
+    for v in arrays.values():
+        keep &= np.isfinite(v)
+    codes = codes[keep]
+    if not codes.size:
+        return {k: ClusterSums(np.zeros(0), np.zeros(0)) for k in arrays}
+    n_clusters = int(codes.max()) + 1
+    n = np.bincount(codes, minlength=n_clusters).astype(float)
+    return {
+        k: ClusterSums(
+            sse=np.bincount(codes, weights=v[keep] ** 2, minlength=n_clusters), n=n
+        )
+        for k, v in arrays.items()
+    }
+
+
+# One fold of a bootstrap: for each named row set ("held", "seen"), the
+# per-pair sums of every rung on that set.
+FoldSums = Mapping[str, Mapping[str, ClusterSums]]
+
+# A statistic reads one fold's RMSEs, as side -> rung -> RMSE, to a number.
+Statistic = Callable[[Mapping[str, Mapping[str, float]]], float]
+
+
+@dataclass(frozen=True)
+class BootstrapResult:
+    point: float
+    low: float
+    high: float
+    draws: int
+
+    def __str__(self) -> str:
+        return f"{self.point:+,.1f} s [{self.low:+,.1f}, {self.high:+,.1f}]"
+
+
+def fold_rmses(fold: FoldSums, draws: Mapping[str, np.ndarray] | None = None) -> dict:
+    """Each rung's RMSE per row set, from the stored sums; resampled if ``draws``."""
+    out: dict[str, dict[str, float]] = {}
+    for side, rungs in fold.items():
+        draw = None if draws is None else draws[side]
+        out[side] = {
+            k: (s.rmse if draw is None else s.resampled(draw)) for k, s in rungs.items()
+        }
+    return out
+
+
+def cluster_bootstrap(
+    folds: Sequence[FoldSums],
+    statistic: Statistic,
+    *,
+    draws: int = BOOTSTRAP_DRAWS,
+    level: float = BOOTSTRAP_LEVEL,
+    seed: int = SEED,
+) -> BootstrapResult:
+    """Percentile interval for the fold-mean of ``statistic`` over resampled pairs.
+
+    Each draw resamples the pairs of every row set of every fold with
+    replacement -- the same draw for every rung on a row set, so paired
+    contrasts stay paired -- recomputes each rung's RMSE from the stored
+    per-pair sums, evaluates ``statistic`` on each fold and averages over
+    folds. The point estimate is the statistic on the unresampled data. No
+    model is fitted here, which is what makes a thousand draws free.
+    """
+    if not folds:
+        return BootstrapResult(float("nan"), float("nan"), float("nan"), 0)
+    point = float(np.mean([statistic(fold_rmses(f)) for f in folds]))
+    rng = np.random.default_rng(seed)
+    sizes = [
+        {side: len(next(iter(rungs.values())).n) for side, rungs in f.items()}
+        for f in folds
+    ]
+    stats = np.empty(draws)
+    for b in range(draws):
+        values = []
+        for f, size in zip(folds, sizes):
+            draw = {
+                side: rng.integers(0, k, k) if k else np.zeros(0, int)
+                for side, k in size.items()
+            }
+            values.append(statistic(fold_rmses(f, draw)))
+        stats[b] = float(np.mean(values))
+    alpha = (1.0 - level) / 2.0
+    lo, hi = np.nanquantile(stats, [alpha, 1.0 - alpha])
+    return BootstrapResult(point, float(lo), float(hi), draws)
+
+
+def gap(rung: str, held: str = "held", seen: str = "seen") -> Statistic:
+    """Held-out minus seen RMSE for one rung."""
+
+    def stat(r: Mapping[str, Mapping[str, float]]) -> float:
+        return r[held][rung] - r[seen][rung]
+
+    return stat
+
+
+def difference_in_differences(
+    with_rung: str, without_rung: str, held: str = "held", seen: str = "seen"
+) -> Statistic:
+    """How much more ``with_rung`` beats ``without_rung`` on held-out pairs than on seen.
+
+    Positive means the added block buys more where the pair is new. Read
+    as (gap without) - (gap with): the composition of the two row sets
+    enters both rungs alike and cancels.
+    """
+
+    def stat(r: Mapping[str, Mapping[str, float]]) -> float:
+        held_delta = r[held][without_rung] - r[held][with_rung]
+        seen_delta = r[seen][without_rung] - r[seen][with_rung]
+        return held_delta - seen_delta
+
+    return stat
