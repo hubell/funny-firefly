@@ -2,7 +2,7 @@
 """The Gate 1 feature frame, and a registry of what every column reads.
 
 One frame per movement, built from ``taxiout.challenge``'s loaders and
-``taxiout.join.join_stands``. Eight blocks:
+``taxiout.join.join_stands``. Nine blocks:
 
 - **Identifiers.** Airport, stand, runway, and the pair. These are what the
   ablation ladder's saturated rung uses and what the held-out-pair split
@@ -37,6 +37,10 @@ One frame per movement, built from ``taxiout.challenge``'s loaders and
 - **Shared corridor.** The other movements in the window weighted by how
   much of the subject's own taxiway route theirs shares, from the graph's
   edge sets (``taxiout.corridor``). The one feature here no other entry has.
+- **Weather.** Three regime flags per airport-hour -- visibility band,
+  precipitation, freezing -- from the Mesonet's METAR archive
+  (``taxiout.metar``), the one block that reads outside the challenge data,
+  and registered under its own prefix so the audit can say so.
 
 Stands that do not join fall back to airport level rather than carrying nulls
 -- 3.7% of training departures and 3.3% of ranking departures are stands
@@ -77,6 +81,11 @@ from taxiout.corridor import (
     corridor_features,
 )
 from taxiout.join import UNMATCHED, join_stands
+from taxiout.metar import (
+    SOURCES as WEATHER_SOURCES,
+    WEATHER_FEATURES,
+    weather_features,
+)
 from taxiout.routing import AGGREGATED_FIELDS
 
 TARGET = "TAXITIME_SEC_mvt"
@@ -138,6 +147,7 @@ FEATURE_COLUMNS: tuple[str, ...] = (
     + AIRCRAFT_FEATURES
     + CONGESTION_FEATURES
     + CORRIDOR_FEATURES
+    + WEATHER_FEATURES
 )
 
 # Every feature column against the raw columns it reads. Checked against
@@ -157,7 +167,15 @@ FEATURE_SOURCES: dict[str, tuple[str, ...]] = {
     # a bare name is the subject's own row, as everywhere above.
     **CONGESTION_SOURCES,
     **CORRIDOR_SOURCES,
+    # The weather block reads an external dataset, and says so: its sources
+    # carry the ``METAR.`` prefix and name the archive's own fields.
+    **WEATHER_SOURCES,
 }
+
+# Prefixes that name an external dataset rather than a phase of the challenge
+# data. A source under one of these is held to that dataset's field list
+# rather than to either challenge list.
+EXTERNAL_SOURCES: tuple[str, ...] = ("METAR",)
 
 
 def source_phase(source: str) -> tuple[str | None, str]:
@@ -191,7 +209,7 @@ MOVEMENT_COLUMNS: tuple[str, ...] = tuple(
             source_phase(c)[1]
             for sources in FEATURE_SOURCES.values()
             for c in sources
-            if source_phase(c)[0] is not None
+            if source_phase(c)[0] not in (None, *EXTERNAL_SOURCES)
         }
     )
 )
@@ -313,6 +331,7 @@ def build_features(
     fallback: pd.DataFrame | None = None,
     movements: pd.DataFrame | None = None,
     edges: pd.DataFrame | None = None,
+    weather: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     """The feature frame for ``frame``, one row in, one row out, order kept.
 
@@ -331,6 +350,10 @@ def build_features(
     from it. Left as ``None``, that block is NaN throughout -- not zero,
     because "not computed" is not "no traffic" -- and the callers that have
     the data always pass it.
+
+    ``weather`` is the hourly regime table from ``taxiout.metar.regime_by_hour``
+    over the cached archive. Left as ``None``, the weather block is missing
+    throughout with its flag set, and the ladder skips its rung.
 
     The result carries exactly ``FEATURE_COLUMNS`` and the original index, so
     it can be set beside the target and the split masks without a join.
@@ -408,6 +431,9 @@ def build_features(
     else:
         for c, values in corridor_features(frame, movements, matrix, edges).items():
             out[c] = values
+
+    for c, values in weather_features(frame, weather).items():
+        out[c] = values
 
     for c in FEATURE_COLUMNS:
         if c in CATEGORICAL_FEATURES:

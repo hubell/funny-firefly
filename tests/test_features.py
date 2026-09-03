@@ -28,6 +28,7 @@ from taxiout.challenge import (  # noqa: E402
 from taxiout.features import (  # noqa: E402
     AIRCRAFT_FEATURES,
     CATEGORICAL_FEATURES,
+    EXTERNAL_SOURCES,
     FEATURE_COLUMNS,
     FEATURE_SOURCES,
     GEOMETRY_FEATURES,
@@ -103,8 +104,19 @@ def test_every_source_names_a_known_phase_or_none():
     for name, sources in FEATURE_SOURCES.items():
         for src in sources:
             phase, column = source_phase(src)
-            assert phase in (None, *SOURCE_PHASES), (name, src)
+            assert phase in (None, *SOURCE_PHASES, *EXTERNAL_SOURCES), (name, src)
             assert column and "." not in column, (name, src)
+
+
+def test_every_external_source_is_a_field_of_its_archive():
+    """The one block from outside the challenge data reads the archive's own fields."""
+    from taxiout.metar import FIELDS
+
+    for name, sources in FEATURE_SOURCES.items():
+        for src in sources:
+            phase, column = source_phase(src)
+            if phase == "METAR":
+                assert column in FIELDS, (name, src)
 
 
 def test_no_departure_source_is_a_hidden_field():
@@ -154,7 +166,7 @@ def test_required_columns_are_the_bare_sources_and_movement_columns_the_rest():
         source_phase(c)[1]
         for s_ in FEATURE_SOURCES.values()
         for c in s_
-        if source_phase(c)[0] is not None
+        if source_phase(c)[0] not in (None, *EXTERNAL_SOURCES)
     }
     assert set(REQUIRED_COLUMNS) == bare
     assert set(MOVEMENT_COLUMNS) == prefixed | {"PHASE_mvt"}

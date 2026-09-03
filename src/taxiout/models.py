@@ -33,6 +33,9 @@ reports:
    movements: never a departure's block time or taxi time. The corridor sits
    last, after throughput, so that its rung says whether it is a new column
    or the take-off count renamed.
+8. **plus weather** -- the regime flags per airport-hour (Gate 2b), the one
+   block from outside the challenge data. Skipped by the runner when the
+   archive is not cached, and said so, rather than fitted on a missing column.
 
 Each rung is scored twice, once plain and once with the record-quality term on
 top. That term lives in ``taxiout.tails`` and is deliberately not reimplemented
@@ -66,6 +69,7 @@ from taxiout.congestion import (
     THROUGHPUT_FEATURES,
 )
 from taxiout.corridor import CORRIDOR_FEATURES
+from taxiout.metar import WEATHER_FEATURES
 from taxiout.features import (
     AIRCRAFT_FEATURES,
     CATEGORICAL_FEATURES,
@@ -269,6 +273,25 @@ LADDER: tuple[Rung, ...] = (
             "other movements in the window weighted by how much of the subject's "
             "own taxiway route theirs shares"
         ),
+    ),
+    Rung(
+        key="weather",
+        label="+ weather",
+        kind="booster",
+        features=IDENTIFIER_BLOCK
+        + TIME_FEATURES
+        + PLAN_FEATURES
+        + GEOMETRY_FEATURES
+        + QUALITY_FEATURES
+        + AIRCRAFT_FEATURES
+        + THROUGHPUT_FEATURES
+        + COVERAGE_FEATURES
+        + ARRIVAL_FEATURES
+        + DEMAND_FEATURES
+        + CONFIGURATION_FEATURES
+        + CORRIDOR_FEATURES
+        + WEATHER_FEATURES,
+        note="visibility band, precipitation and freezing, per airport-hour (Gate 2b)",
     ),
 )
 

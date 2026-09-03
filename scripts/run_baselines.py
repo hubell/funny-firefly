@@ -51,6 +51,7 @@ sys.path.insert(0, str(REPO / "src"))
 
 from taxiout.airports import AIRPORTS  # noqa: E402
 from taxiout.corridor import load_edges  # noqa: E402
+from taxiout.metar import load_metar, regime_by_hour  # noqa: E402
 from taxiout.challenge import load_movements, to_pandas  # noqa: E402
 from taxiout.features import (  # noqa: E402
     GEOMETRY_FEATURES,
@@ -98,6 +99,7 @@ from taxiout.validation import (  # noqa: E402
 
 DATA = REPO / "data" / "challenge"
 MATRICES = REPO / "data" / "processed" / "taxi_distance"
+METAR = REPO / "data" / "raw" / "metar"
 OUT = REPO / "reports" / "baseline.md"
 
 # Loaded but never entered as a feature. The record-quality layer needs the
@@ -203,6 +205,14 @@ def load_edge_sets() -> pd.DataFrame:
     if not files:
         raise FileNotFoundError(f"no edge sets under {MATRICES}; make reports")
     return load_edges(files)
+
+
+def load_weather() -> pd.DataFrame | None:
+    """The hourly regime table from the cached archive, or ``None`` without it."""
+    if not METAR.exists() or not any(METAR.glob("*.csv")):
+        return None
+    metar = load_metar(METAR)
+    return regime_by_hour(metar) if len(metar) else None
 
 
 def load_departures(sample_frac: float | None) -> pd.DataFrame:
@@ -330,6 +340,11 @@ def run(features, y, raw, splits, tails: Tails) -> dict:
         unflagged = ~flagged
         for rung in LADDER:
             t0 = time.time()
+            if rung.kind == "booster" and any(
+                features[c].isna().all() for c in rung.features
+            ):
+                print(f"  {split.name:>10s} {rung.key:<22s} skipped: a block is missing")
+                continue
             preds, info = fit_and_predict(
                 rung, features, y, split.train, masks, unflagged
             )
@@ -1185,12 +1200,20 @@ def main() -> int:
     print("building features ...")
     t0 = time.time()
     movements = load_all_movements()
+    weather = load_weather()
+    if weather is None:
+        print(
+            "WARNING: no METAR cache under data/raw/metar; the weather rung is "
+            "skipped (python scripts/fetch_metar.py)",
+            file=sys.stderr,
+        )
     features = build_features(
         dep,
         matrix,
         fallback=airport_fallback(matrix),
         movements=movements,
         edges=load_edge_sets(),
+        weather=weather,
     )
     del movements
     print(f"  {len(features):,} rows in {time.time() - t0:.0f} s")

@@ -45,6 +45,7 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
 
 from taxiout.corridor import load_edges  # noqa: E402
+from taxiout.metar import load_metar, regime_by_hour  # noqa: E402
 from taxiout.challenge import (  # noqa: E402
     load_movements,
     load_ranking,
@@ -62,6 +63,7 @@ from taxiout.models import LADDER, Booster, booster_backend  # noqa: E402
 
 DATA = REPO / "data" / "challenge"
 MATRICES = REPO / "data" / "processed" / "taxi_distance"
+METAR = REPO / "data" / "raw" / "metar"
 SUBMISSIONS = REPO / "data" / "submissions"
 
 ID = "MVT_ID_mvt"
@@ -182,9 +184,18 @@ def main() -> int:
         )
         return 1
 
+    if not METAR.exists() or not any(METAR.glob("*.csv")):
+        print(
+            "no METAR cache under data/raw/metar; the top rung reads it. "
+            "Run: python scripts/fetch_metar.py",
+            file=sys.stderr,
+        )
+        return 1
+
     print("loading ...")
     matrix = load_matrix()
     fallback = airport_fallback(matrix)
+    weather = regime_by_hour(load_metar(METAR))
     train_columns = sorted(set(REQUIRED_COLUMNS) | set(TAILS_TRAIN_COLUMNS) | {TARGET})
     rank_columns = sorted(set(REQUIRED_COLUMNS) | set(TAILS_PREDICT_COLUMNS) | {ID})
     train = to_pandas(load_movements(DATA, train_columns, phase="DEP")).reset_index(
@@ -216,7 +227,12 @@ def main() -> int:
     t0 = time.time()
     edges = load_edge_sets()
     X = build_features(
-        train, matrix, fallback=fallback, movements=train_moves, edges=edges
+        train,
+        matrix,
+        fallback=fallback,
+        movements=train_moves,
+        edges=edges,
+        weather=weather,
     )
     del train_moves
     y = pd.to_numeric(train[TARGET], errors="coerce")
@@ -226,7 +242,12 @@ def main() -> int:
 
     print("predicting ...")
     Xr = build_features(
-        rank, matrix, fallback=fallback, movements=rank_moves, edges=edges
+        rank,
+        matrix,
+        fallback=fallback,
+        movements=rank_moves,
+        edges=edges,
+        weather=weather,
     )
     physical = model.predict(Xr)
     tail = tail_model.predict(rank)
