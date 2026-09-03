@@ -199,6 +199,38 @@ def trailing_mean(
     return mean, np.where(code < 0, 0.0, n)
 
 
+def centred_mean(
+    events: Sorted,
+    name: str,
+    group: pd.Series | np.ndarray,
+    t: pd.Series,
+    half_window_s: float,
+    *,
+    self_value: np.ndarray | None = None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Mean and count of a value over the events of ``[t - w, t + w]``.
+
+    Closed at both ends. The count is of events that carried the value; the
+    mean is NaN where that count is zero. ``self_value`` is the anchor's own
+    value where the anchor is among the events and carried one, NaN
+    elsewhere: it is taken out of the sum and the count, so the mean is over
+    the *other* events -- a subject is never averaged into its own window.
+    """
+    code = events.group_codes(group)
+    tt = seconds(t)
+    lo, hi = events.bounds(code, tt - int(half_window_s), tt + int(half_window_s))
+    total = events.cumulative[name][hi] - events.cumulative[name][lo]
+    n = events.cumulative[name + "__n"][hi] - events.cumulative[name + "__n"][lo]
+    if self_value is not None:
+        own = np.asarray(self_value, dtype=float)
+        has = np.isfinite(own) & (code >= 0)
+        total = total - np.where(has, own, 0.0)
+        n = n - has.astype(float)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        mean = np.where(n > 0, total / n, np.nan)
+    return mean, np.where(code < 0, 0.0, n)
+
+
 # --------------------------------------------------------------------------
 # coverage
 

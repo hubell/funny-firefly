@@ -2,7 +2,7 @@
 """The Gate 1 feature frame, and a registry of what every column reads.
 
 One frame per movement, built from ``taxiout.challenge``'s loaders and
-``taxiout.join.join_stands``. Nine blocks:
+``taxiout.join.join_stands``. Ten blocks:
 
 - **Identifiers.** Airport, stand, runway, and the pair. These are what the
   ablation ladder's saturated rung uses and what the held-out-pair split
@@ -37,6 +37,11 @@ One frame per movement, built from ``taxiout.challenge``'s loaders and
 - **Shared corridor.** The other movements in the window weighted by how
   much of the subject's own taxiway route theirs shares, from the graph's
   edge sets (``taxiout.corridor``). The one feature here no other entry has.
+- **Plan lags.** Take-off minus a planning value fixed before departure --
+  the first and last off-block estimates and the schedule -- so taxi plus
+  the pushback delay against the plan; the subject's own and the mean over
+  the other departures on its runway within fifteen minutes
+  (``taxiout.planlags``).
 - **Weather.** Three regime flags per airport-hour -- visibility band,
   precipitation, freezing -- from the Mesonet's METAR archive
   (``taxiout.metar``), the one block that reads outside the challenge data,
@@ -85,6 +90,11 @@ from taxiout.metar import (
     SOURCES as WEATHER_SOURCES,
     WEATHER_FEATURES,
     weather_features,
+)
+from taxiout.planlags import (
+    PLAN_LAG_FEATURES,
+    SOURCES as PLAN_LAG_SOURCES,
+    planlag_features,
 )
 from taxiout.routing import AGGREGATED_FIELDS
 
@@ -145,6 +155,7 @@ FEATURE_COLUMNS: tuple[str, ...] = (
     + QUALITY_FEATURES
     + PLAN_FEATURES
     + AIRCRAFT_FEATURES
+    + PLAN_LAG_FEATURES
     + CONGESTION_FEATURES
     + CORRIDOR_FEATURES
     + WEATHER_FEATURES
@@ -162,6 +173,9 @@ FEATURE_SOURCES: dict[str, tuple[str, ...]] = {
     **{c: ("LOBT_flt", "IOBT_flt") for c in PLAN_FEATURES},
     "wake_class": ("WK_TBL_CAT_flt",),
     "aircraft_type": ("AIRCRAFT_TYPE_mvt",),
+    # The plan lags read the subject's own planning values and, under
+    # ``DEP.``, the other departures' on its runway.
+    **PLAN_LAG_SOURCES,
     # The congestion block reads other movements' rows, and says so: its
     # sources carry the phase they are read from (``DEP.`` or ``ARR.``), and
     # a bare name is the subject's own row, as everywhere above.
@@ -421,6 +435,9 @@ def build_features(
 
     out["wake_class"] = _level(frame["WK_TBL_CAT_flt"])
     out["aircraft_type"] = _level(frame["AIRCRAFT_TYPE_mvt"])
+
+    for c, values in planlag_features(frame, movements).items():
+        out[c] = values
 
     for c, values in congestion_features(frame, movements).items():
         out[c] = values

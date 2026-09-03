@@ -63,10 +63,12 @@ from taxiout.features import (  # noqa: E402
     build_features,
 )
 from taxiout.models import (  # noqa: E402
-    BOOSTER_PARAMS,
-    LADDER,
     AirportMean,
+    BOOSTER_PARAMS,
     Booster,
+    LADDER,
+    TOP_RUNG,
+    base_of,
     booster_backend,
 )
 from taxiout.unimpeded import (  # noqa: E402
@@ -695,6 +697,17 @@ def section_ladder(results, splits, tails: Tails) -> list[str]:
         "as a constant, which is exactly what Gate 2 exists to replace with a",
         "model -- and is the column to compare them on. The boosted rungs predict",
         "taxi-out directly and need no offset, so it is blank for them.",
+        "",
+        "The plan-lag rung reads three exposed planning values -- the flight",
+        "plan's first and last off-block estimates and the schedule -- as take-off",
+        "minus a planning value fixed before departure, so taxi plus the pushback",
+        "delay against the plan; the subject's own, and the mean over the other",
+        "departures on its runway within fifteen minutes of its take-off, the",
+        "subject removed by identity. It sits after the aircraft and before the",
+        "congestion blocks, so every congestion rung above it is read net of the",
+        "plan lags. The same congestion rungs without the plan lags are kept at",
+        "the foot of the ladder, each read against the one before it in that",
+        "chain, so the reader sees what each block is worth both ways.",
     ]
     for split in splits:
         if split.name.startswith("pairs-"):
@@ -788,7 +801,13 @@ def section_pairs(results, splits, features, y, tails: Tails) -> list[str]:
 
     # -- table 2: every consecutive contrast on the ladder, as a difference in
     # differences, and the claim contrast whether or not it is consecutive
-    contrasts = [(a, b) for a, b in zip(keys, keys[1:])]
+    # each rung against the rung it is read against: the one before it on
+    # the ladder, or, for the chain kept without the plan lags, its own base
+    contrasts = []
+    for k in keys:
+        b = base_of(by_key[k])
+        if b is not None and b.key in keys:
+            contrasts.append((b.key, k))
     if CLAIM[0] in keys and CLAIM[1] in keys and CLAIM not in contrasts:
         contrasts.append(CLAIM)
     crow = []
@@ -1040,7 +1059,7 @@ def section_per_airport(results, splits, tails: Tails) -> list[str]:
     for split in splits:
         if split.name.startswith("pairs-"):
             continue
-        entry = results.get((split.name, LADDER[-1].key, "valid"))
+        entry = results.get((split.name, TOP_RUNG.key, "valid"))
         if entry is None:
             continue
         ev = entry["eval"]
@@ -1091,7 +1110,7 @@ def section_per_airport(results, splits, tails: Tails) -> list[str]:
             )
         lines += [
             "",
-            f"### {split.name.title()} split, {LADDER[-1].label}",
+            f"### {split.name.title()} split, {TOP_RUNG.label}",
             "",
             *table(
                 ["ICAO", "rows", "RMSE (s)", "excluding flagged (s)", "bias (s)"],
@@ -1104,7 +1123,7 @@ def section_per_airport(results, splits, tails: Tails) -> list[str]:
 
 
 def section_importances(results, splits) -> list[str]:
-    entry = results.get((splits[0].name, LADDER[-1].key, "valid"))
+    entry = results.get((splits[0].name, TOP_RUNG.key, "valid"))
     if entry is None or "importances" not in entry["info"]:
         return []
     imp = entry["info"]["importances"]

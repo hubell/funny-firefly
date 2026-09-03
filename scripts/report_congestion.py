@@ -69,6 +69,7 @@ from taxiout.congestion import (  # noqa: E402
     WINDOWS_MIN,
 )
 from taxiout.corridor import CORRIDOR_FEATURES, degeneracy  # noqa: E402
+from taxiout.planlags import PLAN_LAG_FEATURES  # noqa: E402
 from taxiout.metar import (  # noqa: E402
     MAX_CARRY_H,
     VIS_HIGH_M,
@@ -104,6 +105,7 @@ BLOCKS = (
     ("join quality", QUALITY_FEATURES),
     ("flight plan", PLAN_FEATURES),
     ("aircraft", AIRCRAFT_FEATURES),
+    ("plan lags", PLAN_LAG_FEATURES),
     ("throughput", THROUGHPUT_FEATURES),
     ("arrivals", ARRIVAL_FEATURES),
     ("demand", DEMAND_FEATURES),
@@ -116,6 +118,7 @@ BLOCKS = (
 # The columns whose two-sided shape is printed. One per block, the widest
 # window, because the widest window is the one most exposed to a boundary.
 COMPARED = (
+    "lag_eobt_rwy15m",
     "tko_all_60m",
     "tko_rwy_60m",
     "ldg_60m",

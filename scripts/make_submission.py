@@ -59,7 +59,7 @@ from taxiout.features import (  # noqa: E402
     airport_fallback,
     build_features,
 )
-from taxiout.models import LADDER, Booster, booster_backend  # noqa: E402
+from taxiout.models import TOP_RUNG, Booster, booster_backend  # noqa: E402
 
 DATA = REPO / "data" / "challenge"
 MATRICES = REPO / "data" / "processed" / "taxi_distance"
@@ -69,7 +69,7 @@ SUBMISSIONS = REPO / "data" / "submissions"
 ID = "MVT_ID_mvt"
 
 # The rung the submission uses: the top of the ladder.
-RUNG = LADDER[-1]
+RUNG = TOP_RUNG
 
 # Read by the record-quality term and never entered as a feature. The block
 # time is one of the fields the ranking set hides and is loaded for the

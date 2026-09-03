@@ -289,6 +289,47 @@ from, now stands at 294.4 s in December and 400.1 s in July over the rows
 the physical model is answerable for — 277.3 and 315.9 s on the three July
 airports — against 322.0 and 407.9 s when Gate 1 closed.
 
+**After Gate 2b — the plan lags, 3 September.** Three planning values are
+exposed for every ranking departure and fixed before the aircraft moves:
+the flight plan's first and last off-block estimates and the schedule.
+Take-off minus any of them is taxi plus the pushback delay against the
+plan, and the block carries the subject's own three and the mean of each
+over the other departures on its runway within fifteen minutes of its
+take-off, the subject removed by identity. It sits on the ladder after the
+aircraft and before the congestion blocks, so every congestion rung is read
+net of it; the congestion rungs are kept without it as a second chain at
+the foot of the ladder, so both readings are in
+[`../reports/baseline.md`](../reports/baseline.md).
+
+**It is worth 77 seconds in December and 53 in July, and everything above
+it is worth almost nothing more.** Over the rows the record-quality term
+leaves to the physical model, the plan lags take December from 321.5 s to
+244.8 s and July from 405.6 to 352.9 — the three July airports from 315.9
+to 260.2. Net of the lags, the five congestion blocks and the weather are
+together worth 7.5 s in December (244.8 to 237.3) and 1.8 s in July; without
+the lags the same blocks were worth 27 and 5. The reading is the one the
+notes anticipated: the lag the runway is running at *is* most of the excess
+term, measured after the fact, and a congestion block is a proxy for it.
+
+**It is not a property of the pair.** On held-out pairs the contrast for
+the plan lags is −1.2 s [−5.8, +3.2], zero: the block buys the same on a
+pair the model has seen as on one it has not, so the geometry claim stays
+where it was, +14.5 s [+13.0, +16.3], and every rung net of the lags sits
+within 0.6 s of zero on the same contrast. On pairs never seen in training
+the top rung goes from 311.9 s to 233.7.
+
+Two cautions, both recorded in [`../reports/congestion.md`](../reports/congestion.md).
+The runway mean of take-off minus the first off-block estimate is higher in
+January 2026 than in January 2025 at every airport — Frankfurt 1,238 to
+1,377 s at the median, Munich 1,041 to 1,199 — so the ranking month ran
+later against its plans than the training year, and whether that is more
+taxi or more pushback delay the exposed fields cannot say. And a rung read
+net of the plan lags is read net of a good deal of the excess term, which
+is why the chain without them is kept.
+
+The top rung now stands at 237.3 s in December and 351.1 s in July, 222.7
+and 260.2 s on the three July airports.
+
 **Gate 3 — the queueing layer, only if Gate 2's ablation says congestion is
 binding** (~20–30 h). This is the piece where the geometry stops being a side
 feature. *Revised 2 September:* the forward simulation as first written —

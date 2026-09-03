@@ -82,6 +82,7 @@ def _movements(stands: list[str], **overrides) -> pd.DataFrame:
             "SCHED_TIME_UTC_mvt": pd.to_datetime(["2025-03-04T08:00:00Z"] * n, utc=True),
             "LOBT_flt": pd.to_datetime(["2025-03-04T08:10:00Z"] * n, utc=True),
             "IOBT_flt": pd.to_datetime(["2025-03-04T08:00:00Z"] * n, utc=True),
+            "EOBT_1_flt": pd.to_datetime(["2025-03-04T08:00:00Z"] * n, utc=True),
             "WK_TBL_CAT_flt": ["M"] * n,
             "AIRCRAFT_TYPE_mvt": ["A320"] * n,
         }
@@ -197,6 +198,9 @@ def _with_arrivals(departures: pd.DataFrame) -> pd.DataFrame:
             "TAXITIME_SEC_mvt": [360.0, 480.0],
             "SCHED_TIME_UTC_mvt": [t - 10 * minutes, t - 15 * minutes],
             "RUNWAY_mvt": ["27", "27"],
+            # an arrival carries no departure plan, as in the data
+            "EOBT_1_flt": [pd.NaT, pd.NaT],
+            "LOBT_flt": [pd.NaT, pd.NaT],
         }
     )
     dep = departures.assign(
@@ -420,3 +424,40 @@ def test_aircraft_sources_are_the_two_exposed_columns():
 
     assert FEATURE_SOURCES["wake_class"] == ("WK_TBL_CAT_flt",)
     assert FEATURE_SOURCES["aircraft_type"] == ("AIRCRAFT_TYPE_mvt",)
+
+
+# --------------------------------------------------------------------------
+# the ladder
+
+
+def test_the_ladder_reads_the_congestion_blocks_net_of_the_plan_lags_and_keeps_them_without():
+    from taxiout.models import LADDER, LADDER_BY_KEY, TOP_RUNG, base_of
+    from taxiout.planlags import PLAN_LAG_FEATURES
+
+    keys = [r.key for r in LADDER]
+    assert keys.index("plan-lags") == keys.index("identifiers-geometry-aircraft") + 1
+    assert keys.index("throughput") == keys.index("plan-lags") + 1
+    net = [
+        k
+        for k in keys
+        if k
+        in ("throughput", "arrivals", "demand", "configuration", "corridor", "weather")
+    ]
+    for k in net:
+        assert set(PLAN_LAG_FEATURES) <= set(LADDER_BY_KEY[k].features), k
+        kept = LADDER_BY_KEY[f"{k}-nolag"]
+        assert not set(PLAN_LAG_FEATURES) & set(kept.features), k
+        assert set(kept.features) == set(LADDER_BY_KEY[k].features) - set(
+            PLAN_LAG_FEATURES
+        )
+    # the kept chain is read against itself, and its first rung against the aircraft
+    assert (
+        base_of(LADDER_BY_KEY["throughput-nolag"]).key == "identifiers-geometry-aircraft"
+    )
+    assert base_of(LADDER_BY_KEY["arrivals-nolag"]).key == "throughput-nolag"
+    assert base_of(LADDER_BY_KEY["plan-lags"]).key == "identifiers-geometry-aircraft"
+    assert base_of(LADDER_BY_KEY["throughput"]).key == "plan-lags"
+    assert base_of(LADDER[0]) is None
+    # the submission model is the top of the ladder proper, with the lags
+    assert TOP_RUNG.key == "weather" and set(PLAN_LAG_FEATURES) <= set(TOP_RUNG.features)
+    assert len(set(keys)) == len(keys)

@@ -224,3 +224,26 @@ def test_a_window_on_microsecond_stamps_is_an_hour_not_six_weeks():
     events = Sorted.build(["X"] * 4, stamps)
     n = trailing_count(events, ["X"], stamps.tail(1), 3600)
     assert n.tolist() == [3.0]  # -3600 (boundary), -1800, 0; not -7200
+
+
+def test_centred_mean_averages_the_others_and_not_the_subject():
+    from taxiout.windows import centred_mean
+
+    t = pd.to_datetime(["2025-01-01T10:00:00Z"] * 5, utc=True) + pd.to_timedelta(
+        [0, 5, 10, 20, 12], unit="min"
+    )
+    values = np.array([100.0, 200.0, np.nan, 400.0, 500.0])
+    ev = Sorted.build(["a"] * 5, pd.Series(t), values={"v": values})
+    # anchor is the first event, at 10:00, with a +-15 min window: events at
+    # 10:00 (itself), 10:05, 10:10 (no value), 10:12; not 10:20
+    mean, n = centred_mean(
+        ev, "v", ["a"], pd.Series(t[:1]), 15 * 60, self_value=np.array([100.0])
+    )
+    assert n[0] == 2.0 and mean[0] == pytest.approx((200.0 + 500.0) / 2)
+    # without the self value the subject is averaged in, which is the wrong
+    # answer this argument exists to prevent
+    mean_in, n_in = centred_mean(ev, "v", ["a"], pd.Series(t[:1]), 15 * 60)
+    assert n_in[0] == 3.0 and mean_in[0] == pytest.approx((100.0 + 200.0 + 500.0) / 3)
+    # an anchor whose group was never seen has no window at all
+    mean_x, n_x = centred_mean(ev, "v", ["zzz"], pd.Series(t[:1]), 15 * 60)
+    assert n_x[0] == 0.0 and np.isnan(mean_x[0])

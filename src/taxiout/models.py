@@ -26,14 +26,21 @@ reports:
    stands; on a new pair nothing does, so this too is read on the held-out
    split. The geometric rung has a twin for the same reason: one intercept
    per airport, then one per (airport, wake class).
-7. **plus the excess term, one block at a time** -- runway throughput,
+7. **plus the plan lags** -- take-off minus a planning value fixed before
+   departure (the first and last off-block estimates and the schedule), so
+   taxi plus the pushback delay against the plan; the subject's own and the
+   mean over the other departures on its runway within fifteen minutes. It
+   sits before the congestion blocks so that what they are worth is read net
+   of it, and the congestion rungs are kept without it as a second chain at
+   the foot of the ladder, so the reader sees both.
+8. **plus the excess term, one block at a time** -- runway throughput,
    arrivals, scheduled demand, runway configuration, and the shared corridor
    (Gate 2). Each is its own rung so the report shows what each is worth,
    and each is built from what the ranking set exposes about surrounding
    movements: never a departure's block time or taxi time. The corridor sits
    last, after throughput, so that its rung says whether it is a new column
    or the take-off count renamed.
-8. **plus weather** -- the regime flags per airport-hour (Gate 2b), the one
+9. **plus weather** -- the regime flags per airport-hour (Gate 2b), the one
    block from outside the challenge data. Skipped by the runner when the
    archive is not cached, and said so, rather than fitted on a missing column.
 
@@ -70,6 +77,7 @@ from taxiout.congestion import (
 )
 from taxiout.corridor import CORRIDOR_FEATURES
 from taxiout.metar import WEATHER_FEATURES
+from taxiout.planlags import PLAN_LAG_FEATURES
 from taxiout.features import (
     AIRCRAFT_FEATURES,
     CATEGORICAL_FEATURES,
@@ -118,6 +126,9 @@ class Rung:
     # frozen and hashable. The geometric rungs use it to say which class
     # column, if any, the intercept reads.
     options: tuple[tuple[str, object], ...] = ()
+    # The rung this one is read against. ``None`` is the rung before it on
+    # the ladder; a key names another, for the rungs kept as a second chain.
+    base: str | None = None
 
     @property
     def uses_geometry(self) -> bool:
@@ -189,8 +200,27 @@ LADDER: tuple[Rung, ...] = (
         + AIRCRAFT_FEATURES,
         note="the same model with the wake class and the aircraft type",
     ),
-    # Gate 2: the excess term, one block at a time, each on top of the last.
-    # The coverage flags ride with the first block that needs them.
+    Rung(
+        key="plan-lags",
+        label="+ plan lags",
+        kind="booster",
+        features=IDENTIFIER_BLOCK
+        + TIME_FEATURES
+        + PLAN_FEATURES
+        + GEOMETRY_FEATURES
+        + QUALITY_FEATURES
+        + AIRCRAFT_FEATURES
+        + PLAN_LAG_FEATURES,
+        note=(
+            "take-off minus a planning value fixed before departure -- the first "
+            "and last off-block estimates and the schedule -- so taxi plus the "
+            "pushback delay against the plan; the subject's own and the mean over "
+            "the other departures on its runway within fifteen minutes"
+        ),
+    ),
+    # Gate 2: the excess term, one block at a time, each on top of the last,
+    # read net of the plan lags. The coverage flags ride with the first block
+    # that needs them.
     Rung(
         key="throughput",
         label="+ runway throughput",
@@ -201,6 +231,7 @@ LADDER: tuple[Rung, ...] = (
         + GEOMETRY_FEATURES
         + QUALITY_FEATURES
         + AIRCRAFT_FEATURES
+        + PLAN_LAG_FEATURES
         + THROUGHPUT_FEATURES
         + COVERAGE_FEATURES,
         note="take-offs from the subject's runway and from all runways, trailing",
@@ -215,6 +246,7 @@ LADDER: tuple[Rung, ...] = (
         + GEOMETRY_FEATURES
         + QUALITY_FEATURES
         + AIRCRAFT_FEATURES
+        + PLAN_LAG_FEATURES
         + THROUGHPUT_FEATURES
         + COVERAGE_FEATURES
         + ARRIVAL_FEATURES,
@@ -230,6 +262,7 @@ LADDER: tuple[Rung, ...] = (
         + GEOMETRY_FEATURES
         + QUALITY_FEATURES
         + AIRCRAFT_FEATURES
+        + PLAN_LAG_FEATURES
         + THROUGHPUT_FEATURES
         + COVERAGE_FEATURES
         + ARRIVAL_FEATURES
@@ -246,6 +279,7 @@ LADDER: tuple[Rung, ...] = (
         + GEOMETRY_FEATURES
         + QUALITY_FEATURES
         + AIRCRAFT_FEATURES
+        + PLAN_LAG_FEATURES
         + THROUGHPUT_FEATURES
         + COVERAGE_FEATURES
         + ARRIVAL_FEATURES
@@ -263,6 +297,7 @@ LADDER: tuple[Rung, ...] = (
         + GEOMETRY_FEATURES
         + QUALITY_FEATURES
         + AIRCRAFT_FEATURES
+        + PLAN_LAG_FEATURES
         + THROUGHPUT_FEATURES
         + COVERAGE_FEATURES
         + ARRIVAL_FEATURES
@@ -284,6 +319,7 @@ LADDER: tuple[Rung, ...] = (
         + GEOMETRY_FEATURES
         + QUALITY_FEATURES
         + AIRCRAFT_FEATURES
+        + PLAN_LAG_FEATURES
         + THROUGHPUT_FEATURES
         + COVERAGE_FEATURES
         + ARRIVAL_FEATURES
@@ -295,7 +331,44 @@ LADDER: tuple[Rung, ...] = (
     ),
 )
 
+# The submission model: the top of the ladder proper.
+TOP_RUNG: Rung = LADDER[-1]
+
+
+def _without_plan_lags(rung: Rung, base: str) -> Rung:
+    return Rung(
+        key=f"{rung.key}-nolag",
+        label=f"{rung.label} (without plan lags)",
+        kind=rung.kind,
+        features=tuple(c for c in rung.features if c not in PLAN_LAG_FEATURES),
+        note=rung.note,
+        options=rung.options,
+        base=base,
+    )
+
+
+# The congestion and weather rungs kept without the plan lags, each read
+# against the one before it in this chain and the first against the aircraft
+# rung, so the report shows what each block is worth both gross and net.
+_NET_CHAIN = tuple(
+    r for r in LADDER if PLAN_LAG_FEATURES[0] in r.features and r.key != "plan-lags"
+)
+_WITHOUT: list[Rung] = []
+_base = "identifiers-geometry-aircraft"
+for _r in _NET_CHAIN:
+    _WITHOUT.append(_without_plan_lags(_r, _base))
+    _base = _WITHOUT[-1].key
+LADDER = LADDER + tuple(_WITHOUT)
+
 LADDER_BY_KEY: dict[str, Rung] = {r.key: r for r in LADDER}
+
+
+def base_of(rung: Rung) -> Rung | None:
+    """The rung ``rung`` is read against: its ``base``, else the one before it."""
+    if rung.base is not None:
+        return LADDER_BY_KEY[rung.base]
+    i = LADDER.index(rung)
+    return LADDER[i - 1] if i > 0 else None
 
 
 class AirportMean:
@@ -420,6 +493,8 @@ class Booster:
 
 __all__ = [
     "BOOSTER_PARAMS",
+    "TOP_RUNG",
+    "base_of",
     "IDENTIFIER_BLOCK",
     "LADDER",
     "LADDER_BY_KEY",

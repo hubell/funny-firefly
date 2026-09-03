@@ -380,6 +380,16 @@ hidden fields are poisoned and the frame must not move; arrivals' are poisoned
 and the arrivals features *must* move, which is the proof they read arrivals
 and not something else that happens to correlate.
 
+The plan lags are the one block that reads, through other departures, a
+quantity that contains their taxi-out: take-off minus a planning value fixed
+before departure — the flight plan's first and last off-block estimates and
+the schedule — is the taxi plus the pushback delay against the plan, and the
+runway's mean of it over the other departures within fifteen minutes is the
+lag the runway is running at. Every source of it is an exposed field of the
+ranking set, so the rule holds; but it is worth knowing that a rung read net
+of it is read net of a good deal of the excess term, which is why the ladder
+keeps the congestion rungs without it as well.
+
 ## Tail handling
 
 Decided 2 September 2026, and revised the same day once the term was built

@@ -11,7 +11,7 @@ refuses to write a literal stand identifier from either source.
 ## In one paragraph
 
 2,085,047 training departures and 215,876 ranking departures
-get the same 42 congestion columns, from windows of 5, 15, 30, 60 minutes anchored on the subject's take-off, built by one function
+get the same 50 congestion columns, from windows of 5, 15, 30, 60 minutes anchored on the subject's take-off, built by one function
 from each side's own movement frame with the subject removed from its
 own count by identity. The same calendar month a year apart has the
 same shape on both sides. 10 training rows and 16 ranking rows have a window
@@ -43,6 +43,7 @@ held to that archive's field list.
 | join quality | 7 | `ADEP_mvt`, `RUNWAY_mvt`, `STAND_mvt` | -- | -- | -- |
 | flight plan | 2 | `IOBT_flt`, `LOBT_flt` | -- | -- | -- |
 | aircraft | 2 | `AIRCRAFT_TYPE_mvt`, `WK_TBL_CAT_flt` | -- | -- | -- |
+| plan lags | 8 | `ADEP_mvt`, `EOBT_1_flt`, `LOBT_flt`, `MVT_ID_mvt`, `MVT_TIME_UTC_mvt`, `RUNWAY_mvt`, `SCHED_TIME_UTC_mvt` | `ADEP_mvt`, `EOBT_1_flt`, `LOBT_flt`, `MVT_ID_mvt`, `MVT_TIME_UTC_mvt`, `RUNWAY_mvt`, `SCHED_TIME_UTC_mvt` | -- | -- |
 | throughput | 8 | `ADEP_mvt`, `MVT_ID_mvt`, `MVT_TIME_UTC_mvt`, `RUNWAY_mvt` | `ADEP_mvt`, `MVT_ID_mvt`, `MVT_TIME_UTC_mvt`, `RUNWAY_mvt` | -- | -- |
 | arrivals | 16 | `ADEP_mvt`, `MVT_ID_mvt`, `MVT_TIME_UTC_mvt` | -- | `ADES_mvt`, `BLOCK_TIME_UTC_mvt`, `MVT_TIME_UTC_mvt`, `TAXITIME_SEC_mvt` | -- |
 | demand | 3 | `ADEP_mvt`, `MVT_ID_mvt`, `SCHED_TIME_UTC_mvt` | `ADEP_mvt`, `MVT_ID_mvt`, `SCHED_TIME_UTC_mvt` | -- | -- |
@@ -74,6 +75,19 @@ Median and 90th percentile, the same calendar month a year apart:
 
 | feature | month | ICAO | median 2025 | median 2026 | p90 2025 | p90 2026 |
 | --- | --- | --- | ---: | ---: | ---: | ---: |
+| `lag_eobt_rwy15m` | January | EDDF | 1,238.5 | 1,376.6 | 1,813.8 | 2,393.4 |
+| `lag_eobt_rwy15m` | January | EDDM | 1,040.7 | 1,198.9 | 1,674.1 | 2,050.6 |
+| `lag_eobt_rwy15m` | January | EGLL | 1,471.0 | 1,514.6 | 2,090.8 | 2,163.7 |
+| `lag_eobt_rwy15m` | January | EHAM | 1,247.1 | 1,313.6 | 1,891.3 | 2,568.2 |
+| `lag_eobt_rwy15m` | January | LEBL | 1,137.5 | 1,145.2 | 1,473.9 | 1,517.7 |
+| `lag_eobt_rwy15m` | January | LEMD | 1,219.0 | 1,301.0 | 1,619.2 | 1,780.8 |
+| `lag_eobt_rwy15m` | January | LFPG | 1,430.8 | 1,332.4 | 2,273.2 | 2,224.1 |
+| `lag_eobt_rwy15m` | January | LIRF | 1,155.4 | 1,111.3 | 1,512.8 | 1,494.9 |
+| `lag_eobt_rwy15m` | January | LSZH | 1,156.2 | 1,298.9 | 1,865.0 | 2,223.0 |
+| `lag_eobt_rwy15m` | January | LTFM | 1,180.5 | 1,413.6 | 1,677.0 | 2,102.9 |
+| `lag_eobt_rwy15m` | July | EDDF | 1,427.6 | 1,304.6 | 1,908.7 | 1,680.4 |
+| `lag_eobt_rwy15m` | July | EGLL | 1,809.5 | 1,744.8 | 2,579.3 | 2,260.0 |
+| `lag_eobt_rwy15m` | July | EHAM | 1,388.1 | 1,333.0 | 1,899.3 | 1,786.7 |
 | `tko_all_60m` | January | EDDF | 36.0 | 36.0 | 49.0 | 49.0 |
 | `tko_all_60m` | January | EDDM | 22.0 | 22.0 | 38.0 | 37.0 |
 | `tko_all_60m` | January | EGLL | 39.0 | 39.0 | 45.0 | 44.0 |
