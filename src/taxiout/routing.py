@@ -95,6 +95,12 @@ class Route:
     stand_lon: float
     thr_lat: float
     thr_lon: float
+    # The taxiway edges the path traverses, as (u, v) node pairs with u < v,
+    # runway pavement excluded. Two routes that share an edge share a piece of
+    # taxiway, which is what the shared-corridor feature counts; runway
+    # pavement is left out because two departures on one runway interact in
+    # the runway queue, which throughput already measures, and not on it.
+    edges: tuple[tuple[int, int], ...] = ()
 
     @property
     def taxi_m(self) -> float:
@@ -316,6 +322,13 @@ def route_all(
             # way. Every descriptor here is symmetric under reversal, so this is
             # for readability of the stored path rather than for correctness.
             desc = _describe(tg, path[::-1], entry.ref, membership, turns=turns)
+            taxiway_edges = tuple(
+                sorted(
+                    (min(u, v), max(u, v))
+                    for u, v in zip(path, path[1:])
+                    if g.edges[u, v].get("kind") != "runway"
+                )
+            )
             routes.append(
                 Route(
                     stand_id=stand.stand_id,
@@ -332,6 +345,7 @@ def route_all(
                     stand_lon=stand.stop[1],
                     thr_lat=entry.threshold[0],
                     thr_lon=entry.threshold[1],
+                    edges=taxiway_edges,
                     **desc,
                 )
             )
@@ -394,6 +408,9 @@ class StandRunwayCell:
     spread_m: float
     snap_max_m: float
     values: dict = field(default_factory=dict)
+    # The representative route's taxiway edges, so the cell stays a real
+    # route in this too.
+    edges: tuple[tuple[int, int], ...] = ()
 
 
 def _median(xs: list[float]) -> float:
@@ -460,6 +477,23 @@ def aggregate(routes: list[Route]) -> list[StandRunwayCell]:
                 spread_m=ordered[-1].taxi_m - ordered[0].taxi_m,
                 snap_max_m=max(r.snap_m for r in group),
                 values={f: float(getattr(pick, f)) for f in AGGREGATED_FIELDS},
+                edges=pick.edges,
             )
         )
     return cells
+
+
+def encode_edges(edges: tuple[tuple[int, int], ...]) -> str:
+    """``"u-v|u-v|..."`` for a file; the empty string for no edges."""
+    return "|".join(f"{u}-{v}" for u, v in edges)
+
+
+def decode_edges(text: object) -> tuple[tuple[int, int], ...]:
+    """The inverse of ``encode_edges``; tolerant of a missing value."""
+    if text is None or (isinstance(text, float) and text != text) or text == "":
+        return ()
+    out = []
+    for piece in str(text).split("|"):
+        u, v = piece.split("-")
+        out.append((int(u), int(v)))
+    return tuple(out)

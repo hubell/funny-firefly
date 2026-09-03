@@ -50,6 +50,7 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
 
 from taxiout.airports import AIRPORTS  # noqa: E402
+from taxiout.corridor import load_edges  # noqa: E402
 from taxiout.challenge import load_movements, to_pandas  # noqa: E402
 from taxiout.features import (  # noqa: E402
     GEOMETRY_FEATURES,
@@ -184,7 +185,9 @@ class Tails:
 
 def load_matrix() -> pd.DataFrame:
     files = [
-        f for f in sorted(glob.glob(str(MATRICES / "*.csv"))) if "_features" not in f
+        f
+        for f in sorted(glob.glob(str(MATRICES / "*.csv")))
+        if "_features" not in f and "_edges" not in f
     ]
     if not files:
         raise FileNotFoundError(f"no distance matrices under {MATRICES}; make reports")
@@ -192,6 +195,14 @@ def load_matrix() -> pd.DataFrame:
         [pd.read_csv(f, dtype={"stand_id": str, "designator": str}) for f in files],
         ignore_index=True,
     )
+
+
+def load_edge_sets() -> pd.DataFrame:
+    """The per-cell taxiway edge sets written beside the matrices."""
+    files = sorted(glob.glob(str(MATRICES / "*_edges.csv")))
+    if not files:
+        raise FileNotFoundError(f"no edge sets under {MATRICES}; make reports")
+    return load_edges(files)
 
 
 def load_departures(sample_frac: float | None) -> pd.DataFrame:
@@ -1175,7 +1186,11 @@ def main() -> int:
     t0 = time.time()
     movements = load_all_movements()
     features = build_features(
-        dep, matrix, fallback=airport_fallback(matrix), movements=movements
+        dep,
+        matrix,
+        fallback=airport_fallback(matrix),
+        movements=movements,
+        edges=load_edge_sets(),
     )
     del movements
     print(f"  {len(features):,} rows in {time.time() - t0:.0f} s")

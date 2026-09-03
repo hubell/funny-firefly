@@ -8,6 +8,7 @@ Reads the cached Overpass responses under ``data/raw/`` and writes, per airport:
     the joinable matrix -- one row per (stand identifier, runway designator).
 
 ``data/processed/taxi_distance/<ICAO>_features.csv``
+``data/processed/taxi_distance/<ICAO>_edges.csv``
     one row per (OSM parking position, designator), before identifiers are
     aggregated. Keeps the unidentified stands, which the matrix drops, and lets
     a suspicious matrix cell be traced back to the feature that produced it.
@@ -49,6 +50,7 @@ from taxiout.routing import (  # noqa: E402
     AGGREGATED_FIELDS,
     RUNWAY_PENALTY,
     aggregate,
+    encode_edges,
     route_all,
 )
 from taxiout.runways import build_runways  # noqa: E402
@@ -74,6 +76,8 @@ MATRIX_COLUMNS = (
     "snap_max_m",
     *AGGREGATED_FIELDS,
 )
+
+EDGE_COLUMNS = ("icao", "stand_id", "designator", "n_edges", "edges")
 
 
 def _round(value: object) -> object:
@@ -118,6 +122,17 @@ def process(icao: str, penalty: float, max_snap_m: float) -> dict:
             ]
             row += [_round(c.values[f]) for f in AGGREGATED_FIELDS]
             w.writerow(row)
+
+    # The representative route's taxiway edges per cell, for the shared-corridor
+    # feature. Node ids are this build's own and mean nothing outside it, which
+    # is fine: the overlap between two cells is computed within one file.
+    with (OUT_DIR / f"{icao}_edges.csv").open("w", newline="", encoding="utf-8") as fh:
+        w = csv.writer(fh)
+        w.writerow(EDGE_COLUMNS)
+        for c in cells:
+            w.writerow(
+                [icao, c.stand_id, c.designator, len(c.edges), encode_edges(c.edges)]
+            )
 
     # Report from the matrix, not from the per-feature table. The matrix is what
     # will actually be joined, so summarising the feature table instead would

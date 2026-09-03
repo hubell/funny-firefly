@@ -44,6 +44,7 @@ import pandas as pd
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
 
+from taxiout.corridor import load_edges  # noqa: E402
 from taxiout.challenge import (  # noqa: E402
     load_movements,
     load_ranking,
@@ -101,7 +102,9 @@ def stream_b():
 
 def load_matrix() -> pd.DataFrame:
     files = [
-        f for f in sorted(glob.glob(str(MATRICES / "*.csv"))) if "_features" not in f
+        f
+        for f in sorted(glob.glob(str(MATRICES / "*.csv")))
+        if "_features" not in f and "_edges" not in f
     ]
     if not files:
         raise FileNotFoundError(f"no distance matrices under {MATRICES}; make reports")
@@ -109,6 +112,14 @@ def load_matrix() -> pd.DataFrame:
         [pd.read_csv(f, dtype={"stand_id": str, "designator": str}) for f in files],
         ignore_index=True,
     )
+
+
+def load_edge_sets() -> pd.DataFrame:
+    """The per-cell taxiway edge sets written beside the matrices."""
+    files = sorted(glob.glob(str(MATRICES / "*_edges.csv")))
+    if not files:
+        raise FileNotFoundError(f"no edge sets under {MATRICES}; make reports")
+    return load_edges(files)
 
 
 def is_ignored(path: Path) -> bool:
@@ -203,7 +214,10 @@ def main() -> int:
 
     print(f"fitting {RUNG.label} ...")
     t0 = time.time()
-    X = build_features(train, matrix, fallback=fallback, movements=train_moves)
+    edges = load_edge_sets()
+    X = build_features(
+        train, matrix, fallback=fallback, movements=train_moves, edges=edges
+    )
     del train_moves
     y = pd.to_numeric(train[TARGET], errors="coerce")
     fit_rows = (~covered) & y.notna()
@@ -211,7 +225,9 @@ def main() -> int:
     print(f"  fitted on {int(fit_rows.sum()):,} rows in {time.time() - t0:.0f} s")
 
     print("predicting ...")
-    Xr = build_features(rank, matrix, fallback=fallback, movements=rank_moves)
+    Xr = build_features(
+        rank, matrix, fallback=fallback, movements=rank_moves, edges=edges
+    )
     physical = model.predict(Xr)
     tail = tail_model.predict(rank)
     pred = tails.combine(physical, tail)

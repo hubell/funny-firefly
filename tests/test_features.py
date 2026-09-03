@@ -179,6 +179,7 @@ def _with_arrivals(departures: pd.DataFrame) -> pd.DataFrame:
             "PHASE_mvt": ["ARR", "ARR"],
             "ADEP_mvt": ["AAAA", "AAAA"],
             "ADES_mvt": ["ZZZZ", "ZZZZ"],
+            "STAND_mvt": ["B5", "B5"],
             "MVT_TIME_UTC_mvt": [t - 8 * minutes, t - 12 * minutes],
             "BLOCK_TIME_UTC_mvt": [t - 2 * minutes, t - 4 * minutes],
             "TAXITIME_SEC_mvt": [360.0, 480.0],

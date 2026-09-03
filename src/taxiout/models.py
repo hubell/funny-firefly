@@ -27,10 +27,12 @@ reports:
    split. The geometric rung has a twin for the same reason: one intercept
    per airport, then one per (airport, wake class).
 7. **plus the excess term, one block at a time** -- runway throughput,
-   arrivals, scheduled demand, runway configuration (Gate 2). Each is its
-   own rung so the report shows what each is worth, and each is built from
-   what the ranking set exposes about surrounding movements: never a
-   departure's block time or taxi time.
+   arrivals, scheduled demand, runway configuration, and the shared corridor
+   (Gate 2). Each is its own rung so the report shows what each is worth,
+   and each is built from what the ranking set exposes about surrounding
+   movements: never a departure's block time or taxi time. The corridor sits
+   last, after throughput, so that its rung says whether it is a new column
+   or the take-off count renamed.
 
 Each rung is scored twice, once plain and once with the record-quality term on
 top. That term lives in ``taxiout.tails`` and is deliberately not reimplemented
@@ -63,6 +65,7 @@ from taxiout.congestion import (
     DEMAND_FEATURES,
     THROUGHPUT_FEATURES,
 )
+from taxiout.corridor import CORRIDOR_FEATURES
 from taxiout.features import (
     AIRCRAFT_FEATURES,
     CATEGORICAL_FEATURES,
@@ -245,6 +248,27 @@ LADDER: tuple[Rung, ...] = (
         + DEMAND_FEATURES
         + CONFIGURATION_FEATURES,
         note="the runways in use in the trailing hour, and how long they have held",
+    ),
+    Rung(
+        key="corridor",
+        label="+ shared corridor",
+        kind="booster",
+        features=IDENTIFIER_BLOCK
+        + TIME_FEATURES
+        + PLAN_FEATURES
+        + GEOMETRY_FEATURES
+        + QUALITY_FEATURES
+        + AIRCRAFT_FEATURES
+        + THROUGHPUT_FEATURES
+        + COVERAGE_FEATURES
+        + ARRIVAL_FEATURES
+        + DEMAND_FEATURES
+        + CONFIGURATION_FEATURES
+        + CORRIDOR_FEATURES,
+        note=(
+            "other movements in the window weighted by how much of the subject's "
+            "own taxiway route theirs shares"
+        ),
     ),
 )
 

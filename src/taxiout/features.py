@@ -2,7 +2,7 @@
 """The Gate 1 feature frame, and a registry of what every column reads.
 
 One frame per movement, built from ``taxiout.challenge``'s loaders and
-``taxiout.join.join_stands``. Seven blocks:
+``taxiout.join.join_stands``. Eight blocks:
 
 - **Identifiers.** Airport, stand, runway, and the pair. These are what the
   ablation ladder's saturated rung uses and what the held-out-pair split
@@ -34,6 +34,9 @@ One frame per movement, built from ``taxiout.challenge``'s loaders and
   arrivals and their taxi-in times, scheduled demand, the runway
   configuration in force. Built in ``taxiout.congestion`` from the whole
   movement frame, and the one block whose sources name another row's phase.
+- **Shared corridor.** The other movements in the window weighted by how
+  much of the subject's own taxiway route theirs shares, from the graph's
+  edge sets (``taxiout.corridor``). The one feature here no other entry has.
 
 Stands that do not join fall back to airport level rather than carrying nulls
 -- 3.7% of training departures and 3.3% of ranking departures are stands
@@ -65,9 +68,13 @@ import pandas as pd
 from taxiout.congestion import (
     CATEGORICAL as CONGESTION_CATEGORICAL,
     CONGESTION_FEATURES,
-    MOVEMENT_COLUMNS,
     SOURCES as CONGESTION_SOURCES,
     congestion_features,
+)
+from taxiout.corridor import (
+    CORRIDOR_FEATURES,
+    SOURCES as CORRIDOR_SOURCES,
+    corridor_features,
 )
 from taxiout.join import UNMATCHED, join_stands
 from taxiout.routing import AGGREGATED_FIELDS
@@ -130,6 +137,7 @@ FEATURE_COLUMNS: tuple[str, ...] = (
     + PLAN_FEATURES
     + AIRCRAFT_FEATURES
     + CONGESTION_FEATURES
+    + CORRIDOR_FEATURES
 )
 
 # Every feature column against the raw columns it reads. Checked against
@@ -148,6 +156,7 @@ FEATURE_SOURCES: dict[str, tuple[str, ...]] = {
     # sources carry the phase they are read from (``DEP.`` or ``ARR.``), and
     # a bare name is the subject's own row, as everywhere above.
     **CONGESTION_SOURCES,
+    **CORRIDOR_SOURCES,
 }
 
 
@@ -161,8 +170,7 @@ def source_phase(source: str) -> tuple[str | None, str]:
 
 # What a caller has to load to build the frame: the subject's own columns.
 # The target is not here: it is read by the validation harness, never by a
-# feature. Other movements' columns are ``MOVEMENT_COLUMNS``, re-exported
-# from ``taxiout.congestion``.
+# feature.
 REQUIRED_COLUMNS: tuple[str, ...] = tuple(
     sorted(
         {
@@ -170,6 +178,20 @@ REQUIRED_COLUMNS: tuple[str, ...] = tuple(
             for sources in FEATURE_SOURCES.values()
             for c in sources
             if source_phase(c)[0] is None
+        }
+    )
+)
+
+# What the movement frame has to carry: every prefixed source of every block,
+# stripped, plus the phase that says which prefix a row answers to.
+MOVEMENT_COLUMNS: tuple[str, ...] = tuple(
+    sorted(
+        {"PHASE_mvt"}
+        | {
+            source_phase(c)[1]
+            for sources in FEATURE_SOURCES.values()
+            for c in sources
+            if source_phase(c)[0] is not None
         }
     )
 )
@@ -290,6 +312,7 @@ def build_features(
     *,
     fallback: pd.DataFrame | None = None,
     movements: pd.DataFrame | None = None,
+    edges: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     """The feature frame for ``frame``, one row in, one row out, order kept.
 
@@ -302,6 +325,12 @@ def build_features(
     that has the data always passes it. Left as ``None``, the frame itself
     stands in -- departures only, so no arrival is ever counted -- which is
     what a unit test of the other blocks wants and what nothing else should.
+
+    ``edges`` is the per-cell taxiway edge table from ``<ICAO>_edges.csv``
+    (``taxiout.corridor.load_edges``); the shared-corridor block is computed
+    from it. Left as ``None``, that block is NaN throughout -- not zero,
+    because "not computed" is not "no traffic" -- and the callers that have
+    the data always pass it.
 
     The result carries exactly ``FEATURE_COLUMNS`` and the original index, so
     it can be set beside the target and the split masks without a join.
@@ -316,6 +345,9 @@ def build_features(
         for c in MOVEMENT_COLUMNS:
             if c not in movements.columns:
                 movements[c] = None
+    missing = [c for c in MOVEMENT_COLUMNS if c not in movements.columns]
+    if missing:
+        raise KeyError(f"movement frame needs {missing}")
 
     joined = join_stands(frame[list(_KEYS)], matrix)
     out = pd.DataFrame(index=frame.index)
@@ -369,6 +401,13 @@ def build_features(
 
     for c, values in congestion_features(frame, movements).items():
         out[c] = values
+
+    if edges is None:
+        for c in CORRIDOR_FEATURES:
+            out[c] = np.nan
+    else:
+        for c, values in corridor_features(frame, movements, matrix, edges).items():
+            out[c] = values
 
     for c in FEATURE_COLUMNS:
         if c in CATEGORICAL_FEATURES:

@@ -620,3 +620,38 @@ def test_two_features_on_one_stand_go_to_the_lower_osm_id(lead_ins):
     p = synthetic.probe_two_feature_tie(lead_ins)
     assert p["kept_lead_in_m"] == pytest.approx(p["tie_break_lead_in_m"], abs=1e-6)
     assert p["kept_lead_in_m"] == pytest.approx(min(lead_ins), abs=1e-6)
+
+
+def test_routes_carry_their_taxiway_edges_and_the_representative_keeps_them():
+    """The edge set is the route's own taxiway pavement, runway edges left out."""
+    els = [
+        way(1, "runway", [(50.0, lon(0)), (50.0, lon(1400))], ref="09/27"),
+        way(2, "taxiway", [(lat(-50), lon(0)), (lat(-50), lon(1400))]),
+        way(3, "taxiway", [(lat(-50), lon(1400)), (50.0, lon(1400))]),
+        way(
+            4, "parking_position", [(lat(-130), lon(200)), (lat(-50), lon(200))], ref="A1"
+        ),
+        way(
+            5,
+            "parking_position",
+            [(lat(-130), lon(1000)), (lat(-50), lon(1000))],
+            ref="B1",
+        ),
+    ]
+    g = build_graph("TEST", els, REF)
+    attach_stands(g, els)
+    runways, _ = build_runways("TEST", els)
+    routes, _, _ = route_all(g, runways)
+    assert routes
+    for r in routes:
+        assert r.edges, "a routed path traverses at least one taxiway edge"
+        assert all(u < v for u, v in r.edges)
+        assert list(r.edges) == sorted(r.edges)
+        for u, v in r.edges:
+            assert g.g.edges[u, v].get("kind") != "runway"
+    # the two stands both run along taxiway 2: their routes to the same
+    # designator share edges, and a cell carries its representative's set
+    to_27 = {r.stand_id: set(r.edges) for r in routes if r.designator == "27"}
+    assert to_27["A1"] & to_27["B1"]
+    cells = {(c.stand_id, c.designator): c for c in aggregate(routes)}
+    assert set(cells[("A1", "27")].edges) == to_27["A1"]
