@@ -5,16 +5,18 @@
 
 PYTHON ?= python3
 
-.PHONY: all data reports crosscheck data-review synthetic tails geometry-gaps \
-        baseline submission test lint licence-check clean help
+.PHONY: all data metar reports crosscheck data-review synthetic tails geometry-gaps \
+        congestion baseline submission test lint licence-check clean help
 
 help:
 	@echo "make data     fetch and cache OSM geometry      -> data/raw/<ICAO>.json.gz"
+	@echo "make metar    fetch and cache METARs            -> data/raw/metar/<ICAO>_<period>.csv"
 	@echo "make reports  build graph, matrices and reports -> data/processed/, reports/"
 	@echo "make synthetic    the worked airport            -> reports/synthetic_airport.md, .svg"
 	@echo "make data-review  profile the challenge data   -> reports/data_review.md"
 	@echo "make tails        profile the record-quality term -> reports/tails.md"
 	@echo "make geometry-gaps  the unimpeded term against the data -> reports/geometry_gaps.md"
+	@echo "make congestion   how the excess term was built -> reports/congestion.md"
 	@echo "make baseline     run the ablation ladder      -> reports/baseline.md"
 	@echo "make submission TEAM=<name>  fit and write     -> data/submissions/<name>_v<n>.parquet"
 	@echo "make test     run the unit tests                (no network, no challenge data)"
@@ -34,6 +36,12 @@ all: data reports test licence-check
 # Network. Resumable: delete a cache file to refetch that airport.
 data:
 	$(PYTHON) scripts/fetch_osm.py
+
+# Network. The Iowa State Mesonet's ASOS/METAR archive, for the training year
+# and the two ranking months at every airport; the request and the terms are
+# recorded in data/raw/metar/MANIFEST.json. Resumable per station and period.
+metar:
+	$(PYTHON) scripts/fetch_metar.py
 
 # Offline. Reads data/raw/, writes the matrices and every report.
 reports:
@@ -67,6 +75,12 @@ tails:
 # entries. Aggregates only. About a minute.
 geometry-gaps:
 	$(PYTHON) scripts/report_geometry_gaps.py
+
+# Reads data/challenge/, the matrices and the edge sets from 'make reports'.
+# Writes how the congestion features were built and whether the construction
+# holds on both sides of the data; fits no model. About a minute.
+congestion:
+	$(PYTHON) scripts/report_congestion.py
 
 # Reads data/challenge/ and the matrices from 'make reports'. Writes the
 # ablation ladder. Needs the modelling extras; takes a few minutes.

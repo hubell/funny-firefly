@@ -72,9 +72,19 @@ modelling stage, measured against the target.
       identifier join — [`reports/data_review.md`](reports/data_review.md)
 - [x] Join of OSM identifiers against `STAND_mvt` / `RUNWAY_mvt`
       (`taxiout.join`; 87–99.9% of departures by airport, 96% overall)
-- [ ] Baseline model and a valid submission
-- [ ] Congestion features from what the ranking set exposes (take-offs,
-      schedules, arrivals — not off-block times, which are blanked)
+- [x] Baseline model, the ablation ladder and a valid submission —
+      [`reports/baseline.md`](reports/baseline.md)
+- [x] The record-quality term — [`reports/tails.md`](reports/tails.md)
+- [x] A worked airport where every number is known —
+      [`reports/synthetic_airport.md`](reports/synthetic_airport.md)
+- [x] The unimpeded term measured against the training year —
+      [`reports/geometry_gaps.md`](reports/geometry_gaps.md)
+- [x] Congestion features from what the ranking set exposes (take-offs,
+      schedules, arrivals, configuration, the shared corridor — not
+      off-block times, which are blanked) —
+      [`reports/congestion.md`](reports/congestion.md)
+- [x] Weather as a regime indicator, from a scripted, cached, attributed
+      METAR fetch
 - [ ] Write-up
 
 ## What the data turned out to contain
@@ -173,6 +183,7 @@ airport in scope uses.
 
 ```bash
 make data      # cache OSM geometry from Overpass (network, resumable)
+make metar     # cache METARs from the Iowa State Mesonet (network, resumable)
 make reports   # coverage, distance matrices, routing + sensitivity reports
 make synthetic # the worked airport; reads nothing, so it runs anywhere
 make test      # unit tests, no network, no challenge data
@@ -180,6 +191,7 @@ make crosscheck  # optional: verify runway geometry against OurAirports
 make data-review  # needs the challenge data locally; writes reports/data_review.md
 make tails        # needs the challenge data; writes reports/tails.md
 make geometry-gaps  # needs the challenge data and the OSM cache; writes reports/geometry_gaps.md
+make congestion   # needs the challenge data; writes reports/congestion.md
 make baseline     # needs the challenge data; writes reports/baseline.md
 make submission TEAM=<name>   # needs the challenge data; writes a submission
 make licence-check  # verify no OSM-derived or challenge content is tracked
@@ -193,6 +205,7 @@ data review and everything after it need `pip install -e ".[modelling]"`.
 | stage | reads | writes |
 | ----- | ----- | ------ |
 | `scripts/fetch_osm.py` | Overpass API | `data/raw/<ICAO>.json.gz` |
+| `scripts/fetch_metar.py` | Iowa State Mesonet ASOS archive | `data/raw/metar/<ICAO>_<period>.csv`, `MANIFEST.json` |
 | `scripts/report_coverage.py` | `data/raw/` | `reports/stand_coverage.md` |
 | `scripts/build_taxi_graph.py` | `data/raw/` | `data/processed/taxi_distance/`, `reports/taxi_routing.md` |
 | `scripts/check_penalty_sensitivity.py` | `data/raw/` | `reports/penalty_sensitivity.md` |
@@ -201,10 +214,11 @@ data review and everything after it need `pip install -e ".[modelling]"`.
 | `scripts/review_challenge_data.py` | `data/challenge/`, `data/processed/taxi_distance/` | `reports/data_review.md` |
 | `scripts/report_tails.py` | `data/challenge/` | `reports/tails.md` |
 | `scripts/report_geometry_gaps.py` | `data/challenge/`, `data/processed/taxi_distance/`, `data/raw/` | `reports/geometry_gaps.md` |
+| `scripts/report_congestion.py` | `data/challenge/`, `data/processed/taxi_distance/` | `reports/congestion.md` |
 | `scripts/run_baselines.py` | `data/challenge/`, `data/processed/taxi_distance/` | `reports/baseline.md` |
 | `scripts/make_submission.py` | `data/challenge/`, `data/processed/taxi_distance/` | `data/submissions/<team>_v<n>.parquet` (gitignored) |
 
-Only `fetch_osm.py` and `check_runways_ourairports.py` touch the network. `build_taxi_graph.py` runs all 11
+Only `fetch_osm.py`, `fetch_metar.py` and `check_runways_ourairports.py` touch the network. `build_taxi_graph.py` runs all 11
 airports in about two minutes from the cache and takes `--airports`,
 `--runway-penalty` and `--max-snap-m` for sensitivity checks. Output is
 deterministic: repeated runs produce byte-identical files.
@@ -232,6 +246,19 @@ fetch may exercise the mirror rotation harder.
   via the Overpass API.
 - **OurAirports** — released to the public domain; used to cross-check
   OSM-derived runway designators and lengths.
+- **Iowa Environmental Mesonet, Iowa State University** — the ASOS/METAR
+  archive, fetched by `scripts/fetch_metar.py` for the training year and the
+  two ranking months at every listed airport and cached, gitignored, under
+  `data/raw/metar/` with the request parameters recorded in
+  `MANIFEST.json`. This is the one additional dataset the model reads, and
+  it enters only as three regime flags per airport-hour (visibility band,
+  precipitation, freezing). The IEM's disclaimer page states the terms: the
+  materials "are in the public domain and may be used freely by anyone for
+  any lawful purpose", provided "without any warranty of accuracy", and
+  "Attributing the Iowa Environmental Mesonet of Iowa State University would
+  be appreciated" — which this line does. The observations themselves are
+  METARs the airports publish; the archive is where a reader can re-fetch
+  them from the recorded request.
 
 ODbL sorts derived artefacts into two kinds, and the difference decides what
 ships. A **Derivative Database** carries share-alike; a **Produced Work** — a
@@ -284,6 +311,10 @@ src/taxiout/
   routing.py     stand->runway routes and their physical descriptors
   challenge.py   challenge data access; which fields are hidden or excluded
   join.py        staged join of STAND_mvt / RUNWAY_mvt to the matrices
+  windows.py     trailing and centred windows: closed, subject removed, truncation flagged
+  congestion.py  throughput, arrivals, demand and configuration from the movements around a subject
+  corridor.py    the shared-corridor load, from the routes' taxiway edge sets
+  metar.py       weather as three regime flags per airport-hour
   synthetic.py   the worked airport: a field where every number is known, and
                  worked traffic in the challenge schema
   features.py    the feature frame, and a registry of what every column reads
@@ -294,6 +325,7 @@ src/taxiout/
   submission.py  validate and write a submission file
 scripts/
   fetch_osm.py                 cache OSM geometry (resumable, network)
+  fetch_metar.py               cache METARs (resumable, network)
   report_coverage.py           reports/stand_coverage.md
   build_taxi_graph.py          distance matrices + reports/taxi_routing.md
   check_penalty_sensitivity.py reports/penalty_sensitivity.md
@@ -302,6 +334,7 @@ scripts/
   review_challenge_data.py     reports/data_review.md (needs challenge data)
   report_tails.py              reports/tails.md (needs challenge data)
   report_geometry_gaps.py      reports/geometry_gaps.md (needs challenge data + OSM cache)
+  report_congestion.py         reports/congestion.md (needs challenge data)
   run_baselines.py             reports/baseline.md (needs challenge data)
   make_submission.py           a submission file (needs challenge data)
   check_licence_hygiene.py     verifies no OSM or challenge content is tracked

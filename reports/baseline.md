@@ -192,6 +192,12 @@ Train January-November 2025, validate December, all ten airports -- the winter p
 | identifiers + time | 442.2 | -45.8 | n/a | 335.5 | 322.3 |
 | identifiers + time + geometry | 443.1 | -44.9 | n/a | 336.2 | 323.1 |
 | identifiers + time + geometry + aircraft | 442.6 | -45.3 | n/a | 334.7 | 321.5 |
+| + runway throughput | 439.1 | -48.8 | n/a | 330.3 | 316.9 |
+| + arrivals | 433.9 | -54.1 | n/a | 322.6 | 308.9 |
+| + demand | 429.6 | -58.3 | n/a | 317.4 | 303.5 |
+| + configuration | 429.6 | -58.4 | n/a | 318.0 | 304.1 |
+| + shared corridor | 430.2 | -57.8 | n/a | 318.3 | 304.5 |
+| + weather | 423.5 | -64.4 | n/a | 308.8 | 294.4 |
 
 ### July split
 
@@ -206,6 +212,12 @@ Train January-June 2025, validate July -- the three airports the July test set c
 | identifiers + time | 677.2 | -40.0 | n/a | 447.3 | 410.6 |
 | identifiers + time + geometry | 675.3 | -41.9 | n/a | 443.9 | 406.9 |
 | identifiers + time + geometry + aircraft | 675.4 | -41.7 | n/a | 442.8 | 405.6 |
+| + runway throughput | 674.8 | -42.4 | n/a | 441.4 | 404.1 |
+| + arrivals | 672.5 | -44.7 | n/a | 439.2 | 401.6 |
+| + demand | 671.3 | -45.9 | n/a | 437.1 | 399.4 |
+| + configuration | 673.1 | -44.1 | n/a | 439.0 | 401.4 |
+| + shared corridor | 672.4 | -44.8 | n/a | 438.0 | 400.3 |
+| + weather | 671.6 | -45.6 | n/a | 437.8 | 400.1 |
 
 ## Held-out pairs
 
@@ -252,6 +264,12 @@ gaps are at the end, for the record.
 | identifiers + time | 303.3 | 351.6 | +48.3 s [+31.4, +67.3] | +36 / +46 / +63 | no |
 | identifiers + time + geometry | 302.5 | 336.3 | +33.8 s [+15.9, +53.1] | +23 / +31 / +47 | yes |
 | identifiers + time + geometry + aircraft | 299.6 | 329.9 | +30.3 s [+12.1, +50.0] | +20 / +27 / +44 | yes |
+| + runway throughput | 296.9 | 326.5 | +29.6 s [+11.2, +49.5] | +18 / +27 / +44 | yes |
+| + arrivals | 294.0 | 324.0 | +30.1 s [+11.4, +50.3] | +19 / +27 / +44 | yes |
+| + demand | 291.9 | 322.7 | +30.8 s [+12.1, +50.8] | +19 / +28 / +45 | yes |
+| + configuration | 290.9 | 320.3 | +29.4 s [+10.5, +49.9] | +17 / +28 / +43 | yes |
+| + shared corridor | 290.9 | 320.9 | +30.0 s [+11.2, +50.6] | +18 / +28 / +44 | yes |
+| + weather | 288.3 | 318.1 | +29.8 s [+10.7, +50.6] | +17 / +28 / +44 | yes |
 
 The zero-parameter rung is the purest statement in the table. The geometric unimpeded term carries no identifier, so it has nothing to memorize and, if the geometry is doing what it claims, nothing to lose on a pair it has never seen. Net of the airport mean's own gap -- pure composition -- its gap is -1.7 s [-6.2, +2.7], which is indistinguishable from zero: it loses nothing.
 
@@ -270,6 +288,12 @@ never saw; zero means it is memorization dressed as a feature.
 | geometric unimpeded + wake class → identifiers + time | +135.0 | +97.9 | -37.1 s [-42.3, -31.9] |
 | identifiers + time → identifiers + time + geometry **(the claim)** | +0.8 | +15.3 | +14.5 s [+13.0, +16.3] |
 | identifiers + time + geometry → identifiers + time + geometry + aircraft | +2.8 | +6.4 | +3.5 s [+2.7, +4.5] |
+| identifiers + time + geometry + aircraft → + runway throughput | +2.7 | +3.4 | +0.6 s [+0.2, +1.1] |
+| + runway throughput → + arrivals | +2.9 | +2.5 | -0.4 s [-1.0, +0.1] |
+| + arrivals → + demand | +2.1 | +1.4 | -0.7 s [-1.2, -0.2] |
+| + demand → + configuration | +1.0 | +2.3 | +1.3 s [+0.8, +1.9] |
+| + configuration → + shared corridor | -0.0 | -0.6 | -0.6 s [-1.0, -0.2] |
+| + shared corridor → + weather | +2.6 | +2.8 | +0.2 s [-0.4, +0.8] |
 
 The claim contrast, identifiers + time → identifiers + time + geometry. **+14.5 s [+13.0, +16.3].** The interval excludes zero: the geometry block buys more on a pair the model has never seen than on one it has, which is the claim.
 
@@ -303,6 +327,12 @@ The gap per rung with the record-quality rows left in. Two hundred draws, becaus
 | identifiers + time | -49.5 s [-155.1, +46.4] |
 | identifiers + time + geometry | -60.0 s [-165.8, +35.6] |
 | identifiers + time + geometry + aircraft | -63.1 s [-169.4, +32.7] |
+| + runway throughput | -64.2 s [-170.8, +32.1] |
+| + arrivals | -64.5 s [-171.4, +32.0] |
+| + demand | -63.7 s [-171.0, +32.7] |
+| + configuration | -65.7 s [-173.4, +31.2] |
+| + shared corridor | -65.2 s [-173.0, +31.5] |
+| + weather | -65.8 s [-174.3, +31.0] |
 
 ## Error by pair frequency
 
@@ -325,6 +355,12 @@ reports that record rather than anything about the rungs.
 | identifiers + time | 347.3 | 446.1 | 373.7 | 316.4 |
 | identifiers + time + geometry | 323.3 | 428.9 | 375.4 | 317.3 |
 | identifiers + time + geometry + aircraft | 311.9 | 426.4 | 375.5 | 315.6 |
+| + runway throughput | 309.5 | 417.8 | 365.4 | 311.6 |
+| + arrivals | 302.1 | 415.2 | 358.9 | 303.3 |
+| + demand | 297.0 | 411.6 | 351.8 | 298.1 |
+| + configuration | 290.4 | 419.3 | 351.5 | 298.7 |
+| + shared corridor | 294.4 | 419.6 | 352.7 | 299.0 |
+| + weather | 290.6 | 410.9 | 338.0 | 289.4 |
 
 ## Per airport
 
@@ -333,39 +369,39 @@ contains -- Frankfurt, Heathrow and Schiphol, 53% of the test rows -- so
 a pooled-optimal model could be a Frankfurt-Heathrow-Schiphol-optimal
 model. The top rung, per airport, on each forward split.
 
-### December split, identifiers + time + geometry + aircraft
+### December split, + weather
 
 | ICAO | rows | RMSE (s) | excluding flagged (s) | bias (s) |
 | --- | ---: | ---: | ---: | ---: |
-| all | 165,677 | 442.6 | 321.5 | +30 |
-| the three * | 56,782 | 305.5 | 305.5 | +41 |
-| EDDF * | 17,324 | 256.2 | 256.2 | +32 |
-| EDDM | 12,035 | 403.9 | 403.9 | -41 |
-| EGLL * | 20,000 | 381.3 | 381.3 | -11 |
-| EHAM * | 19,458 | 254.0 | 254.0 | +103 |
-| LEBL | 13,835 | 238.9 | 238.9 | +5 |
-| LEMD | 17,985 | 220.9 | 220.9 | +4 |
-| LFPG | 19,778 | 402.6 | 402.6 | +118 |
-| LIRF | 12,068 | 1,198.1 | 406.4 | -21 |
-| LSZH | 10,585 | 254.2 | 254.2 | +21 |
-| LTFM | 22,609 | 320.2 | 320.2 | +29 |
+| all | 165,677 | 423.5 | 294.4 | +2 |
+| the three * | 56,782 | 277.3 | 277.3 | +5 |
+| EDDF * | 17,324 | 240.3 | 240.3 | +11 |
+| EDDM | 12,035 | 357.4 | 357.4 | -28 |
+| EGLL * | 20,000 | 358.8 | 358.8 | -18 |
+| EHAM * | 19,458 | 201.7 | 201.7 | +23 |
+| LEBL | 13,835 | 223.9 | 223.9 | +10 |
+| LEMD | 17,985 | 210.6 | 210.6 | +0 |
+| LFPG | 19,778 | 352.4 | 352.4 | +13 |
+| LIRF | 12,068 | 1,196.4 | 399.3 | -48 |
+| LSZH | 10,585 | 239.4 | 239.4 | +30 |
+| LTFM | 22,609 | 296.6 | 296.6 | +11 |
 
-### July split, identifiers + time + geometry + aircraft
+### July split, + weather
 
 | ICAO | rows | RMSE (s) | excluding flagged (s) | bias (s) |
 | --- | ---: | ---: | ---: | ---: |
-| all | 190,713 | 675.4 | 405.6 | -37 |
-| the three * | 64,613 | 323.1 | 323.1 | -18 |
-| EDDF * | 21,334 | 234.4 | 234.4 | +2 |
-| EDDM | 15,825 | 236.4 | 236.4 | -23 |
-| EGLL * | 20,790 | 475.6 | 475.6 | -46 |
-| EHAM * | 22,489 | 196.5 | 196.5 | -10 |
-| LEBL | 16,752 | 315.9 | 315.9 | -38 |
-| LEMD | 18,818 | 229.5 | 229.5 | +8 |
-| LFPG | 21,712 | 348.4 | 348.4 | -53 |
-| LIRF | 15,211 | 2,140.9 | 971.5 | -152 |
-| LSZH | 12,611 | 241.7 | 241.7 | +10 |
-| LTFM | 25,171 | 379.4 | 379.4 | -71 |
+| all | 190,713 | 671.6 | 400.1 | -19 |
+| the three * | 64,613 | 315.9 | 315.9 | -6 |
+| EDDF * | 21,334 | 227.9 | 227.9 | +10 |
+| EDDM | 15,825 | 229.2 | 229.2 | -8 |
+| EGLL * | 20,790 | 464.8 | 464.8 | -31 |
+| EHAM * | 22,489 | 194.3 | 194.3 | +4 |
+| LEBL | 16,752 | 304.8 | 304.8 | -37 |
+| LEMD | 18,818 | 224.1 | 224.1 | -10 |
+| LFPG | 21,712 | 355.1 | 355.1 | +75 |
+| LIRF | 15,211 | 2,138.1 | 970.3 | -182 |
+| LSZH | 12,611 | 227.9 | 227.9 | +7 |
+| LTFM | 25,171 | 362.2 | 362.2 | -49 |
 
 `*` an airport the July 2026 test month contains.
 
@@ -379,23 +415,23 @@ first evidence that the ambiguity bookkeeping was worth carrying.
 
 | feature | share of splits | block |
 | --- | ---: | --- |
-| `stand` | 34.1% | other |
-| `aircraft_type` | 11.6% | other |
-| `designator` | 10.4% | other |
-| `tko_doy_cos` | 6.9% | other |
-| `tko_hour_cos` | 5.7% | other |
-| `tko_minute_of_day` | 5.3% | other |
-| `tko_hour_sin` | 4.7% | other |
-| `tko_doy_sin` | 4.1% | other |
-| `icao` | 2.9% | other |
-| `tko_dow` | 2.2% | other |
-| `lobt_iobt_missing` | 1.8% | other |
-| `tko_month` | 1.1% | other |
-| `wake_class` | 0.8% | other |
-| `junctions` | 0.8% | geometry |
-| `backtrack_frac` | 0.7% | geometry |
+| `stand` | 36.1% | other |
+| `cfg_runways` | 11.9% | other |
+| `aircraft_type` | 6.9% | other |
+| `designator` | 4.6% | other |
+| `tko_doy_cos` | 2.9% | other |
+| `tko_hour_cos` | 2.6% | other |
+| `tko_minute_of_day` | 2.4% | other |
+| `txi_mean_60m` | 2.1% | other |
+| `wx_freezing` | 2.1% | other |
+| `tko_hour_sin` | 1.9% | other |
+| `sched_pm60m` | 1.8% | other |
+| `tko_doy_sin` | 1.5% | other |
+| `tko_all_60m` | 1.3% | other |
+| `txi_mean_30m` | 1.0% | other |
+| `lobt_iobt_missing` | 1.0% | other |
 
-The geometry block and its quality flags take 7.8% of the splits.
+The geometry block and its quality flags take 3.6% of the splits.
 
 ## What is not here yet
 
