@@ -223,10 +223,10 @@ data review and everything after it need `pip install -e ".[modelling]"`.
 | `scripts/review_challenge_data.py` | `data/challenge/`, `data/processed/taxi_distance/` | `reports/data_review.md` |
 | `scripts/report_tails.py` | `data/challenge/` | `reports/tails.md` |
 | `scripts/report_geometry_gaps.py` | `data/challenge/`, `data/processed/taxi_distance/`, `data/raw/` | `reports/geometry_gaps.md` |
-| `scripts/report_congestion.py` | `data/challenge/`, `data/processed/taxi_distance/` | `reports/congestion.md` |
-| `scripts/run_baselines.py` | `data/challenge/`, `data/processed/taxi_distance/` | `reports/baseline.md` |
-| `scripts/sweep_params.py` | challenge data, matrices, edge sets, METAR cache | `data/processed/sweep_october.csv` (gitignored) |
-| `scripts/make_submission.py` | `data/challenge/`, `data/processed/taxi_distance/` | `data/submissions/<team>_v<n>.parquet` (gitignored) |
+| `scripts/report_congestion.py` | `data/challenge/`, `data/processed/taxi_distance/`, `data/raw/metar/`, `data/processed/residuals/` | `reports/congestion.md` |
+| `scripts/run_baselines.py` | `data/challenge/`, `data/processed/taxi_distance/`, `data/raw/metar/` | `reports/baseline.md`, `data/processed/residuals/` (gitignored) |
+| `scripts/sweep_params.py` | `data/challenge/`, `data/processed/taxi_distance/`, `data/raw/metar/` | `data/processed/sweep_october.csv` (gitignored) |
+| `scripts/make_submission.py` | `data/challenge/`, `data/processed/taxi_distance/`, `data/raw/metar/` | `data/submissions/<team>_v<n>.parquet` (gitignored) |
 
 Only `fetch_osm.py`, `fetch_metar.py` and `check_runways_ourairports.py` touch the network. `build_taxi_graph.py` runs all 11
 airports in about two minutes from the cache and takes `--airports`,
@@ -325,6 +325,7 @@ src/taxiout/
   congestion.py  throughput, arrivals, demand and configuration from the movements around a subject
   corridor.py    the shared-corridor load, from the routes' taxiway edge sets
   metar.py       weather as three regime flags per airport-hour
+  exposure.py    the ranking months' regime against their training-year twins
   planlags.py    take-off against the planning values fixed before departure
   saturation.py  runway saturation, from other departures' take-off times
   ceiling.py     the oracle diagnostic: what any queue model could still add

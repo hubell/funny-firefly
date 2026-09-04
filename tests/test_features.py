@@ -431,7 +431,12 @@ def test_aircraft_sources_are_the_two_exposed_columns():
 
 
 def test_the_ladder_reads_the_congestion_blocks_net_of_the_plan_lags_and_keeps_them_without():
-    from taxiout.models import LADDER, LADDER_BY_KEY, TOP_RUNG, base_of
+    from taxiout.models import (
+        LADDER,
+        LADDER_BY_KEY,
+        TOP_RUNG,
+        base_of,
+    )
     from taxiout.planlags import PLAN_LAG_FEATURES
 
     keys = [r.key for r in LADDER]
@@ -466,8 +471,20 @@ def test_the_ladder_reads_the_congestion_blocks_net_of_the_plan_lags_and_keeps_t
     assert base_of(LADDER_BY_KEY["plan-lags"]).key == "identifiers-geometry-aircraft"
     assert base_of(LADDER_BY_KEY["throughput"]).key == "plan-lags"
     assert base_of(LADDER[0]) is None
-    # the submission model is the top of the ladder proper, with the lags
-    assert TOP_RUNG.key == "saturation"
+    # the submission model carries the plan lags
     assert set(PLAN_LAG_FEATURES) <= set(TOP_RUNG.features)
-    assert base_of(TOP_RUNG).key == "weather"
     assert len(set(keys)) == len(keys)
+
+
+def test_the_submission_rung_is_not_the_last_rung_of_the_ladder():
+    """Saturation was built, measured, and left out of the model on purpose."""
+    from taxiout.models import ABOVE_SUBMISSION, LADDER_PROPER, TOP_RUNG
+    from taxiout.saturation import SATURATION_FEATURES
+
+    assert TOP_RUNG.key == "weather"
+    assert [r.key for r in ABOVE_SUBMISSION] == ["saturation"]
+    # the rung is still on the ladder, and its block is still built
+    assert LADDER_PROPER[-1].key == "saturation"
+    assert set(SATURATION_FEATURES) <= set(LADDER_PROPER[-1].features)
+    # but nothing the submission is fitted from reads it
+    assert not set(SATURATION_FEATURES) & set(TOP_RUNG.features)

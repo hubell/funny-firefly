@@ -46,7 +46,10 @@ reports:
 10. **plus runway saturation** -- the cheap Gate 3: from the other departures'
    take-off times on the subject's runway, the share of consecutive gaps
    under ninety seconds, the smallest gap, and the span of the last three.
-   Measured against the ceiling in ``reports/congestion.md``.
+   Measured against the ceiling in ``reports/congestion.md``, found to be
+   worth nothing, and therefore **not** in the submission: ``TOP_RUNG`` is
+   the weather rung below it. The rung stays on the ladder because a cheap
+   queue proxy that was built, measured and bought nothing is a result.
 
 Each rung is scored twice, once plain and once with the record-quality term on
 top. That term lives in ``taxiout.tails`` and is deliberately not reimplemented
@@ -109,8 +112,11 @@ IDENTIFIER_BLOCK: tuple[str, ...] = ("icao", "stand", "designator")
 # January to September 2025, score October 2025 -- a month the ladder never
 # reads -- over a grid of trees (300, 600, 1000), learning rate (0.03, 0.06,
 # 0.1), leaves (31, 63, 127) and minimum child samples (50, 200, 500), on
-# the top rung's features, RMSE over the rows the record-quality term
-# leaves to the physical model. The cell below scored 235.0 s on
+# the saturation rung's features -- the top rung when the sweep ran, before
+# that block was dropped from the submission -- with the RMSE taken over the
+# rows the record-quality term leaves to the physical model.
+# ``scripts/sweep_params.py`` pins that rung by name so the numbers below stay
+# reproducible now that ``TOP_RUNG`` has moved. The cell below scored 235.0 s on
 # October; the grid ran from 235.0 to 244.8 s and its top eight cells
 # lie within 0.8 s of each other. The parameters that stood before it
 # (500 trees, 0.06, 63 leaves, 200) sit between the 238.2 s of their
@@ -377,9 +383,6 @@ LADDER: tuple[Rung, ...] = (
     ),
 )
 
-# The submission model: the top of the ladder proper.
-TOP_RUNG: Rung = LADDER[-1]
-
 
 def _without_plan_lags(rung: Rung, base: str) -> Rung:
     return Rung(
@@ -392,6 +395,9 @@ def _without_plan_lags(rung: Rung, base: str) -> Rung:
         base=base,
     )
 
+
+# The ladder proper, before the chain kept without the plan lags is appended.
+LADDER_PROPER: tuple[Rung, ...] = LADDER
 
 # The congestion and weather rungs kept without the plan lags, each read
 # against the one before it in this chain and the first against the aircraft
@@ -407,6 +413,21 @@ for _r in _NET_CHAIN:
 LADDER = LADDER + tuple(_WITHOUT)
 
 LADDER_BY_KEY: dict[str, Rung] = {r.key: r for r in LADDER}
+
+# The rung the submission is fitted from. Not the last rung of the ladder:
+# the saturation rung sits above it as a measured negative -- it costs half a
+# second in December and eight tenths in July, and takes none of the ceiling
+# -- and a block that was built, measured and bought nothing belongs in the
+# ladder and the write-up, not in the model. Named here so that
+# ``scripts/make_submission.py`` and the report's per-airport and importance
+# sections all read the same rung.
+SUBMISSION_KEY = "weather"
+TOP_RUNG: Rung = LADDER_BY_KEY[SUBMISSION_KEY]
+
+# The rungs of the ladder proper above it: blocks that were built, measured,
+# and left out of the model. The report measures each against the ceiling of
+# the rung it was added to.
+ABOVE_SUBMISSION: tuple[Rung, ...] = LADDER_PROPER[LADDER_PROPER.index(TOP_RUNG) + 1 :]
 
 
 def base_of(rung: Rung) -> Rung | None:
@@ -539,6 +560,9 @@ class Booster:
 
 __all__ = [
     "BOOSTER_PARAMS",
+    "ABOVE_SUBMISSION",
+    "LADDER_PROPER",
+    "SUBMISSION_KEY",
     "TOP_RUNG",
     "base_of",
     "IDENTIFIER_BLOCK",

@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""Fit the Gate 1 model on the training year and write a submission file.
+"""Fit the model on the training year and write a submission file.
 
-One model, the top rung of the ladder in ``taxiout.models`` -- identifiers,
-take-off clock, the flight plan's delay signal, the distance-matrix block and
-its join-quality flags -- fitted on the full 2025 movement files with the rows
-``taxiout.tails`` covers excluded, then combined with that term on the rows it
-covers. Nothing here is chosen by a leaderboard score; the rung and the
-hyperparameters are the ones ``reports/baseline.md`` was generated with.
+One model, the submission rung of the ladder in ``taxiout.models``: every block
+of the feature frame except the runway-saturation one -- the identifiers, the
+take-off clock, the plan's own delay signal and its lags, the distance-matrix
+block with its join-quality flags, the aircraft, the congestion blocks and the
+shared corridor, and the weather regimes. Saturation was built and measured and
+bought nothing, and ``taxiout.models`` says so where it names the rung. Fitted
+on the full 2025 movement files with the rows ``taxiout.tails`` covers excluded,
+then combined with that term on the rows it covers. Nothing here is chosen by a
+leaderboard score; the rung and the hyperparameters are the ones
+``reports/baseline.md`` was generated with.
 
 The file goes to ``data/submissions/<team>_v<n>.parquet``, and the script
 checks with git that the path is ignored before writing a byte. Predictions
@@ -19,9 +23,11 @@ Validation, the template's schema and the read-back check are all
 ``taxiout.submission``'s -- a submission is rejected outright if any row of
 the template is missing or extra, so none of that is reimplemented here.
 
-Needs the challenge data under ``data/challenge/``, the distance matrices
-under ``data/processed/taxi_distance/`` (``make reports``), and the modelling
-extras. Takes a few minutes.
+Needs the challenge data under ``data/challenge/``, the distance matrices and
+edge sets under ``data/processed/taxi_distance/`` (``make reports``), the METAR
+cache under ``data/raw/metar/`` (``make metar``), which the weather block reads
+and without which this refuses to write, and the modelling extras. Takes a few
+minutes.
 
 Usage
 -----
@@ -68,7 +74,9 @@ SUBMISSIONS = REPO / "data" / "submissions"
 
 ID = "MVT_ID_mvt"
 
-# The rung the submission uses: the top of the ladder.
+# The rung the submission uses. Not the last rung of the ladder: the
+# saturation rung sits above it as a measured negative and is deliberately
+# out of the model. ``taxiout.models`` names which rung this is and why.
 RUNG = TOP_RUNG
 
 # Read by the record-quality term and never entered as a feature. The block
@@ -186,7 +194,7 @@ def main() -> int:
 
     if not METAR.exists() or not any(METAR.glob("*.csv")):
         print(
-            "no METAR cache under data/raw/metar; the top rung reads it. "
+            "no METAR cache under data/raw/metar; the submission rung reads it. "
             "Run: python scripts/fetch_metar.py",
             file=sys.stderr,
         )

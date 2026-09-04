@@ -82,6 +82,7 @@ from taxiout.unimpeded import (  # noqa: E402
 )
 from taxiout.validation import (  # noqa: E402
     BOOTSTRAP_DRAWS,
+    BOOTSTRAP_LEVEL,
     JULY_AIRPORTS,
     PAIR_FOLDS,
     SEEN_FRACTION,
@@ -324,7 +325,7 @@ def write_residuals(
 
     One file per (split, rung), under a gitignored directory: the residual
     is the target minus the prediction, so the file carries the target and
-    is never tracked. ``scripts/report_congestion.py`` reads the top rung's.
+    is never tracked. ``scripts/report_congestion.py`` reads the submission rung's.
     """
     RESIDUALS.mkdir(parents=True, exist_ok=True)
     rows = raw.loc[mask]
@@ -741,6 +742,12 @@ def section_ladder(results, splits, tails: Tails) -> list[str]:
         "plan lags. The same congestion rungs without the plan lags are kept at",
         "the foot of the ladder, each read against the one before it in that",
         "chain, so the reader sees what each block is worth both ways.",
+        "",
+        "The last rung of the ladder is not the model. Runway saturation was",
+        "built as the cheap queueing proxy, measured, and found to be worth",
+        f"nothing, so the submission is fitted from `{TOP_RUNG.label}` and the",
+        "saturation rung stays on the ladder as the measured negative it is.",
+        "The per-airport and split-share sections below read that rung.",
     ]
     for split in splits:
         if split.name.startswith("pairs-"):
@@ -918,7 +925,7 @@ def section_pairs(results, splits, features, y, tails: Tails) -> list[str]:
         f"{BOOTSTRAP_DRAWS:,} draws, resampling pairs with replacement from the stored",
         "residuals and recomputing every RMSE from them -- no model is refitted.",
         "Rows within a pair share a stand, a runway and a route, so the pair is",
-        "the unit. The interval is the 95% percentile interval of the fold-mean.",
+        f"the unit. The interval is the {BOOTSTRAP_LEVEL:.0%} percentile interval of the fold-mean.",
         *(
             [
                 "",
@@ -938,7 +945,7 @@ def section_pairs(results, splits, features, y, tails: Tails) -> list[str]:
                 "rung",
                 "seen (s)",
                 "held out (s)",
-                "gap [95%]",
+                f"gap [{BOOTSTRAP_LEVEL:.0%}]",
                 "gap per fold",
                 "reads geometry",
             ],
@@ -1080,14 +1087,16 @@ def section_frequency(results, features, y, splits, references) -> list[str]:
 
 
 def section_per_airport(results, splits, tails: Tails) -> list[str]:
-    """Per-airport RMSE for the top rung on each forward split."""
+    """Per-airport RMSE for the submission rung on each forward split."""
     lines = [
         "## Per airport",
         "",
         "The pooled figure is weighted towards the three airports July 2026",
-        "contains -- Frankfurt, Heathrow and Schiphol, 53% of the test rows -- so",
+        "contains -- Frankfurt, Heathrow and Schiphol, which the data review puts",
+        "at just over half the test rows -- so",
         "a pooled-optimal model could be a Frankfurt-Heathrow-Schiphol-optimal",
-        "model. The top rung, per airport, on each forward split.",
+        f"model. `{TOP_RUNG.label}`, the rung the submission is fitted from,",
+        "per airport, on each forward split.",
     ]
     for split in splits:
         if split.name.startswith("pairs-"):
@@ -1168,7 +1177,7 @@ def section_importances(results, splits) -> list[str]:
     ]
     share = float(imp[[c for c in imp.index if c in geometry]].sum()) / total
     return [
-        "## Where the top rung spends its splits",
+        f"## Where `{TOP_RUNG.label}` spends its splits",
         "",
         "Split counts, not a causal statement: a feature can be split on often and",
         "carry little, and two collinear features share the credit arbitrarily.",

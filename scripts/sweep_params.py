@@ -9,7 +9,8 @@ validation set. October is a month the ladder never scores, so a number
 read from it chooses parameters without touching what is reported.
 
 One grid, over the booster's trees, learning rate, leaves and minimum child
-samples, on the top rung's feature block; each cell fitted on the unflagged
+samples, on the feature block of ``SWEEP_RUNG`` -- the saturation rung, which
+was the top of the ladder when the sweep ran; each cell fitted on the unflagged
 rows of January to September, as the ladder fits, and scored by the RMSE
 over October's rows the record-quality term leaves to the physical model.
 The number of trees is read from one fit per cell of the other three: the
@@ -50,7 +51,7 @@ from run_baselines import (  # noqa: E402
     load_weather,
 )
 from taxiout.features import build_features  # noqa: E402
-from taxiout.models import BOOSTER_PARAMS, TOP_RUNG, Booster  # noqa: E402
+from taxiout.models import BOOSTER_PARAMS, LADDER_BY_KEY, Booster  # noqa: E402
 from taxiout.features import airport_fallback  # noqa: E402
 from taxiout.validation import month_of, rmse  # noqa: E402
 
@@ -60,6 +61,16 @@ OUT = REPO / "data" / "processed" / "sweep_october.csv"
 # ``month_of`` yields ``YYYY-MM``.
 TRAIN_MONTHS = tuple(f"2025-{m:02d}" for m in range(1, 10))
 SCORE_MONTH = "2025-10"
+
+# The rung the sweep is fitted on, pinned by name rather than read from
+# ``TOP_RUNG``. The sweep ran once, on the saturation rung, when that was the
+# top of the ladder; the saturation block has since been dropped from the
+# submission and ``TOP_RUNG`` has moved down to the weather rung. Following
+# ``TOP_RUNG`` here would silently re-run the sweep on a different feature
+# block and stop reproducing the October numbers recorded in
+# ``taxiout.models``, which is the one place the choice of parameters is
+# accounted for.
+SWEEP_RUNG = LADDER_BY_KEY["saturation"]
 
 GRID = {
     "learning_rate": (0.03, 0.06, 0.1),
@@ -135,7 +146,7 @@ def main() -> int:
         params.update(dict(zip(GRID.keys(), values)))
         params["n_estimators"] = max(TREES)
         t0 = time.time()
-        b = Booster(TOP_RUNG.features, params).fit(X_fit, y_fit)
+        b = Booster(SWEEP_RUNG.features, params).fit(X_fit, y_fit)
         for trees in TREES:
             r = _score_at(b, X_sc, y_sc, trees)
             rows.append(

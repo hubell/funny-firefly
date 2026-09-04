@@ -89,7 +89,7 @@ baseline:
 	$(PYTHON) scripts/run_baselines.py
 
 # The one parameter sweep: fit January to September 2025, score October, on
-# the top rung's features. Its numbers stay under data/processed/, gitignored;
+# the saturation rung's features, the top rung when it ran. Its numbers stay under data/processed/, gitignored;
 # the chosen parameters are written into taxiout.models by hand with the
 # October number that chose them. Takes half an hour or more.
 sweep:
