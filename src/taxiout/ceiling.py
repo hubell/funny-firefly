@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-only
-"""The ceiling: how much of the top rung's residual sits in the runway sequence.
+"""The ceiling: how much of a rung's residual sits in the runway sequence.
 
 An oracle diagnostic, never a feature. It reads the residuals of the
 *other* departures on the subject's runway -- which are their taxi times,

@@ -45,6 +45,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 REPO = Path(__file__).resolve().parents[1]
@@ -77,7 +78,11 @@ from taxiout.ceiling import (  # noqa: E402
     lag1_autocorrelation,
     oracle,
 )
-from taxiout.models import LADDER_BY_KEY, TOP_RUNG, base_of  # noqa: E402
+from taxiout.models import (  # noqa: E402
+    ABOVE_SUBMISSION,
+    LADDER_BY_KEY,
+    TOP_RUNG,
+)
 from taxiout.planlags import PLAN_LAG_FEATURES  # noqa: E402
 from taxiout.saturation import SATURATION_FEATURES  # noqa: E402
 from taxiout.metar import (  # noqa: E402
@@ -102,6 +107,24 @@ from taxiout.features import (  # noqa: E402
     build_features,
     source_phase,
 )
+from taxiout.exposure import (  # noqa: E402
+    ARRIVAL_COLUMNS,
+    ARRIVAL_LATE_S,
+    LAG_COLUMNS,
+    LAG_HI_S,
+    LAG_LO_S,
+    MONTH_PAIRS,
+    TAXI_IN_HI_S,
+    TAXI_IN_LO_S,
+    arrival_rows,
+    departure_rows,
+    lag_slopes,
+    pooled_cost,
+    joint_window_rows,
+    shift_table,
+    window_losses,
+    worst_case,
+)
 from taxiout.validation import month_of  # noqa: E402
 
 DATA = REPO / "data" / "challenge"
@@ -111,20 +134,26 @@ OUT = REPO / "reports" / "congestion.md"
 
 # The forward splits whose validation residuals the ladder keeps.
 FORWARD_SPLITS = ("december", "july")
-# The rungs the ceiling is read on: the rung before the top of the ladder and
-# the top itself, so the saturation rung is read against the ceiling of the
-# rung it was added to; then the same two on the chain kept without the plan
-# lags.
-_BASE = base_of(TOP_RUNG)
+# Which forward split answers for which ranking month. December is the
+# winter proxy for January -- the same choice the ladder's splits make -- and
+# July answers for July.
+SPLIT_FOR_MONTH = {"2026-01": "december", "2026-07": "july"}
+TARGET = "TAXITIME_SEC_mvt"
+# The rungs the ceiling is read on: the submission rung and the saturation
+# rung above it, so the cheap queue proxy is measured against the ceiling of
+# the rung it was added to; then the same two of the chain kept without the
+# plan lags.
 CEILING_RUNGS = tuple(
-    k
-    for k in (
-        _BASE.key if _BASE else None,
-        TOP_RUNG.key,
-        f"{_BASE.key}-nolag" if _BASE else None,
-        f"{TOP_RUNG.key}-nolag",
+    dict.fromkeys(
+        k
+        for k in (
+            TOP_RUNG.key,
+            *(r.key for r in ABOVE_SUBMISSION),
+            f"{TOP_RUNG.key}-nolag",
+            *(f"{r.key}-nolag" for r in ABOVE_SUBMISSION),
+        )
+        if k in LADDER_BY_KEY
     )
-    if k and k in LADDER_BY_KEY
 )
 
 BLOCKS = (
@@ -223,7 +252,8 @@ def section_audit() -> list[str]:
         "read under a bare or `DEP.` source: "
         + ", ".join(f"`{c}`" for c in FORBIDDEN_FEATURE_INPUTS)
         + ".",
-        "Exposed for every arrival in the ranking set at 0.0% null, and the only",
+        "Exposed for every arrival in the ranking set, with no nulls by the data",
+        "review's count, and the only",
         "columns an `ARR.` source may name: "
         + ", ".join(f"`{c}`" for c in AVAILABLE_FOR_ARRIVALS)
         + ". `AOBT_3_flt` is read under no phase. The only source outside the",
@@ -338,6 +368,334 @@ def section_windows(train: pd.DataFrame, rank: pd.DataFrame) -> list[str]:
     ]
 
 
+def fit_tail(train: pd.DataFrame, note: str):
+    """The record-quality term fitted on the training side, if it is in the tree.
+
+    Stream B owns ``taxiout.tails``; this reads the interface its docstring
+    fixes and reimplements none of it. Without it the exposure section keeps
+    every row and the report says so, rather than printing a mean that looks
+    like it excluded the tail and did not.
+    """
+    try:
+        from taxiout.tails import TailModel
+    except ImportError:
+        return (
+            None,
+            note + " (the record-quality term is not in the tree, so no row is flagged)",
+        )
+    return TailModel().fit(train), "unflagged by the record-quality term and " + note
+
+
+def signed(x: float, digits: int = 0) -> str:
+    return "n/a" if not np.isfinite(x) else f"{x:+,.{digits}f}"
+
+
+def residual_rmse_by_airport(split: str, rung: str) -> pd.DataFrame:
+    """Per-airport ex-flagged RMSE of one rung on one forward split."""
+    r = load_residuals(split, rung)
+    if r is None or not len(r):
+        return pd.DataFrame(columns=["icao", "n", "rmse_s"])
+    g = r.groupby(r["icao"].astype(str), sort=True)["residual"]
+    return pd.DataFrame(
+        {
+            "n": g.size().astype(float),
+            "rmse_s": g.apply(lambda v: float(np.sqrt(np.mean(v**2)))),
+        }
+    ).reset_index(names="icao")
+
+
+def _window_sentence(losses: dict, plans: pd.DataFrame, joint_plans: pd.DataFrame) -> str:
+    """What each window kept and what the joint one would have reported instead.
+
+    Every number here is computed over exactly the cells the tables below
+    compare: the smallest keep rate of any of the three lags' own windows,
+    the smallest a joint window would leave, and the cell whose reported
+    shift the joint window would move furthest.
+    """
+    narrowest, eobt, joint = [], [], []
+    for _, row in plans.iterrows():
+        for side, month in (
+            ("training", row["training_month"]),
+            ("ranking", row["ranking_month"]),
+        ):
+            cell = losses[side].loc[(row["icao"], month)]
+            n = float(cell["in_record"])
+            if n:
+                narrowest.append(float(cell["in_window_min"]) / n)
+                eobt.append(float(cell["in_window"]) / n)
+                joint.append(float(cell["in_joint"]) / n)
+    if not narrowest:
+        return ""
+    head = (
+        f"Over the cells compared below, the narrowest of the three lags' own windows "
+        f"keeps {pct(min(narrowest))} of the record set and the take-off-minus-EOBT "
+        f"window -- the one the headline shift is read from -- keeps "
+        f"{pct(min(eobt))}, where a joint window over the three would leave that "
+        f"same mean only {pct(min(joint))} of its rows."
+    )
+    merged = plans.merge(
+        joint_plans[["icao", "ranking_month", "lag_eobt_s_shift"]],
+        on=["icao", "ranking_month"],
+        suffixes=("", "_joint"),
+        how="inner",
+    ).dropna(subset=["lag_eobt_s_shift", "lag_eobt_s_shift_joint"])
+    if merged.empty:
+        return head
+    merged["moved"] = (
+        merged["lag_eobt_s_shift"] - merged["lag_eobt_s_shift_joint"]
+    ).abs()
+    w = merged.loc[merged["moved"].idxmax()]
+    label = pd.Period(w["ranking_month"]).strftime("%B %Y")
+    return (
+        head + f" The difference is not cosmetic: a joint window reports {w['icao']}'s "
+        f"{label} shift as {signed(float(w['lag_eobt_s_shift_joint']))} s where its own window "
+        f"reports {signed(float(w['lag_eobt_s_shift']))} s."
+    )
+
+
+def section_exposure(
+    dep_rows: dict, arr_rows: dict, train_target, tail_note: str
+) -> list[str]:
+    """How each ranking month's regime differs from its training-year twin."""
+    train_dep, rank_dep = dep_rows["training"], dep_rows["ranking"]
+    plans = shift_table(train_dep, rank_dep, LAG_COLUMNS)
+    arrivals = shift_table(arr_rows["training"], arr_rows["ranking"], ARRIVAL_COLUMNS)
+    slopes = lag_slopes(train_dep, train_target).set_index("icao")
+    losses = {k: window_losses(v) for k, v in dep_rows.items()}
+    # what a single window across all three lags would have reported instead,
+    # so the argument for windowing each lag on its own carries its own number
+    joint_plans = shift_table(
+        joint_window_rows(train_dep), joint_window_rows(rank_dep), LAG_COLUMNS
+    )
+
+    lines = [
+        "## Regime exposure: the ranking months against their twins",
+        "",
+        "The plan-lag block reads take-off minus a planning value fixed before",
+        "departure, which is the taxi plus the pushback delay against that plan.",
+        "The ranking months' departures take off later against their plans than the",
+        "same calendar month of 2025 did, and the exposed fields cannot say which of",
+        "the two moved: a ranking departure's block time is hidden, so the split is",
+        "unobservable. They can bound it, and that is what this section does. It",
+        "fits no model, and nothing here is a feature.",
+        "",
+        f"The rows: departures {tail_note}, with each lag then windowed to between "
+        f"{LAG_LO_S / 60:.0f} and {LAG_HI_S / 60:.0f} minutes **on its own**. A departure taking off half an hour",
+        "before its own off-block estimate is a record artefact rather than a fast",
+        "taxi; one taking off two hours after it is the record-quality tail, which",
+        "has its own term. The window is per lag and not across the three together,",
+        "because a row whose schedule lag runs long is usually a row that took off",
+        "late: windowing the three together drops it from the take-off-minus-EOBT",
+        "mean as well, and drops more such rows on the side that ran later, which is",
+        "the side whose shift is being measured. "
+        + _window_sentence(losses, plans, joint_plans),
+        "",
+        "The control reads arrivals at the same airport-month -- no departure plan",
+        "and nothing hidden, exposed on both sides -- with a taxi-in between "
+        f"{TAXI_IN_LO_S / 60:.0f} and {TAXI_IN_HI_S / 60:.0f} minutes and a lateness within {ARRIVAL_LATE_S / 3600:.0f} hours either way,",
+        "symmetric because an arrival landing early is ordinary where a departure",
+        "taking off before its off-block estimate is not.",
+    ]
+
+    worst_by_month = {}
+    for rank_month, train_month in MONTH_PAIRS:
+        p_m = plans[plans["ranking_month"] == rank_month].set_index("icao")
+        a_m = arrivals[arrivals["ranking_month"] == rank_month].set_index("icao")
+        if p_m.empty:
+            continue
+        label = pd.Period(rank_month).strftime("%B %Y")
+        twin = pd.Period(train_month).strftime("%B %Y")
+
+        rows = []
+        for icao in p_m.index:
+            rows.append(
+                [
+                    str(icao),
+                    f"{int(p_m.loc[icao, 'lag_eobt_s_n_train']):,}",
+                    f"{int(p_m.loc[icao, 'lag_eobt_s_n_rank']):,}",
+                    signed(float(p_m.loc[icao, "lag_eobt_s_shift"])),
+                    signed(float(p_m.loc[icao, "lag_lobt_s_shift"])),
+                    signed(float(p_m.loc[icao, "lag_sched_s_shift"])),
+                    signed(float(a_m.loc[icao, "arr_taxi_in_s_shift"]))
+                    if icao in a_m.index
+                    else "n/a",
+                    signed(float(a_m.loc[icao, "arr_late_s_shift"]))
+                    if icao in a_m.index
+                    else "n/a",
+                ]
+            )
+        lines += [
+            "",
+            f"### {label} against {twin}",
+            "",
+            "The shift in each mean, in seconds. The first three are the departure's",
+            "own plan; the last two are the control, and read no plan of the",
+            "departure's at all:",
+            "",
+            *table(
+                [
+                    "ICAO",
+                    f"rows, {twin}",
+                    f"rows, {label}",
+                    "take-off - EOBT",
+                    "- LOBT",
+                    "- schedule",
+                    "arrivals' taxi-in",
+                    "arrivals' lateness",
+                ],
+                rows,
+                "-rrrrrrr",
+            ),
+        ]
+
+        split = SPLIT_FOR_MONTH.get(rank_month)
+        rmse = residual_rmse_by_airport(split, TOP_RUNG.key) if split else pd.DataFrame()
+        if rmse.empty:
+            lines += [
+                "",
+                "No residuals for this split under `data/processed/residuals/`, so the",
+                "worst case is not computed; `python scripts/run_baselines.py` writes them.",
+            ]
+            continue
+        rmse = rmse.set_index("icao")
+        worst, rows = [], []
+        for icao in p_m.index:
+            shift = float(p_m.loc[icao, "lag_eobt_s_shift"])
+            slope = float(slopes.loc[icao, "slope"]) if icao in slopes.index else np.nan
+            base = float(rmse.loc[icao, "rmse_s"]) if icao in rmse.index else np.nan
+            n = float(rmse.loc[icao, "n"]) if icao in rmse.index else np.nan
+            w = worst_case(shift, slope, base)
+            worst.append(
+                {
+                    "icao": icao,
+                    "n": n,
+                    "rmse_s": base,
+                    "bias_s": w["bias_s"],
+                    "cost_s": w["cost_s"],
+                }
+            )
+            rows.append(
+                [
+                    str(icao),
+                    num(slope, 2),
+                    signed(shift),
+                    signed(w["bias_s"]),
+                    num(base, 1),
+                    num(w["rmse_with_bias_s"], 1),
+                    signed(w["cost_s"], 1),
+                ]
+            )
+        worst = pd.DataFrame(worst)
+        pooled = pooled_cost(worst)
+        worst_by_month[rank_month] = {
+            "per_airport": worst,
+            "pooled": pooled,
+            "split": split,
+        }
+        rows.append(
+            [
+                "**pooled**",
+                "--",
+                "--",
+                "--",
+                num(pooled["rmse_s"], 1),
+                num(pooled["rmse_with_bias_s"], 1),
+                signed(pooled["cost_s"], 1),
+            ]
+        )
+        lines += [
+            "",
+            "The worst case: what the model would mispredict if the entire shift were",
+            "pushback delay and none of it taxi. The slope is the airport's",
+            "training-year ordinary least squares of taxi-out on take-off minus the",
+            "first off-block estimate, over the same rows and the same window; the",
+            "bias is that slope times the shift; and the cost is that bias added in",
+            f"quadrature to `{TOP_RUNG.label}`'s ex-flagged RMSE on the {split} split at",
+            "that airport. A per-airport constant bias enters that airport's squared",
+            "error, so biases of opposite sign do not cancel in the pooled row:",
+            "",
+            *table(
+                [
+                    "ICAO",
+                    "slope, s per s",
+                    "shift, s",
+                    "worst-case bias, s",
+                    "RMSE (s)",
+                    "with the bias (s)",
+                    "cost (s)",
+                ],
+                rows,
+                "-rrrrrr",
+            ),
+        ]
+
+    lines += ["", *_exposure_reading(plans, arrivals, slopes, worst_by_month)]
+    return lines
+
+
+def _exposure_reading(plans, arrivals, slopes, worst_by_month) -> list[str]:
+    """What the three quantities say, in the report's own numbers."""
+    jan = plans[plans["ranking_month"] == "2026-01"].set_index("icao")
+    jan_a = arrivals[arrivals["ranking_month"] == "2026-01"].set_index("icao")
+    if jan.empty:
+        return []
+    moved = jan["lag_eobt_s_shift"].sort_values(ascending=False)
+    top = [i for i in moved.index[:3] if i in jan_a.index]
+    lo, hi = float(np.nanmin(slopes["slope"])), float(np.nanmax(slopes["slope"]))
+    lines = [
+        "### What it bounds",
+        "",
+        "Where the plan lag moves most, the surface does not. At the three airports",
+        "whose January lag moved furthest -- "
+        + ", ".join(f"{i} at {signed(float(moved[i]))} s" for i in top)
+        + " --",
+        "arrivals' taxi-in moved by "
+        + ", ".join(signed(float(jan_a.loc[i, "arr_taxi_in_s_shift"])) for i in top)
+        + " s, while arrivals' own lateness moved by "
+        + ", ".join(signed(float(jan_a.loc[i, "arr_late_s_shift"])) for i in top)
+        + " s.",
+        "Taxi-in is the surface running slower or not; arrivals' lateness is the day",
+        "running late or not. The second moves with the departure plan lag and the",
+        "first barely moves, so the shift is mostly the day running late against its",
+        "plans rather than the surface running slower.",
+        "",
+        "That is a reading of the control, not a measurement of the split, and what",
+        "stands is the bound. Taking the whole shift as pushback delay -- the worst",
+        "case, which the control says it is not -- the slopes run "
+        f"{num(lo, 2)} to {num(hi, 2)} seconds of",
+        "taxi-out per second of lag.",
+    ]
+    if not worst_by_month:
+        return lines
+    lines[-1] = lines[-1].rstrip(".") + ", and the cost in RMSE is:"
+    for month, r in worst_by_month.items():
+        label = pd.Period(month).strftime("%B %Y")
+        per = (
+            r["per_airport"]
+            .dropna(subset=["cost_s"])
+            .sort_values("cost_s", ascending=False)
+        )
+        if per.empty:
+            continue
+        worst_two = " and ".join(
+            f"{signed(row.cost_s, 1)} s at {row.icao}" for row in per.head(2).itertuples()
+        )
+        lines.append(
+            f"in {label}, {worst_two} at its two worst airports, "
+            f"and {signed(r['pooled']['cost_s'], 1)} s pooled;"
+        )
+    if lines[-1].endswith(";"):
+        lines[-1] = lines[-1][:-1] + "."
+    lines += [
+        "",
+        "It is a bound on the exposure and not an estimate of it. The true shift is",
+        "a mixture, no exposed field separates the two, and nothing in the model is",
+        "corrected for it: a correction would be a guess at the mixture, fitted on",
+        "nothing.",
+    ]
+    return lines
+
+
 def section_corridor(train: pd.DataFrame) -> list[str]:
     d = degeneracy(train)
     rows = [
@@ -422,8 +780,9 @@ def section_configuration(train: pd.DataFrame) -> list[str]:
         "changed, capped at six hours. The floor of two suppresses the flicker of",
         "a stray movement on an idle runway; a runway the window has forgotten is",
         "a change like any other. The set itself is a diagnostic here and not a",
-        "feature: as a categorical it took 12% of the top rung's splits and bought",
-        "nothing on any split, so the model reads the count of runways in use and",
+        "feature: as a categorical the ladder found it taking a large share of the",
+        "model's splits and buying nothing on any split, so the model reads instead",
+        "the count of runways in use and",
         "the seconds since the set last changed. Per airport: how many distinct sets the year",
         "runs, how much of the year the three commonest cover, how often the set",
         "is empty, the median number of runways in use, the median time since the",
@@ -548,7 +907,7 @@ def section_ceiling() -> list[str]:
         "",
         "An oracle diagnostic, never a feature. On each forward split's validation",
         "rows, over the rows the record-quality term leaves to the physical model,",
-        "the top rung's residuals are read against the residuals of the *other*",
+        "each rung's residuals are read against the residuals of the *other*",
         "departures on the same runway -- which are their taxi times minus what",
         "the model already knew, and which no admissible feature may read. Two",
         "questions. First, the lag-1 autocorrelation: the correlation between a",
@@ -562,10 +921,10 @@ def section_ceiling() -> list[str]:
         "subject excluded -- one least-squares fit, pooled, in sample. That is",
         "what a model could reach if it knew its neighbours' outcomes exactly, and",
         "it bounds what any queue model built from the runway sequence could add.",
-        "Read on the rung before the top of the ladder and on the top itself --",
-        "so the saturation rung is measured against the ceiling of the rung it",
-        "was added to -- and on the same two of the chain kept without the plan",
-        "lags.",
+        "Read on the rung the submission is fitted from and on the saturation",
+        "rung above it -- so the cheap queue proxy is measured against the",
+        "ceiling of the rung it was added to -- and on the same two of the chain",
+        "kept without the plan lags.",
     ]
     any_found = False
     for split in FORWARD_SPLITS:
@@ -629,7 +988,7 @@ def section_ceiling() -> list[str]:
             ),
             "",
         ]
-        # -- per airport, top rung
+        # -- per airport, on the rung the submission is fitted from
         top = TOP_RUNG.key
         if top in loaded:
             r = loaded[top]
@@ -713,6 +1072,11 @@ def main() -> int:
         hourly = regime_by_hour(load_metar(METAR))
     sides = {}
     stands: set[str] = set()
+    dep_rows: dict[str, pd.DataFrame] = {}
+    arr_rows: dict[str, pd.DataFrame] = {}
+    train_target = None
+    tail_model = None
+    tail_note = "carrying a flight-plan record"
     for side in ("training", "ranking"):
         print(f"{side} ...")
         dep, moves = load_side(side)
@@ -724,6 +1088,17 @@ def main() -> int:
         # the configuration set, for its own table below: a diagnostic, not a feature
         f["cfg_runways"] = configuration_sets(dep, moves).to_numpy()
         sides[side] = f
+
+        # The regime-exposure section, from the raw rows rather than the frame:
+        # it compares the ranking months against their training-year twins and
+        # is not a feature of anything. The record-quality term is fitted on
+        # the training side and predicted on both, as everywhere else.
+        if side == "training":
+            tail_model, tail_note = fit_tail(dep, tail_note)
+            train_target = pd.to_numeric(dep[TARGET], errors="coerce")
+        flagged = tail_model.flagged(dep) if tail_model is not None else None
+        dep_rows[side] = departure_rows(dep, flagged)
+        arr_rows[side] = arrival_rows(moves)
         del moves
     train, rank = sides["training"], sides["ranking"]
 
@@ -762,6 +1137,8 @@ def main() -> int:
         + section_audit()
         + [""]
         + section_windows(train, rank)
+        + [""]
+        + section_exposure(dep_rows, arr_rows, train_target, tail_note)
         + [""]
         + section_corridor(train)
         + [""]

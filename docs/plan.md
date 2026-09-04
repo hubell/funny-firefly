@@ -397,7 +397,8 @@ without a decision; the numbers that decide it are above.
 alone, and never reported: `scripts/sweep_params.py` fits January to
 September and scores October — a month none of the ladder's splits reads —
 over one grid of trees, learning rate, leaves and minimum child samples on
-the top rung's features, by the RMSE over the rows the record-quality term
+the saturation rung's features, the top rung when it ran, by the RMSE over
+the rows the record-quality term
 leaves to the physical model. The grid ran from 235.0 to 244.8 s and its
 top eight cells lie within 0.8 s of each other; the cell that scored 235.0
 s — 1,000 trees, learning rate 0.03, 127 leaves, 50 minimum child samples
@@ -412,6 +413,53 @@ the three July airports; the rung below it, without the saturation block,
 at 235.7 and 346.2. The geometry claim is +14.7 s [+13.2, +16.5], the plan
 lags' held-out contrast −1.1 s [−6.0, +3.6], the ceiling 10.0 s in December
 and 8.5 in July. The ladder now takes eighty minutes.
+
+**Runway saturation dropped from the model, 4 September.** The saturation
+block cost half a second in December and eight tenths in July on the rung it
+was added to, and the submission is fitted from that rung. It is out of the
+model: `TOP_RUNG` names the weather rung, and the saturation rung stays on the
+ladder as the measured negative it is. A cheap queue proxy that was built,
+measured against the ceiling, and bought nothing is a result, and it belongs
+in the paper beside the ceiling rather than in the predictions.
+
+Over the rows the record-quality term leaves to the physical model, the
+submission rung stands at **235.7 s in December and 346.2 s in July**, and
+221.4 and 258.8 s on the three July airports, against 236.2 and 347.0 with the
+saturation block. The geometry claim is +14.7 s [+13.2, +16.5] and the
+saturation rung's own held-out contrast is −0.2 s [−0.7, +0.3]. The one
+parameter sweep is now pinned by name to the rung it ran on, which was the
+saturation rung; following `TOP_RUNG` down would have quietly re-run it on a
+different feature block and stopped reproducing the October numbers recorded
+beside the booster's parameters.
+
+**Limitation, 4 September: the ranking months ran late against their plans,
+and the exposed fields cannot say why.** Recorded in full, with its numbers, under
+*Regime exposure* in [`../reports/congestion.md`](../reports/congestion.md).
+Take-off minus a planning value is taxi plus the pushback delay against that
+plan, and the ranking months moved: in January 2026 the mean take-off minus
+the first off-block estimate rose by 289 s at Istanbul, 224 at Frankfurt and
+193 at Munich against the same month of 2025, while July 2026 fell by 135 s
+at Frankfurt and 127 at Heathrow. A ranking departure's block time is hidden,
+so which of the two moved is unobservable — but it is boundable, and both
+halves of the bound are in the report.
+
+The control says which way. Where the plan lag moved most, arrivals' taxi-in
+at the same airport-month barely moved: −20 s at Istanbul, +9 at Frankfurt,
++16 at Munich, against arrivals' own lateness moving +856, +453 and +367 s.
+Taxi-in is the surface running slower or not; arrivals' lateness is the day
+running late or not. The second moves with the plan lag and the first does
+not, so the shift is mostly the day running late against its plans rather
+than the surface running slower.
+
+The bound is what stands. Taking the whole shift as pushback delay — the
+worst case, which the control says it is not — the training-year slope of
+taxi-out on the plan lag runs 0.24 to 0.51 seconds per second, so the
+per-airport bias reaches 93 s at Istanbul and 71 at Frankfurt, and added in
+quadrature to those airports' own ex-flagged RMSE it costs 18.7 s and 12.0 s,
+and 5.1 s pooled; in July, 4.5 s and 3.0 s, and 2.7 s pooled. That is a bound
+on the exposure and not an estimate of it: the true shift is a mixture, no
+exposed field separates the two, and nothing in the model is corrected for
+it, because a correction would be a guess at the mixture fitted on nothing.
 
 **Gate 3 — the queueing layer, only if Gate 2's ablation says congestion is
 binding** (~20–30 h). This is the piece where the geometry stops being a side
