@@ -139,10 +139,13 @@ FORWARD_SPLITS = ("december", "july")
 # July answers for July.
 SPLIT_FOR_MONTH = {"2026-01": "december", "2026-07": "july"}
 TARGET = "TAXITIME_SEC_mvt"
-# The rungs the ceiling is read on: the submission rung and the saturation
-# rung above it, so the cheap queue proxy is measured against the ceiling of
-# the rung it was added to; then the same two of the chain kept without the
-# plan lags.
+# The rungs the ceiling is read on: the submission rung and every rung of the
+# ladder proper above it -- the shrunk-encoding arms and runway saturation --
+# so each block that was built but left out of the model is measured against
+# the ceiling of the rung it was added to; then the same rungs of the chain
+# kept without the plan lags, where those exist. The list follows
+# ``ABOVE_SUBMISSION`` rather than naming rungs, so adding one above the
+# submission cannot leave this behind.
 CEILING_RUNGS = tuple(
     dict.fromkeys(
         k
