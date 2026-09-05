@@ -94,6 +94,14 @@ modelling stage, measured against the target.
       worth nothing; the simulation is not started without a decision
 - [x] The one parameter sweep, on October 2025, recorded in
       `src/taxiout/models.py` with the number that chose it
+- [x] An identifier encoding shrunk toward the geometry rather than toward a
+      group mean, with the shrinkage weight estimated per airport and not
+      tuned — the arms and the leakage guards in
+      [`reports/baseline.md`](reports/baseline.md)
+- [x] Leave one airport out, all ten: train on nine, predict the tenth, with
+      no identifier of the tenth in the frame — the question the challenge's
+      test set cannot pose, and the one no identifier-based entry can answer
+      at all — [`reports/transfer.md`](reports/transfer.md)
 - [ ] Write-up
 
 ## What the data turned out to contain
@@ -202,6 +210,7 @@ make tails        # needs the challenge data; writes reports/tails.md
 make geometry-gaps  # needs the challenge data and the OSM cache; writes reports/geometry_gaps.md
 make congestion   # needs the challenge data; writes reports/congestion.md
 make baseline     # needs the challenge data; writes reports/baseline.md
+make transfer     # needs the challenge data; writes reports/transfer.md
 make submission TEAM=<name>   # needs the challenge data; writes a submission
 make licence-check  # verify no OSM-derived or challenge content is tracked
 ```
@@ -225,6 +234,7 @@ data review and everything after it need `pip install -e ".[modelling]"`.
 | `scripts/report_geometry_gaps.py` | `data/challenge/`, `data/processed/taxi_distance/`, `data/raw/` | `reports/geometry_gaps.md` |
 | `scripts/report_congestion.py` | `data/challenge/`, `data/processed/taxi_distance/`, `data/raw/metar/`, `data/processed/residuals/` | `reports/congestion.md` |
 | `scripts/run_baselines.py` | `data/challenge/`, `data/processed/taxi_distance/`, `data/raw/metar/` | `reports/baseline.md`, `data/processed/residuals/` (gitignored) |
+| `scripts/report_transfer.py` | `data/challenge/`, `data/processed/taxi_distance/`, `data/raw/metar/` | `reports/transfer.md` |
 | `scripts/sweep_params.py` | `data/challenge/`, `data/processed/taxi_distance/`, `data/raw/metar/` | `data/processed/sweep_october.csv` (gitignored) |
 | `scripts/make_submission.py` | `data/challenge/`, `data/processed/taxi_distance/`, `data/raw/metar/` | `data/submissions/<team>_v<n>.parquet` (gitignored) |
 
@@ -350,6 +360,7 @@ scripts/
   report_geometry_gaps.py      reports/geometry_gaps.md (needs challenge data + OSM cache)
   report_congestion.py         reports/congestion.md (needs challenge data)
   run_baselines.py             reports/baseline.md (needs challenge data)
+  report_transfer.py           reports/transfer.md (needs challenge data)
   sweep_params.py              the one parameter sweep, on October 2025
   make_submission.py           a submission file (needs challenge data)
   check_licence_hygiene.py     verifies no OSM or challenge content is tracked

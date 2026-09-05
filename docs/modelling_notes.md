@@ -380,6 +380,29 @@ hidden fields are poisoned and the frame must not move; arrivals' are poisoned
 and the arrivals features *must* move, which is the proof they read arrivals
 and not something else that happens to correlate.
 
+**The registry names the fitting sample as a source, too.** *Added 4
+September.* The shrunk identifier encoding
+([`../src/taxiout/encoding.py`](../src/taxiout/encoding.py)) reads a pair's
+mean taxi-out over the *training* rows, which is a source class the registry
+had never carried: not the subject's own row, not another departure's row,
+not an external archive, but the target of the rows the model is fitted on.
+It has a prefix of its own, `TRAIN.`, and one permitted column, the target.
+
+Writing it as `DEP.TAXITIME_SEC_mvt` would have been the easy thing and
+would have been false. `TAXITIME_SEC_mvt` is blanked for every departure in
+the ranking set, so a feature declaring it under `DEP.` would be declaring
+something unavailable at inference — and would have failed the test, correctly.
+What the encoding reads is available by construction: the ranking set is 2026
+and the fitting sample is 2025, so the encoding is computed once over the
+whole training year and read across a boundary no ranking row is on either
+side of. Inside the ladder there *is* a boundary to respect, and the guarding
+happens there: the encoding is recomputed within every fold from that fold's
+own training rows, out of fold within training as well, over unflagged rows
+only, and [`../tests/test_encoding.py`](../tests/test_encoding.py) asserts
+each of those rather than the module claiming them. The prefix exists so that
+the next feature to read a target has to say so in the registry instead of
+hiding under a phase.
+
 The plan lags are the one block that reads, through other departures, a
 quantity that contains their taxi-out: take-off minus a planning value fixed
 before departure — the flight plan's first and last off-block estimates and

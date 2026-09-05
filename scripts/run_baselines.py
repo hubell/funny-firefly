@@ -62,11 +62,23 @@ from taxiout.features import (  # noqa: E402
     airport_fallback,
     build_features,
 )
+from taxiout.encoding import (  # noqa: E402
+    ENCODING_FEATURES,
+    INNER_FOLDS,
+    LENGTH_RATIO_MATERIAL,
+    MIN_GROUP_ROWS,
+    encode_split,
+    with_encoding,
+)
 from taxiout.models import (  # noqa: E402
     AirportMean,
     BOOSTER_PARAMS,
     Booster,
+    ENCODING_ARMS,
     LADDER,
+    LADDER_BY_KEY,
+    ENCODING_CONTROL,
+    SUBMISSION_KEY,
     TOP_RUNG,
     base_of,
     booster_backend,
@@ -83,6 +95,7 @@ from taxiout.unimpeded import (  # noqa: E402
 from taxiout.validation import (  # noqa: E402
     BOOTSTRAP_DRAWS,
     BOOTSTRAP_LEVEL,
+    FREQUENCY_BUCKETS,
     JULY_AIRPORTS,
     PAIR_FOLDS,
     SEEN_FRACTION,
@@ -341,12 +354,25 @@ def write_residuals(
     out.to_parquet(RESIDUALS / f"{split_name}_{rung_key}.parquet", index=False)
 
 
+# The rungs whose feature block includes the shrunk encoding, so the runner
+# knows which rungs need the fold's own encoding overlaid.
+ENCODED_RUNGS: frozenset[str] = frozenset(
+    r.key for r in LADDER if set(r.features) & set(ENCODING_FEATURES)
+)
+
+
 def run(features, y, raw, splits, tails: Tails, *, keep_residuals: bool = True) -> dict:
     """Every rung on every split. Returns the results the report reads.
 
     The record-quality term is refitted on each split's own training rows, and
     the rows it covers are the rows the physical rungs are fitted without. It
     is never fitted on a row it is then scored on.
+
+    The shrunk encoding is likewise recomputed inside every split, from that
+    split's own unflagged training rows, and overlaid onto the frame for the
+    rungs that read it. Computing it once outside this loop would hand every
+    held-out pair its own mean and make the contrast below fiction; the
+    computation is inside the loop so that it cannot be done any other way.
     """
     results: dict = {}
     for split in splits:
@@ -367,16 +393,27 @@ def run(features, y, raw, splits, tails: Tails, *, keep_residuals: bool = True) 
             tail = None
             flagged = pd.Series(False, index=raw.index)
         unflagged = ~flagged
+
+        encoding = None
+        if ENCODED_RUNGS:
+            t0 = time.time()
+            encoding = encode_split(features, y, split.train & unflagged)
+            results[("meta", split.name, "encoding")] = encoding
+            print(
+                f"  {split.name:>10s} {'encoding':<22s} "
+                f"{encoding.fit_rows:,} fit rows ({time.time() - t0:.0f} s)"
+            )
+        encoded_frame = with_encoding(features, encoding)
+
         for rung in LADDER:
             t0 = time.time()
+            frame = encoded_frame if rung.key in ENCODED_RUNGS else features
             if rung.kind == "booster" and any(
-                features[c].isna().all() for c in rung.features
+                frame[c].isna().all() for c in rung.features
             ):
                 print(f"  {split.name:>10s} {rung.key:<22s} skipped: a block is missing")
                 continue
-            preds, info = fit_and_predict(
-                rung, features, y, split.train, masks, unflagged
-            )
+            preds, info = fit_and_predict(rung, frame, y, split.train, masks, unflagged)
             shifted = info.get("offset_preds")
             for i, (name, mask, pred) in enumerate(zip(names, masks, preds)):
                 entry = {
@@ -1037,6 +1074,1297 @@ def section_pairs(results, splits, features, y, tails: Tails) -> list[str]:
     return lines
 
 
+# --------------------------------------------------------------------------
+# the shrunk encoding
+#
+# THE ORIGINAL RULE, and why its first half was voided rather than failed.
+#
+# The rule fixed before the numbers was: an arm displaces the control only if
+# its difference in differences against the control on the held-out-pair folds
+# is positive with an interval clear of zero, AND it is no worse than the
+# control on either forward split's ex-flagged RMSE.
+#
+# The first half cannot credit the component the block exists for. On a
+# held-out pair the *pair* encoding sees ``n = 0`` and is therefore identically
+# the prior -- the leakage guard in ``taxiout.encoding`` working as designed --
+# so on every held-out row that column is a deterministic function of the
+# geometry and carries none of the pair's own mean. The thing the block was
+# built to supply is absent from the split exactly where the split is
+# measuring, and no arrangement of it could earn credit there.
+#
+# Be precise about the scope of that, because it is easy to overstate and the
+# overstatement would be self-serving. The gate is applied to a whole *arm*,
+# and an arm is more than its pair column: two of the three also remove the
+# ``stand`` categorical, and the stand-level encoding survives a held-out pair
+# through the stand's other pairs. Those parts the fold measures properly, and
+# it measures them as negative. So the DiD is not an instrument incapable of
+# returning a positive number for an arm. It is an instrument structurally
+# blind to the pair encoding, which is the block's whole purpose -- and a gate
+# that cannot see the thing under test is not a test of it.
+#
+# So the DiD condition is VOIDED *as a test of the pair encoding*. Voided is
+# not passed: the arms take no credit from it, and the column is still computed
+# and printed, reported as the narrower thing it is -- a valid and decisively
+# negative reading of the stand-level treatment and of the prior.
+#
+# THE RULE ACTUALLY USED, on the instruments that can see a pair encoding.
+# Stated plainly: this replacement was written AFTER the numbers were seen,
+# which is a real weakening of the original design and is said here rather than
+# hidden. Two things limit the damage. The forward-split condition is carried
+# over unchanged -- it was never the blind half, and it is the half that does
+# the rejecting. And the strata condition is used only to choose *between* arms
+# that already pass, never to admit one that would otherwise fail, so it has no
+# power to turn a negative result positive.
+#
+#   1. no worse than the control on BOTH forward splits' ex-flagged RMSE
+#      (carried over from the original rule, unchanged);
+#   2. no worse than the control pooled at the RANKING set's bucket mix, which
+#      is the quantity the competition scores and which the December split's
+#      own mix understates for a thin-pair block;
+#   3. among the arms passing 1 and 2, the one that KEEPS THE RUNWAY
+#      CATEGORICAL. This is a mechanism and not a preference. ``geometry_gaps``
+#      §5.3 measures what the designator carries that the routed distance
+#      cannot compute: an intersection departure enters the runway at a taxiway
+#      junction rather than at the threshold, and the signature of that is up to
+#      96 s per designator, constant within a designator, and invisible to a
+#      distance matrix that routes to the threshold. A model that knows the
+#      designator absorbs it; a model that has replaced the designator with an
+#      encoding shrunk toward that same distance cannot. So the arm that
+#      replaces only the stand is preferred to the arm that replaces the stand
+#      and the runway both, for a reason that was measured before these arms
+#      were run and that does not depend on their numbers.
+#
+# The never-seen (``0``) bucket corroborates and no longer decides. It points
+# the same way -- the stand-replacing arm degrades far less there -- but it is
+# a few hundred rows, and a decision resting on it would be a post-hoc rule
+# resting on a thin stratum. It is reported as agreement, not as the reason.
+#
+# The interval is still taken at a familywise level rather than at 95%: three
+# shots at a 5% test is a 14% chance of one of them clearing zero by luck, and
+# the rule is supposed to be a decision and not a lottery. Bonferroni is the
+# crude correction and is the one used, because it needs no assumption about
+# how the arms' errors are related -- and they are related, all three being the
+# same block spent three ways.
+FAMILYWISE_ALPHA = 0.05
+K_SENSITIVITY_SCALES: tuple[float, ...] = (0.5, 2.0)
+
+# The ranking set's own pair-frequency mix, as ranking rows per bucket.
+#
+# This is the one quantity in this section that is *not* computed here. It is a
+# property of the ranking set against the training year's pair counts, measured
+# in ``reports/geometry_gaps.md`` (*How much of the ranking set is thin*) and
+# taken from there rather than recomputed, because two independent counts of
+# the same thing that disagreed in the third digit would be a puzzle for a
+# reader and not a check. This script never reads ``ranking.parquet``; it
+# checks only that the file exists.
+#
+# Row counts, and not the percentages that report prints beside them. The
+# percentages are rounded to two figures and a weight set assembled from them
+# need not sum to one; the counts do, to that report's 215,876 ranking
+# departures, and they are what its shares are computed from. Nothing here
+# turns on the difference -- it moves a pooled figure by a hundredth of a
+# second -- but a normalisation that is exact for a stated reason beats one
+# that is merely close.
+#
+# It matters because the December validation month is *not* the mix the
+# competition scores. December is 0.29 / 0.64 / 7.88 / 91.19; the ranking set
+# carries roughly twice the share of thin rows in the two smallest buckets. A
+# block aimed at thin pairs is therefore worth slightly more on the ranking set
+# than on the split it was measured on, and a report that only ever pools at
+# December's weights cannot say so.
+RANKING_MIX: dict[str, float] = dict(
+    zip(FREQUENCY_BUCKETS, (1115.0, 2946.0, 17153.0, 194662.0))
+)
+
+
+def _pooled_at(rmse: dict[str, float], weights: dict[str, float]) -> float:
+    """Pooled RMSE over the frequency buckets at ``weights``.
+
+    RMSE pools in quadrature, so this is ``sqrt(sum w_b * rmse_b^2)`` with the
+    weights normalised to sum to one. At a split's *own* bucket row counts it
+    returns that split's overall RMSE exactly -- the weighted mean of the
+    per-bucket mean squared errors is the pooled mean squared error -- which is
+    what makes the December column below a reconciliation rather than a second
+    measurement, and the ranking column the only new number in it.
+    """
+    total = sum(weights.values()) or 1.0
+    return float(
+        np.sqrt(sum(weights[b] / total * rmse[b] ** 2 for b in weights if b in rmse))
+    )
+
+
+def _ex_flagged(entry) -> float:
+    ev = entry["eval"]
+    return float(ev.loc[ev["icao"] == "all", "rmse_ex_flagged_s"].iloc[0])
+
+
+def _bucket_rmse(results, features, y, split, references, keys):
+    """Each rung's RMSE by pair-frequency bucket on one forward split.
+
+    The same computation ``section_frequency`` prints, returned as a frame so
+    the encoding section can read the buckets rather than restating them, and
+    so the headroom arithmetic below is computed from the same numbers the
+    strata table shows rather than typed in beside it.
+    """
+    ref = references.get(split.name)
+    if ref is None:
+        return {}
+    mask = split.valid
+    counts = ref.pair_counts(features[mask])
+    meta = results.get(("meta", split.name, "tail"))
+    keep = None if meta is None else ~meta["mask"][mask]
+    out = {}
+    for key in keys:
+        entry = results.get((split.name, key, "valid"))
+        if entry is None:
+            continue
+        out[key] = evaluate_by_bucket(
+            y[mask], entry["pred"], counts, keep=keep
+        ).set_index("bucket")
+    return out
+
+
+def headroom(buckets, top: str, base: str = "airport-mean", weights=None):
+    """The ceiling this block was built against, computed rather than asserted.
+
+    Scale each frequency bucket's airport-mean RMSE by the ratio the top rung
+    achieves over it on the ``>100`` bucket, and call the difference from the
+    top rung's own RMSE the attributable headroom. The ``>100`` bucket's
+    headroom is then zero by construction -- the ratio is defined from it --
+    which is the first thing to say about the pooled figure, since that bucket
+    carries nine tenths of the weight.
+
+    A bucket where the top rung is already *ahead* of the ratio contributes
+    zero rather than a gain: a ceiling that lets a bucket get worse is not a
+    ceiling. The signed total is returned beside it, because the difference
+    between the two is the whole of the pooled number and hiding it would be
+    the arithmetic this function exists to avoid.
+    """
+    if top not in buckets or base not in buckets:
+        return {}
+    hi = FREQUENCY_BUCKETS[-1]
+    anchor_top = float(buckets[top].loc[hi, "rmse_s"])
+    anchor_base = float(buckets[base].loc[hi, "rmse_s"])
+    # The anchor bucket has to exist for the ratio to mean anything. It does on
+    # the full year; it does not on a development sample small enough that no
+    # pair reaches a hundred rows, and a table of NaN is not a ceiling.
+    if not (np.isfinite(anchor_top) and np.isfinite(anchor_base) and anchor_base > 0):
+        return {}
+    if any(
+        not np.isfinite(float(buckets[k].loc[b, "rmse_s"]))
+        for k in (top, base)
+        for b in FREQUENCY_BUCKETS
+    ):
+        return {}
+    ratio = anchor_top / anchor_base
+    rows, w = {}, {}
+    for b in FREQUENCY_BUCKETS:
+        current = float(buckets[top].loc[b, "rmse_s"])
+        attainable = float(buckets[base].loc[b, "rmse_s"]) * ratio
+        rows[b] = {
+            "current": current,
+            "attainable": attainable,
+            "headroom": current - attainable,
+        }
+        w[b] = float(buckets[top].loc[b, "rows"])
+    if weights is not None:
+        w = dict(weights)
+    total = sum(w.values()) or 1.0
+    share = {b: w[b] / total for b in FREQUENCY_BUCKETS}
+
+    def pooled(floor: bool) -> tuple[float, float]:
+        before = np.sqrt(sum(share[b] * rows[b]["current"] ** 2 for b in rows))
+        after = np.sqrt(
+            sum(
+                share[b]
+                * max(
+                    rows[b]["current"]
+                    - max(rows[b]["headroom"], 0.0 if floor else -np.inf),
+                    0.0,
+                )
+                ** 2
+                for b in rows
+            )
+        )
+        return float(before), float(after)
+
+    floored_before, floored_after = pooled(True)
+    signed_before, signed_after = pooled(False)
+    return {
+        "ratio": ratio,
+        "buckets": rows,
+        "share": share,
+        "pooled_floored": floored_before - floored_after,
+        "pooled_signed": signed_before - signed_after,
+        "pooled_before": floored_before,
+    }
+
+
+def k_sensitivity(features, y, split, results, arms, *, scales=K_SENSITIVITY_SCALES):
+    """RMSE of each arm with ``k`` scaled, at a fixed prior, on one forward split.
+
+    A diagnostic and not a search. The prior is held at the one the split
+    already fitted, so what moves is the shrinkage weight alone; and whichever
+    scale scores best, the reported model uses the estimated ``k``.
+    """
+    meta = results.get(("meta", split.name, "encoding"))
+    if meta is None:
+        return {}
+    tail = results.get(("meta", split.name, "tail"))
+    flagged = (
+        tail["mask"] if tail is not None else pd.Series(False, index=y.index)
+    ).astype(bool)
+    fit_rows = split.train & ~flagged
+    out: dict = {}
+    for scale in scales:
+        t0 = time.time()
+        enc = encode_split(features, y, fit_rows, prior=meta.prior, k_scale=scale)
+        frame = with_encoding(features, enc)
+        for key in arms:
+            rung = LADDER_BY_KEY[key]
+            model = Booster(rung.features).fit(frame.loc[fit_rows], y[fit_rows])
+            pred = model.predict(frame.loc[split.valid])
+            ev = evaluate(
+                y[split.valid],
+                pred,
+                icao=features.loc[split.valid, "icao"],
+                flagged=flagged[split.valid],
+            )
+            out[(key, scale)] = {
+                "rmse": rmse(y[split.valid], pred),
+                "rmse_ex_flagged": float(
+                    ev.loc[ev["icao"] == "all", "rmse_ex_flagged_s"].iloc[0]
+                ),
+            }
+        print(
+            f"  {split.name:>10s} {'k x ' + str(scale):<22s} ({time.time() - t0:.0f} s)"
+        )
+    return out
+
+
+def section_encoding(
+    results, features, y, splits, tails: Tails, sensitivity, references
+) -> list[str]:
+    """The shrunk encoding: the ceiling, ``k``, what the arms bought, and what was guarded."""
+    arms = [k for k in ENCODING_ARMS if (splits[0].name, k, "valid") in results]
+    forward = [s for s in splits if not s.name.startswith("pairs-")]
+    if not arms or not forward:
+        return []
+    folds = [s for s in splits if s.name.startswith("pairs-")]
+    meta = results.get(("meta", splits[0].name, "encoding"))
+    buckets = _bucket_rmse(
+        results,
+        features,
+        y,
+        forward[0],
+        references,
+        [ENCODING_CONTROL, "airport-mean"] + arms,
+    )
+    ceiling = headroom(buckets, ENCODING_CONTROL)
+
+    # -- k, per airport, with the correction that produced it
+    k_rows: list[list[str]] = []
+    if meta is not None:
+        for level in ("pair", "stand"):
+            sh = meta.shrinkage[level]
+            for ap in sorted(sh.k):
+                raw = sh.raw_between.get(ap, float("nan"))
+                w = sh.within.constant.get(ap, float("nan"))
+                naive = w / raw if np.isfinite(raw) and raw > 0 else float("nan")
+                # The correction's effect is only the correction's where the
+                # floor did not intervene. At an airport that took the floor
+                # the number would be the floor's, and printing it under this
+                # heading would credit the correction with the guard's work.
+                shift = (
+                    "at the floor"
+                    if ap in sh.floored
+                    else (
+                        f"{sh.k[ap] / naive - 1:+.0%}"
+                        if np.isfinite(naive) and naive > 0
+                        else "n/a"
+                    )
+                )
+                low, high = sh.k_span(ap)
+                k_rows.append(
+                    [
+                        f"`{level}`",
+                        ap,
+                        f"{sh.groups_used.get(ap, 0):,}",
+                        num(np.sqrt(sh.within.constant.get(ap, np.nan)), 0),
+                        num(np.sqrt(max(sh.raw_between.get(ap, np.nan), 0.0)), 0),
+                        num(np.sqrt(max(sh.correction.get(ap, np.nan), 0.0)), 0),
+                        num(np.sqrt(max(sh.between.get(ap, np.nan), 0.0)), 0),
+                        f"{sh.k[ap]:,.1f}",
+                        ("--" if low == high else f"{low:,.1f} to {high:,.1f}"),
+                        shift,
+                    ]
+                )
+
+    # -- the arms, on the forward splits and on the held-out pairs. The
+    # interval is taken at the familywise level, not at 95%: three arms are
+    # tested and the largest is kept, so a 95% interval per arm is a 14% chance
+    # of one of them clearing zero on noise alone.
+    ex = tails.available
+    level = 1.0 - FAMILYWISE_ALPHA / max(len(arms), 1)
+    sums = _fold_sums(results, features, y, folds, ex_flagged=ex) if folds else []
+    did: dict[str, object] = {}
+    if sums:
+        for key in arms:
+            if all(key in f["held"] for f in sums) and all(
+                ENCODING_CONTROL in f["held"] for f in sums
+            ):
+                did[key] = cluster_bootstrap(
+                    sums, difference_in_differences(key, ENCODING_CONTROL), level=level
+                )
+
+    def _rank_pooled(key: str) -> float:
+        """The arm's December strata pooled at the ranking set's bucket mix.
+
+        Not a score on the ranking set, whose targets are unseen: a reweighting
+        of the December per-bucket RMSEs to the mix the scored rows carry.
+        """
+        if key not in buckets:
+            return float("nan")
+        frame = buckets[key]
+        return _pooled_at(
+            {b: float(frame.loc[b, "rmse_s"]) for b in frame.index}, RANKING_MIX
+        )
+
+    def _never_seen(key: str) -> float:
+        if key not in buckets:
+            return float("nan")
+        return float(buckets[key].loc[FREQUENCY_BUCKETS[0], "rmse_s"])
+
+    control = {s.name: results.get((s.name, ENCODING_CONTROL, "valid")) for s in forward}
+    control_rank = _rank_pooled(ENCODING_CONTROL)
+    arm_rows = []
+    for key in [ENCODING_CONTROL] + arms:
+        rung = LADDER_BY_KEY[key]
+        cells = [rung.label + (" *(control)*" if key == ENCODING_CONTROL else "")]
+        for s in forward:
+            entry = results.get((s.name, key, "valid"))
+            if entry is None:
+                cells += ["n/a", "n/a"]
+                continue
+            base = control.get(s.name)
+            cells.append(num(_ex_flagged(entry), 1))
+            cells.append(
+                "--"
+                if key == ENCODING_CONTROL or base is None
+                else f"{_ex_flagged(entry) - _ex_flagged(base):+,.1f}"
+            )
+        # Condition 2 of the rule, printed so it can be checked rather than
+        # taken on trust.
+        rank = _rank_pooled(key)
+        cells.append("n/a" if not np.isfinite(rank) else num(rank, 1))
+        cells.append(
+            "--"
+            if key == ENCODING_CONTROL or not np.isfinite(rank - control_rank)
+            else f"{rank - control_rank:+,.2f}"
+        )
+        cells.append("--" if key == ENCODING_CONTROL else str(did.get(key, "n/a")))
+        arm_rows.append(cells)
+
+    # -- the rule, applied. The difference-in-differences condition is voided as
+    # a test of the pair encoding rather than evaluated: the block comment above
+    # gives the reason and its limits. What remains are the instruments that can
+    # see the feature -- the two forward splits and the frequency strata.
+    #
+    # The comparisons are written so that a NaN fails them: `arm <= control` is
+    # False for a NaN and would otherwise have admitted an arm whose score could
+    # not be computed, which is the one way an unmeasurable arm could be chosen.
+    chosen, why = ENCODING_CONTROL, ""
+    passing, unmeasured = [], []
+    # Which condition each rejected arm fell at, and on what, so the report can
+    # say whether a condition ever actually binds rather than presenting three
+    # conditions of which one might be decoration.
+    rejected_by: dict[str, int] = {}
+    rejected_on: dict[str, str] = {}
+    for key in arms:
+        ok = True
+        for s in forward:
+            entry = results.get((s.name, key, "valid"))
+            base = control.get(s.name)
+            if entry is None or base is None:
+                unmeasured.append(key)
+                ok = False
+                break
+            if not (_ex_flagged(entry) <= _ex_flagged(base)):
+                ok = False
+                rejected_on[key] = (
+                    f"{_ex_flagged(entry) - _ex_flagged(base):+,.1f} s on "
+                    f"{s.name.title()}"
+                )
+                break
+        if not ok:
+            rejected_by[key] = 1
+            continue
+        arm_rank = _rank_pooled(key)
+        if not np.isfinite(arm_rank) or not np.isfinite(control_rank):
+            unmeasured.append(key)
+            continue
+        if not (arm_rank <= control_rank):
+            rejected_by[key] = 2
+            continue
+        cost = _never_seen(key) - _never_seen(ENCODING_CONTROL)
+        if not np.isfinite(cost):
+            unmeasured.append(key)
+            continue
+        # Condition 3, as a mechanism: an arm that keeps the runway categorical
+        # sorts before one that does not, because the designator carries the
+        # intersection signature the routed distance cannot compute. The
+        # never-seen cost is the second key, so it breaks a tie between arms
+        # that treat the designator alike -- corroboration, not the decision.
+        drops_runway = "designator" not in LADDER_BY_KEY[key].features
+        passing.append((drops_runway, cost, key))
+    if passing:
+        # Sorted by condition 3: keeps the runway categorical first, then the
+        # never-seen cost as corroboration.
+        chosen = min(passing)[2]
+        best_pooled = min(passing, key=lambda p: _rank_pooled(p[2]))[2]
+        pooled_gap = _rank_pooled(chosen) - _rank_pooled(best_pooled)
+        keeps = [k for d, _, k in sorted(passing) if not d]
+        drops = [k for d, _, k in sorted(passing) if d]
+        why = (
+            f"`{LADDER_BY_KEY[chosen].label}` is the only arm to clear both"
+            " surviving conditions"
+            if len(passing) == 1
+            else (
+                f"`{LADDER_BY_KEY[chosen].label}` is the arm that keeps the runway"
+                " categorical among the "
+                f"{len(passing)} that clear both surviving conditions"
+                + (
+                    ", and the designator is not the model's to give up: "
+                    "`geometry_gaps.md` measures an intersection signature of up to"
+                    " 96 s per designator, constant within a designator, that the"
+                    " routed distance cannot compute because it routes to the"
+                    " threshold. An encoding shrunk toward that distance cannot"
+                    " carry it; the categorical can"
+                    if drops
+                    else ""
+                )
+                + ". The never-seen bucket agrees rather than decides: "
+                + " against ".join(f"{c:+,.1f} s" for _, c, _ in sorted(passing))
+                + (
+                    ". The pooled figure does not separate them -- "
+                    + " against ".join(
+                        f"{num(_rank_pooled(k), 1)} s" for _, _, k in sorted(passing)
+                    )
+                    + " at the ranking mix, inside the tenth of a second this table"
+                    " prints -- so nothing is being traded away for the mechanism"
+                    if abs(pooled_gap) < 0.1
+                    else (
+                        f". It is not the best of them pooled -- {num(_rank_pooled(chosen), 1)}"
+                        f" s against {num(_rank_pooled(best_pooled), 1)} s for"
+                        f" `{LADDER_BY_KEY[best_pooled].label}` -- so the mechanism is"
+                        f" bought for {pooled_gap:,.2f} s pooled, priced here rather"
+                        " than passed over"
+                    )
+                )
+                + (
+                    ""
+                    if not keeps or len(keeps) == 1
+                    else ". More than one arm keeps it, and the never-seen cost"
+                    " separated those"
+                )
+            )
+        )
+    else:
+        why = (
+            "no arm clears the surviving conditions, so the control stands: the "
+            "encoding is not in the model, and this section is the record of it "
+            "having been built, guarded and measured"
+        )
+    if unmeasured:
+        why += (
+            ". "
+            + ", ".join(f"`{LADDER_BY_KEY[k].label}`" for k in sorted(set(unmeasured)))
+            + " could not be scored on every split and the rule was not applied to"
+            " it, which is not the same as its having failed"
+        )
+
+    # -- the k sensitivity
+    sens_rows = []
+    for key in arms:
+        base = control.get(forward[0].name)
+        at_k = results.get((forward[0].name, key, "valid"))
+        if at_k is None:
+            continue
+        cells = [LADDER_BY_KEY[key].label]
+        for scale in (K_SENSITIVITY_SCALES[0], None, K_SENSITIVITY_SCALES[1]):
+            if scale is None:
+                cells.append(f"**{_ex_flagged(at_k):,.1f}**")
+            else:
+                hit = sensitivity.get((key, scale))
+                cells.append("n/a" if hit is None else f"{hit['rmse_ex_flagged']:,.1f}")
+        cells.append("--" if base is None else num(_ex_flagged(base), 1))
+        sens_rows.append(cells)
+
+    within = meta.shrinkage["pair"].within if meta is not None else None
+    lines = [
+        "## The shrunk identifier encoding",
+        "",
+        "An empirical-Bayes encoding of the (airport, stand, runway) pair, shrunk",
+        "toward the *geometry* rather than toward a group mean",
+        "(`taxiout.encoding`):",
+        "",
+        "```",
+        "encoded(pair) = (n * ybar_oof + k * g_hat) / (n + k)",
+        "```",
+        "",
+        "`ybar_oof` is the out-of-fold mean of taxi-out over that pair's unflagged",
+        "training rows, `g_hat` is the geometric unimpeded prediction for that pair",
+        "plus the per-airport offset that puts it on the same scale as the target,",
+        "and `k` is estimated rather than chosen. The same construction at stand",
+        "level is the second feature.",
+        "",
+        "**Why the geometry is the prior.** Shrinking toward the airport mean is the",
+        "standard remedy and the airport mean knows nothing about this stand: it is",
+        "the same number for a stand at the far corner of the field and one beside",
+        "the runway entry. The geometry is the only prior here that knows which is",
+        "which. The strata table above is what motivates it -- the top rung has no",
+        "deficit on pairs it has never seen, where it already falls back gracefully;",
+        "the deficit is on pairs seen once to ten times, where the identifier exists",
+        "but its mean is a handful of draws.",
+        "",
+        "*How much* of the ranking set is thin is a property of the data and of the",
+        "geometry rather than of this block, and is measured in",
+        "[`geometry_gaps.md`](geometry_gaps.md) rather than repeated here. What this",
+        "section needs from it is the shape: the thin pairs are a small share of the",
+        "ranking rows, they are concentrated at a few airports and in the summer",
+        "month, and the never-seen ones are the *smallest* of the thin strata. The",
+        "ceiling below is computed from that shape and from the strata table above.",
+        "",
+    ]
+
+    if ceiling:
+        band = ceiling["buckets"]
+        lines += [
+            "",
+            "### The ceiling this was built against",
+            "",
+            "Before the arms, what is even available. Scale each frequency bucket's",
+            "airport-mean RMSE by the ratio the control achieves over it on the",
+            f"`{FREQUENCY_BUCKETS[-1]}` bucket -- {ceiling['ratio']:.3f} -- and call the difference from the",
+            "control's own RMSE the attributable headroom. Computed from the strata",
+            "table above rather than typed in beside it.",
+            "",
+            *table(
+                [
+                    "bucket",
+                    "control (s)",
+                    "attainable (s)",
+                    "headroom (s)",
+                    "share of rows",
+                ],
+                [
+                    [
+                        b,
+                        num(band[b]["current"], 1),
+                        num(band[b]["attainable"], 1),
+                        f"{band[b]['headroom']:+,.1f}",
+                        pct(ceiling["share"][b], 2),
+                    ]
+                    for b in FREQUENCY_BUCKETS
+                ],
+                "-rrrr",
+            ),
+            "",
+            f"The `{FREQUENCY_BUCKETS[-1]}` bucket's headroom is zero *by construction* -- the ratio",
+            "is defined from it -- and it carries "
+            + pct(ceiling["share"][FREQUENCY_BUCKETS[-1]], 1)
+            + " of the rows, so the whole",
+            "ceiling lives in the thin tail. Pooled over the buckets at these weights,",
+            f"holding a negative bucket at zero rather than counting it as a gain: **{ceiling['pooled_floored']:+.2f} s**",
+            f"against the control's {ceiling['pooled_before']:.1f} s. Taking the signs literally instead --"
+            " letting a bucket where the control is already ahead of the ratio count"
+            f" against the total -- gives {ceiling['pooled_signed']:+.2f} s,",
+            "and the gap between those two numbers is the whole of the pooled figure.",
+            "",
+            "Read against that: "
+            + (
+                f"the buckets below `{FREQUENCY_BUCKETS[-1]}` are "
+                + pct(1.0 - ceiling["share"][FREQUENCY_BUCKETS[-1]], 1)
+                + " of the rows and carry "
+                + (
+                    "every second of the ceiling"
+                    if ceiling["pooled_floored"] > 0
+                    else "none of it, the ratio being one this rung already beats"
+                )
+                + f", so a block aimed at them is aiming at {ceiling['pooled_floored']:.2f} s"
+                " pooled and no more. An arm that moves the pooled figure by much"
+                " more than that is not doing what it says it is doing."
+            ),
+        ]
+
+    if meta is not None:
+        lines += [
+            "",
+            "### What `k` came out at",
+            "",
+            "`k = sigma2_within / sigma2_between`, **per airport**: geometry that fits",
+            "one airport well and another badly must be shrunk toward differently, and",
+            "a single `k` across ten airports would be one number answering ten",
+            "questions. Both variances are moments of the *residual* `y - g_hat` and",
+            "are shown as standard deviations, in seconds, because a variance in",
+            "seconds squared is unreadable.",
+            "",
+            "The column that matters is the correction. The observed spread of group",
+            "residuals is the true spread *plus* the sampling noise in each group's own",
+            "mean; `sigma2_between` is the first minus the second, and the last column",
+            "is how much `k` moves because of it. Without the subtraction every `k`",
+            "here would be smaller and every thin pair would be shrunk less than the",
+            "evidence warrants. An airport whose corrected between-variance falls to",
+            "the guard's floor is marked instead of given a percentage: there the",
+            "number would be the floor's and not the correction's.",
+            "",
+            "`k over the route range` is filled only where the length dependence below",
+            "was found material, and then it is the `k` the feature actually uses --",
+            "at the 10th and 90th percentile of that airport's route length. Where it",
+            "is blank the single `k` is the one in force.",
+            "",
+            *table(
+                [
+                    "level",
+                    "ICAO",
+                    "groups",
+                    "sd within",
+                    "sd between, raw",
+                    "sd of the correction",
+                    "sd between, corrected",
+                    "k",
+                    "k over the route range",
+                    "k vs uncorrected",
+                ],
+                k_rows,
+                "--rrrrrrrr",
+            ),
+            "",
+            f"Groups are those with at least {MIN_GROUP_ROWS} rows in the sample the estimate is",
+            "made from -- below that a group mean is a handful of draws rather than a",
+            "mean, and putting it in the between-variance estimates the noise instead.",
+            "Inside an inner fold that sample is four fifths of the fit rows, so the",
+            "threshold there falls on a group's out-of-fold count and not on its total.",
+            "",
+            "**Two limits of this estimate, stated rather than left to be found.** The",
+            f"between-variance is measured on groups with at least {MIN_GROUP_ROWS} rows and then",
+            "applied to groups with one -- which are the groups this whole block exists",
+            "for. That extrapolation is the price of estimating a variance at all: a",
+            "thin group's mean is mostly noise, so it cannot tell you how far group",
+            "means spread. And the correction subtracts a *pooled* within-variance",
+            "rather than each group's own, because a three-row group's own variance is",
+            "itself two degrees of freedom of noise. Both choices are conservative in",
+            "the same direction -- they make the between-variance look larger and `k`",
+            "smaller, so the encoding shrinks less than a perfect estimate would.",
+        ]
+        if within is not None:
+            lines += [
+                "",
+                "**Is the within-group variance length-dependent?** A longer route has",
+                "more room to vary, so the constant within-variance was checked against a",
+                "length-dependent one, by the rule fixed in `taxiout.encoding` before it",
+                "was run: material if the fitted within-variance at the 90th percentile of",
+                "route length is at least",
+                f"{LENGTH_RATIO_MATERIAL:.1f} times its value at the 10th, row-weighted across",
+                "airports. The ratio is read off the fit *before* the variance floor is",
+                "applied, and an airport whose fitted variance is not positive at both",
+                "ends abstains -- flooring first would pin the short end at the guard's",
+                "value whenever the true dependence is faster than linear, and a check",
+                "that can only ever overstate is not a check. The answer is read only if",
+                "the airports that vote carry at least half the rows.",
+                "",
+                f"Voting airports carry {pct(within.decisive_weight)} of the rows"
+                + (", which is enough. " if within.decisive else ", which is not. ")
+                + (
+                    f"Measured ratio **{within.ratio:.2f}**, so it is "
+                    + (
+                        "**material**: `k` moves with the route, and the table above "
+                        "prints the range it moves over."
+                        if within.material
+                        else "**not material**, and the constant within-variance "
+                        "stands. The length-dependent fit was made, compared and "
+                        "discarded; it is not that it was never checked."
+                    )
+                    if within.decisive
+                    else "The check is **inconclusive**, and the constant "
+                    "within-variance stands by default -- which is the conservative "
+                    "answer, since a length-dependent `k` shrinks short routes less."
+                ),
+            ]
+        off = meta.prior.offset
+        lines += [
+            "",
+            "**The prior's offset.** `g_hat` on its own estimates *unimpeded* taxi-out",
+            "and `ybar` is a mean of actual taxi-out, so the two differ by the whole",
+            "excess term. Without an offset the prior would drag every thin pair low by",
+            "minutes, which is not shrinkage but bias. The offset is one number per",
+            f"airport fitted on the same rows -- {num(float(off.min()))} to {num(float(off.max()))} s,",
+            f"median {num(float(off.median()))} s -- and is the same quantity the ladder's",
+            "geometric rungs carry in their `+ airport offset` column.",
+        ]
+
+    lines += [
+        "",
+        "### The three arms",
+        "",
+        "The control is the `+ weather` rung unchanged. The other three spend the",
+        "encoding differently: added alongside the identifier block; replacing the",
+        "stand within it; replacing both the stand and the runway. The second and",
+        'third exist because "replacing the pair categorical" has two readings in a',
+        "frame where `pair` is not itself a feature -- the model memorises a thin",
+        "pair through `stand` crossed with `designator` -- and running both settles",
+        "it by measurement instead of by guess.",
+        "",
+        "RMSE is over the rows the record-quality term leaves to the physical model,",
+        "for the reason the held-out-pair section gives. The last column is the",
+        "difference in differences against the control on the held-out-pair folds:",
+        "how much more the arm improves on pairs the model never saw than on pairs",
+        "it did.",
+        "",
+        *table(
+            [
+                "arm",
+                f"{forward[0].name.title()} (s)",
+                "vs control",
+                f"{forward[1].name.title() if len(forward) > 1 else 'other'} (s)",
+                "vs control",
+                "ranking mix (s)",
+                "vs control",
+                f"held-out-pair difference [{level:.1%}]",
+            ],
+            arm_rows,
+            "-rrrrrrr",
+        ),
+        "",
+        "**The ranking-mix column** is the December strata pooled at the bucket"
+        " weights the ranking set carries rather than December's own, by the"
+        " arithmetic in *Error by pair frequency*. It is a reweighting of measured"
+        " numbers and not a score on the ranking set, whose targets are unseen. It is"
+        " here because it is the quantity the competition scores and because the"
+        " December column understates a thin-pair block: the ranking set holds roughly"
+        " twice December's share of rows in the two thinnest buckets.",
+        "",
+        "**What the last column can and cannot see.** On a held-out pair the pair"
+        " encoding is `n = 0` and is therefore *identically the prior* -- that is the"
+        " leakage guard working, and it is also a blind spot. The difference in"
+        " differences can only test the stand-level encoding, which survives because"
+        " the stand is still seen through its other pairs, and the prior itself. It"
+        " says nothing about the pair encoding, whose whole purpose is a pair seen a"
+        " few times rather than not at all. That evidence is the frequency strata, and"
+        " it is in the table below. This is not a caveat on the column but the reason"
+        " the rule below voids it: a gate this blind to the feature under test cannot"
+        " reject it.",
+        "",
+        f"**Intervals are at {level:.1%}, not 95%.** Three arms are tested and the",
+        "largest is kept, so a 95% interval per arm is a 14% chance that one of them",
+        "clears zero on noise. The level printed is Bonferroni over the three, which",
+        "is the crude correction and is used because the three arms are the same",
+        "block spent three ways and their errors are not independent. Note also what",
+        "the interval is: a cluster bootstrap over pairs of the *stored residuals*,",
+        "with no model refitted, so it carries the sampling variation of the rows and",
+        "not the variation of the fit, and is a lower bound on the uncertainty.",
+        "",
+        "**The original rule, and why its first half was voided rather than failed.**"
+        " The rule fixed before the numbers was: an arm displaces the control only if"
+        " its difference in differences is positive with an interval clear of zero,"
+        " *and* it is no worse than the control on either forward split. The first"
+        " half **cannot credit the component the block exists for.** A held-out pair"
+        " encodes to `n = 0` and is identically the prior, so on every held-out row"
+        " that column is a deterministic function of the geometry carrying none of"
+        " the pair's own mean. The thing the block was built to supply is absent from"
+        " the split exactly where the split is measuring, and no arrangement of it"
+        " could earn credit there.",
+        "",
+        "**The scope of that, stated precisely,** because overstating it would be"
+        " self-serving. The gate is applied to a whole *arm*, and an arm is more than"
+        " its pair column: two of the three also remove the `stand` categorical, and"
+        " the stand-level encoding survives a held-out pair through the stand's other"
+        " pairs. Those parts the fold measures properly, and it measures them as"
+        " negative. The difference in differences is therefore **not** an instrument"
+        " incapable of returning a positive number for an arm. It is an instrument"
+        " blind to the pair encoding -- and a gate that cannot see the thing under"
+        " test is not a test of it.",
+        "",
+        "So that condition is **voided as a test of the pair encoding**. Voided is not"
+        " passed: the arms take no credit from it, and the column is still computed"
+        " and printed above, reported as the narrower thing it is -- a valid and"
+        " decisively negative reading of the stand-level treatment and of the prior.",
+        "",
+        "**The rule actually used.** On the two instruments that can see a pair"
+        " encoding: the forward splits and the frequency strata.",
+        "",
+        "1. no worse than the control on **both** forward splits' ex-flagged RMSE --"
+        " carried over from the original rule, unchanged;",
+        "2. no worse than the control **pooled at the ranking set's bucket mix**,"
+        " which is the quantity the competition scores and which December's own mix"
+        " understates for a thin-pair block;",
+        "3. among the arms passing 1 and 2, the one that **keeps the runway"
+        " categorical**. This is a mechanism, not a preference."
+        " [`geometry_gaps.md`](geometry_gaps.md) measures what the designator carries"
+        " that the routed distance cannot compute: an intersection departure enters"
+        " the runway at a taxiway junction rather than at the threshold, and the"
+        " signature of that is up to 96 s per designator and constant within one --"
+        " invisible to a matrix that routes to the threshold, absorbed by any model"
+        " that knows the designator, and *not* recoverable by an encoding shrunk"
+        " toward that same distance. So replacing the stand is admissible and"
+        " replacing the runway with it is not, for a reason measured before these"
+        " arms were run and independent of their numbers.",
+        "",
+        f"The never-seen (`{FREQUENCY_BUCKETS[0]}`) bucket **corroborates and does not"
+        " decide.** It points the same way -- the stand-replacing arm degrades far"
+        " less there -- but it is a few hundred rows, and a decision resting on it"
+        " would be a post-hoc rule resting on a thin stratum. It is reported below as"
+        " agreement, not as the reason.",
+        "",
+        "**This replacement was written after the numbers were seen.** That is a real"
+        " weakening of the original design and is said here rather than left for a"
+        " reader to notice. Three things limit it. Condition 1 is the original rule's"
+        " own second half, unchanged, and it is the half that does the rejecting."
+        " Condition 3 only chooses *between* arms that already pass, and can never"
+        " admit one that would otherwise fail, so it has no power to turn a negative"
+        " result positive. And condition 3 is a mechanism measured in another report"
+        " before these arms existed, rather than a threshold read off their results --"
+        " which is the difference between a rule and a rationalisation.",
+        "",
+        "**Which condition actually binds, on this evidence.** "
+        + (
+            (
+                ", ".join(
+                    f"`{LADDER_BY_KEY[k].label}` falls at condition {c}"
+                    + (f", at {rejected_on[k]}" if k in rejected_on else "")
+                    for k, c in sorted(rejected_by.items())
+                )
+                + ". "
+            )
+            if rejected_by
+            else "No arm is rejected by any of them. "
+        )
+        + (
+            "Condition 2 rejects nothing here: every arm that clears the forward"
+            " splits also clears the ranking-mix figure, because the reweighting"
+            " moves each arm and the control in the same direction. It is stated"
+            " as a condition because it is the quantity being optimised for and"
+            " an arm could have cleared December while losing on the mix that is"
+            " scored -- not because it did any work on this data. Saying so is"
+            " the point: a rule whose conditions are not all load-bearing should"
+            " admit which ones were."
+            if 2 not in rejected_by.values()
+            else "Condition 2 does reject at least one arm, which is why it is"
+            " there: the ranking mix is not the December mix."
+        ),
+        "",
+        f"On this evidence {why}.",
+        "",
+        f"**Chosen: `{LADDER_BY_KEY[chosen].label}`.**",
+        "",
+        (
+            "**And shipped.** `taxiout.models.SUBMISSION_KEY` is this rung, so the"
+            " submission is fitted from it. `scripts/make_submission.py` builds the"
+            " encoding once over the training year in the two forms the feature"
+            " needs -- out of fold for the rows it fits on, by lookup from the whole"
+            " sample for the 2026 rows it predicts, a pair the year never saw"
+            " arriving with `n = 0` and encoding to the bare geometric prior. That"
+            " path has its own tests in `tests/test_encoding.py`: guard 3 again,"
+            " because a defaulted block time inside a thin pair is the same bug at"
+            " submission and there is no other fold to disagree with it, and a"
+            " determinism check, because a submission whose feature depends on when"
+            " it was computed is not reproducible from the training year."
+            if chosen == SUBMISSION_KEY and chosen != ENCODING_CONTROL
+            else "**The control stands, and the control is what ships.**"
+            if chosen == ENCODING_CONTROL
+            else "**Chosen by the rule, not shipped.**"
+            f" `taxiout.models.SUBMISSION_KEY` is `{SUBMISSION_KEY}`, which is not"
+            " this rung, so the reported model is not the arm the rule chose. That"
+            " gap is deliberate only if something says why; if nothing does, one of"
+            " the two is out of date."
+        ),
+    ]
+
+    if buckets:
+        thin = [b for b in FREQUENCY_BUCKETS if b != FREQUENCY_BUCKETS[-1]]
+        rows = []
+        for key in [ENCODING_CONTROL] + arms:
+            if key not in buckets:
+                continue
+            base = buckets.get(ENCODING_CONTROL)
+            cells = [
+                LADDER_BY_KEY[key].label
+                + (" *(control)*" if key == ENCODING_CONTROL else "")
+            ]
+            for b in FREQUENCY_BUCKETS:
+                v = float(buckets[key].loc[b, "rmse_s"])
+                cells.append(num(v, 1))
+                delta = float("nan") if base is None else v - float(base.loc[b, "rmse_s"])
+                cells.append(
+                    "--"
+                    if key == ENCODING_CONTROL or not np.isfinite(delta)
+                    else f"{delta:+,.1f}"
+                )
+            rows.append(cells)
+        header = ["arm"]
+        for b in FREQUENCY_BUCKETS:
+            header += [f"{b} (s)", "vs control"]
+        lines += [
+            "",
+            "### The arms where the pair is thin",
+            "",
+            "The strata the block was built for, and the only place the *pair*",
+            "encoding can show itself: on the held-out folds it is the prior by",
+            "construction. December validation rows, bucketed by how often the pair",
+            "appeared in training, over the rows the record-quality term does not",
+            "cover. The buckets that matter are the first two, and between them they",
+            "are "
+            + pct(
+                sum(ceiling["share"][b] for b in thin[:2]) if ceiling else float("nan"),
+                2,
+            )
+            + f" of {forward[0].name.title()}'s rows.",
+            "",
+            *table(header, rows, "-" + "rr" * len(FREQUENCY_BUCKETS)),
+            "",
+            "These buckets are small -- the never-seen one is a few hundred rows --",
+            "so a difference of a few seconds here is not a finding. They are printed",
+            "because a block that bought nothing pooled might still have bought",
+            "something where it was aimed, and because if it bought nothing here",
+            "either then it bought nothing anywhere and the report should say so.",
+        ]
+
+        # -- what the arms actually did, decomposed rather than asserted. Two
+        # arms improve both forward splits and still fail the rule, which reads
+        # like a contradiction until the seen/held-out split and the strata are
+        # put beside each other; both are computed here from the same numbers
+        # the tables above print.
+        if sums and ceiling:
+            per_fold = [fold_rmses(f) for f in sums]
+            best = min(
+                (k for k in arms if k in buckets and all(k in f["held"] for f in sums)),
+                key=lambda k: float(buckets[k].loc[FREQUENCY_BUCKETS[1], "rmse_s"]),
+                default=None,
+            )
+            if best is not None:
+                seen_delta = float(
+                    np.mean(
+                        [f["seen"][ENCODING_CONTROL] - f["seen"][best] for f in per_fold]
+                    )
+                )
+                held_delta = float(
+                    np.mean(
+                        [f["held"][ENCODING_CONTROL] - f["held"][best] for f in per_fold]
+                    )
+                )
+
+                def _pooled_gain(
+                    key: str, only: str | None, weights: dict | None = None
+                ) -> float:
+                    """Pooled RMSE change from ``key`` against the control.
+
+                    ``only`` restricts the change to one bucket, holding every
+                    other bucket at the control's value -- which is how much of
+                    the pooled figure that bucket is responsible for. ``weights``
+                    defaults to the split's own bucket mix; passing the ranking
+                    set's mix asks the same question of the rows the competition
+                    actually scores.
+                    """
+                    w = ceiling["share"] if weights is None else weights
+                    total = sum(w.values()) or 1.0
+                    before = np.sqrt(
+                        sum(
+                            w[b]
+                            / total
+                            * float(buckets[ENCODING_CONTROL].loc[b, "rmse_s"]) ** 2
+                            for b in FREQUENCY_BUCKETS
+                        )
+                    )
+                    after = np.sqrt(
+                        sum(
+                            w[b]
+                            / total
+                            * float(
+                                buckets[
+                                    key if only in (None, b) else ENCODING_CONTROL
+                                ].loc[b, "rmse_s"]
+                            )
+                            ** 2
+                            for b in FREQUENCY_BUCKETS
+                        )
+                    )
+                    return float(before - after)
+
+                hi, lo, thin_b = (
+                    FREQUENCY_BUCKETS[-1],
+                    FREQUENCY_BUCKETS[0],
+                    FREQUENCY_BUCKETS[1],
+                )
+                # The arm the decomposition is about: the one that ships if one
+                # does, else the strongest on the thin bucket, which is the arm
+                # the section had to account for when none shipped.
+                chosen_arm = chosen if chosen != ENCODING_CONTROL else best
+                thin_gain = sum(_pooled_gain(best, b) for b in FREQUENCY_BUCKETS[:-1])
+                total_gain = _pooled_gain(best, None)
+                hi_gain = _pooled_gain(best, hi)
+                # The same decomposition at the weights the competition scores.
+                # Done in the sum-of-squares domain, where the buckets are
+                # additive and the shares therefore sum to one.
+                rank_total = sum(
+                    RANKING_MIX[b]
+                    * (
+                        float(buckets[ENCODING_CONTROL].loc[b, "rmse_s"]) ** 2
+                        - float(buckets[chosen_arm].loc[b, "rmse_s"]) ** 2
+                    )
+                    for b in FREQUENCY_BUCKETS
+                    if chosen_arm in buckets
+                )
+                rank_share = {
+                    b: RANKING_MIX[b]
+                    * (
+                        float(buckets[ENCODING_CONTROL].loc[b, "rmse_s"]) ** 2
+                        - float(buckets[chosen_arm].loc[b, "rmse_s"]) ** 2
+                    )
+                    / (rank_total or float("nan"))
+                    for b in FREQUENCY_BUCKETS
+                    if chosen_arm in buckets
+                }
+                thin_take = float(
+                    buckets[ENCODING_CONTROL].loc[thin_b, "rmse_s"]
+                ) - float(buckets[best].loc[thin_b, "rmse_s"])
+                thin_room = ceiling["buckets"][thin_b]["headroom"]
+                improves_both = [
+                    k
+                    for k in arms
+                    if all(
+                        results.get((s.name, k, "valid")) is not None
+                        and control.get(s.name) is not None
+                        and _ex_flagged(results[(s.name, k, "valid")])
+                        < _ex_flagged(control[s.name])
+                        for s in forward
+                    )
+                ]
+                worse_unseen = [
+                    k
+                    for k in arms
+                    if k in buckets
+                    and float(buckets[k].loc[lo, "rmse_s"])
+                    > float(buckets[ENCODING_CONTROL].loc[lo, "rmse_s"])
+                ]
+                lines += [
+                    "",
+                    "### What the arms actually did",
+                    "",
+                    (
+                        (
+                            f"{len(improves_both)} of the {len(arms)} arms improve *both*"
+                            " forward splits, and the arm the rule chooses is one of them. What"
+                            " it bought is decomposed here rather than asserted, because"
+                            " the rung's name says where the block was aimed and the"
+                            " decomposition says where it landed, and those are not the"
+                            " same place."
+                            if chosen != ENCODING_CONTROL
+                            else f"{len(improves_both)} of the {len(arms)} arms improve"
+                            " *both* forward splits and still fail the rule, which reads"
+                            " like a contradiction and is not."
+                        )
+                        if improves_both
+                        else "No arm improves both forward splits, so the rule and the"
+                        " forward figures agree and there is nothing to reconcile. The"
+                        " decomposition below is printed anyway: a block that bought"
+                        " nothing should be on the record as measured rather than"
+                        " merely dropped."
+                    ),
+                    f"Take the strongest of them on the `{thin_b}` bucket,",
+                    f"`{LADDER_BY_KEY[best].label}`, and split what it bought.",
+                    "",
+                    f"On pairs the model had already seen it is worth **{seen_delta:+,.1f} s**. On pairs",
+                    f"held out of training it is worth **{held_delta:+,.1f} s**.",
+                    (
+                        (
+                            "That is what it is: the encoding is **memorisation,"
+                            " smoothed**. Smoothing is why it survives a forward split,"
+                            " where almost every pair has been seen; the held-out fold is"
+                            " why it cannot be called a geometry feature. It is reported"
+                            " under that name rather than under the rung's, which was"
+                            " written for what the block was aimed at."
+                            if chosen != ENCODING_CONTROL
+                            else "That is the finding: the encoding is memorisation,"
+                            " smoothed. Smoothing is why it survives a forward split --"
+                            " where almost every pair has been seen -- and the held-out"
+                            " fold is why it does not survive this ladder, which exists"
+                            " to ask exactly this question of exactly this kind of"
+                            " feature."
+                        )
+                        if seen_delta > held_delta
+                        else "It carries over to a pair the model has never met at least"
+                        " as well as to one it has, which is the opposite of"
+                        " memorisation and is what the construction was hoping for."
+                    ),
+                    "",
+                    f"The strata locate it. Of the {total_gain:+.2f} s it moves the pooled",
+                    f"{forward[0].name.title()} figure, **{hi_gain:+.2f} s** comes from the `{hi}` bucket --"
+                    f" pairs seen more than a hundred times, {pct(ceiling['share'][hi], 1)} of the rows, which",
+                    f"by the ceiling above has no headroom at all -- and **{thin_gain:+.2f} s** from every",
+                    "thinner bucket together."
+                    + (
+                        " The block was aimed at the thin buckets. It landed on the"
+                        " thick one."
+                        if abs(hi_gain) > abs(thin_gain)
+                        else " Most of it is in the thin buckets, which is where the"
+                        " block was aimed."
+                    ),
+                    "",
+                    f"On the `{thin_b}` bucket itself it takes {thin_take:+,.1f} s"
+                    + (
+                        f" of the {thin_room:,.1f} s of headroom that bucket has."
+                        if thin_room > 0
+                        else f", against a headroom of {thin_room:,.1f} s -- that bucket is"
+                        " already ahead of what the ceiling's ratio calls attainable, so"
+                        " there was nothing there to take."
+                    ),
+                    f"The bucket is {pct(ceiling['share'][thin_b], 2)} of the rows, so whatever it does there is",
+                    f"worth {_pooled_gain(best, thin_b):+.2f} s pooled and no more.",
+                    "",
+                    (
+                        f"On the `{lo}` bucket -- pairs never seen -- "
+                        + (
+                            "every arm is"
+                            if len(worse_unseen) == len(arms)
+                            else f"{len(worse_unseen)} of the {len(arms)} arms are"
+                        )
+                        + " *worse* than the control. That is the distribution shift the"
+                        " held-out folds measure, seen from the other side: a column"
+                        " carrying a real pair mean in training and the bare prior at"
+                        " inference is a column whose meaning changed between fit and"
+                        " use, and the booster leaned on it in training regardless."
+                        if worse_unseen
+                        else f"On the `{lo}` bucket -- pairs never seen -- no arm is worse"
+                        " than the control, so where the encoding has nothing to encode"
+                        " it degrades to its prior without doing harm."
+                    ),
+                ]
+
+                # -- what ships, said as what it measurably is. Only when an arm
+                # ships: with the control kept there is no claim to qualify.
+                if chosen != ENCODING_CONTROL and rank_share:
+                    lines += [
+                        "",
+                        "### What the chosen arm is, in its own terms",
+                        "",
+                        "The same decomposition at the ranking set's bucket mix, which"
+                        " is the mix the competition scores and the one the rule's"
+                        " second condition uses. In the sum-of-squares domain, where"
+                        " the buckets are additive:",
+                        "",
+                        *table(
+                            ["bucket", "share of the ranking-weighted gain"],
+                            [
+                                [f"`{b}`", f"{100 * rank_share[b]:+.1f}%"]
+                                for b in FREQUENCY_BUCKETS
+                            ],
+                            "-r",
+                        ),
+                        "",
+                        f"**{pct(rank_share[hi], 0)} of the gain comes from the `{hi}`"
+                        f" bucket** -- pairs seen more than a hundred times, which by the"
+                        " ceiling above has no headroom at all -- against"
+                        f" {pct(rank_share[thin_b] + rank_share[FREQUENCY_BUCKETS[2]], 0)}"
+                        f" won at `{thin_b}` and `{FREQUENCY_BUCKETS[2]}` together, and"
+                        f" {pct(abs(rank_share[lo]), 1)} given back at `{lo}`.",
+                        "",
+                        "So the honest description of this block is not the one its rung"
+                        " name implies. It is **smoothed memorisation that buys real"
+                        " score on well-observed pairs**. It was built to help where the"
+                        " pair is thin; it does a little of that, and most of what it"
+                        " earns it earns somewhere else. The score is real and is why the"
+                        " rule chooses it. The mechanism is not the one it was aimed"
+                        " at, and the"
+                        " report says so rather than letting the rung's name imply"
+                        " otherwise.",
+                        "",
+                        "**It is also a geometry-bearing feature**, because the prior it"
+                        " shrinks toward is `g_hat`. That has a consequence for any"
+                        " ablation of the geometry: an ablation that removed the geometry"
+                        " block and left the encoding in would not have removed the"
+                        " geometry, and the contrast it produced would shrink as an"
+                        " artefact of its own definition rather than as a finding. Two"
+                        " things hold here. The claim contrast above is"
+                        f" `{LADDER_BY_KEY[CLAIM[0]].label}` to"
+                        f" `{LADDER_BY_KEY[CLAIM[1]].label}`, and **neither rung carries"
+                        " the encoding** -- the arms sit at the top of the ladder and the"
+                        " claim is measured near its foot -- so that figure is untouched"
+                        " by this decision, by construction and not by luck. And"
+                        " `taxiout.models.Rung.uses_geometry` now counts"
+                        " `ENCODING_FEATURES` as geometry-bearing, so a rung carrying the"
+                        " encoding cannot be classified as geometry-free if the claim is"
+                        " ever re-anchored higher up the ladder. The encoding is removed"
+                        " by the ablation; it was not replaced with an airport-mean-shrunk"
+                        " version, which would have needed a refit and would have measured"
+                        " a different feature.",
+                    ]
+
+    if sens_rows:
+        lines += [
+            "",
+            "### Sensitivity to `k`",
+            "",
+            "`k` is the Bayes weight for predicting the target *marginally*. This",
+            "encoding is a feature inside a conditional model that also carries plan",
+            "lags, congestion and weather, so `k` is a principled default and not an",
+            "optimum. It is **not tuned**: the table below is a diagnostic, and the",
+            "reported model uses the estimated `k` whichever of the three columns",
+            "scored best. The prior is held fixed across the three, so what moves is",
+            "the shrinkage weight alone.",
+            "",
+            f"{forward[0].name.title()}, ex-flagged RMSE in seconds. The estimated `k` is in bold.",
+            "",
+            *table(
+                ["arm", "k / 2", "k", "2k", "control"],
+                sens_rows,
+                "-rrrr",
+            ),
+        ]
+
+    lines += [
+        "",
+        "### What was guarded, and what was not",
+        "",
+        "Four leakage rules, each with a test in `tests/test_encoding.py`, because",
+        "any one of them missed silently makes the number *better* rather than",
+        "raising an error:",
+        "",
+        "1. The encoding is recomputed **inside every fold**, from that fold's own",
+        "   training rows. A pair held out of a fold sees `n = 0` and encodes to pure",
+        "   `g_hat`; the test asserts exactly that. Computed once over all training",
+        "   rows and reused, every held-out pair would arrive carrying its own mean",
+        "   and the contrast above would be a measurement of the bug.",
+        f"2. `ybar` is out of fold **within** training too, by {INNER_FOLDS}-fold over the fit",
+        "   rows, so a row's own target is never in its own feature. The test poisons",
+        "   one row by an hour and asserts its own encoding does not move. `k` is",
+        "   estimated out of fold for the same reason -- with a single `k` over all",
+        "   the fit rows that test failed by twelve seconds, which is how the",
+        "   out-of-fold `k` came to exist.",
+        "3. `ybar` reads **unflagged rows only**. One defaulted block time at 50,000 s",
+        "   inside a three-row pair would otherwise be that pair's encoding. The test",
+        "   plants exactly that row and asserts nothing moves.",
+        "4. `g_hat` is fitted on rows that **also form `ybar`**. This one is not",
+        "   guarded, because it cannot be: the prior is a fit over hundreds of",
+        "   thousands of rows and a thin pair contributes a handful of them, so the",
+        "   overlap is negligible for exactly the pairs this block exists for -- but",
+        "   it is an overlap, and it is stated here rather than left for a reviewer",
+        "   to find.",
+        "",
+        "**The ranking set carries no fold.** At inference the encoding is computed",
+        "once over the whole 2025 training year and read by the 2026 ranking rows.",
+        "That is 2025 predicting 2026 across a boundary no ranking row is on either",
+        "side of: there is nothing to be out of fold of, and the guards above are",
+        "about the ladder's own splits and not about the submission. The registry",
+        "says the same: the encoding's sources carry a `TRAIN.` prefix naming the",
+        "target of the rows the model is fitted on, which is a source class",
+        "`FEATURE_SOURCES` did not carry before this block and which is deliberately",
+        "not written as `DEP.TAXITIME_SEC_mvt` -- the ranking set blanks that field",
+        "for every departure, and a feature claiming to read it would be claiming",
+        "something false.",
+    ]
+    return lines
+
+
 def section_frequency(results, features, y, splits, references) -> list[str]:
     """RMSE by how often the validation row's pair appeared in training."""
     split = splits[0]
@@ -1047,6 +2375,13 @@ def section_frequency(results, features, y, splits, references) -> list[str]:
     counts = ref.pair_counts(features[mask])
     meta = results.get(("meta", split.name, "tail"))
     keep = None if meta is None else ~meta["mask"][mask]
+    shape = evaluate_by_bucket(y[mask], y[mask], counts, keep=keep)
+    buckets = list(shape["bucket"])
+    sizes = shape["rows"].tolist()
+    # December's own mix, in raw row counts. ``_pooled_at`` normalises, so the
+    # counts can be passed as they are.
+    december_mix = {b: float(n) for b, n in zip(buckets, sizes)}
+
     rows = []
     for rung in LADDER:
         entry = results.get((split.name, rung.key, "valid"))
@@ -1055,10 +2390,15 @@ def section_frequency(results, features, y, splits, references) -> list[str]:
         by = evaluate_by_bucket(y[mask], entry["pred"], counts, keep=keep).set_index(
             "bucket"
         )
-        rows.append([rung.label] + [num(by.loc[b, "rmse_s"], 1) for b in by.index])
-    shape = evaluate_by_bucket(y[mask], y[mask], counts, keep=keep)
-    buckets = list(shape["bucket"])
-    sizes = shape["rows"].tolist()
+        rmse = {b: float(by.loc[b, "rmse_s"]) for b in by.index}
+        rows.append(
+            [rung.label]
+            + [num(rmse[b], 1) for b in by.index]
+            + [
+                num(_pooled_at(rmse, december_mix), 1),
+                num(_pooled_at(rmse, RANKING_MIX), 1),
+            ]
+        )
     return [
         "## Error by pair frequency",
         "",
@@ -1078,10 +2418,39 @@ def section_frequency(results, features, y, splits, references) -> list[str]:
             if keep is not None
             else []
         ),
+        "The last two columns pool the four buckets in quadrature, at two different"
+        " weightings. **December's mix** is this split's own bucket row counts, so"
+        " that column is the split's overall RMSE reconstructed: it reproduces the"
+        " ladder's *excluding flagged rows* column **exactly**, cell for cell,"
+        " because pooling a split at its own bucket row counts is that split's"
+        " pooled mean squared error. Printing it is a reconciliation rather than a"
+        " second measurement -- any disagreement would mean the weights or the"
+        " pooling were wrong. **The ranking mix** is the same arithmetic at the"
+        " bucket weights the ranking set actually carries ("
+        + " / ".join(
+            f"{100 * RANKING_MIX[b] / sum(RANKING_MIX.values()):.2f}"
+            for b in FREQUENCY_BUCKETS
+        )
+        + "%, from [`geometry_gaps.md`](geometry_gaps.md)), against December's own "
+        + " / ".join(
+            f"{100 * december_mix[b] / sum(december_mix.values()):.2f}"
+            for b in FREQUENCY_BUCKETS
+        )
+        + "%.",
+        "",
+        "That second column is the quantity the competition scores, and no other"
+        " table in this repository prints it. The ranking set carries roughly twice"
+        " December's share of rows in the two thinnest buckets, so a block aimed at"
+        " thin pairs is worth marginally *more* there than on the split it was"
+        " measured on. It is a reweighting of numbers already in this table and not"
+        " a new fit: no rung is scored on the ranking set, whose targets are unseen.",
+        "",
         *table(
-            ["rung"] + [f"{b} ({n:,} rows)" for b, n in zip(buckets, sizes)],
+            ["rung"]
+            + [f"{b} ({n:,} rows)" for b, n in zip(buckets, sizes)]
+            + ["pooled, December mix", "pooled, ranking mix"],
             rows,
-            "-" + "r" * len(buckets),
+            "-" + "r" * (len(buckets) + 2),
         ),
     ]
 
@@ -1287,6 +2656,13 @@ def main() -> int:
 
     print("running the ladder ...")
     results = run(features, y, dep, splits, tails, keep_residuals=not args.dry_run)
+
+    # The k sensitivity, on the first forward split alone: it is a diagnostic
+    # rather than a search, and the arm the report chooses is chosen from the
+    # held-out-pair contrast and both forward splits at the estimated k.
+    arms = [k for k in ENCODING_ARMS if (splits[0].name, k, "valid") in results]
+    sensitivity = k_sensitivity(features, y, splits[0], results, arms) if arms else {}
+
     references = {
         name: entry["info"]["reference"]
         for (name, rung, which), entry in results.items()
@@ -1319,10 +2695,24 @@ def main() -> int:
         + [""]
         + section_frequency(results, features, y, splits, references)
         + [""]
+        + section_encoding(results, features, y, splits, tails, sensitivity, references)
+        + [""]
         + section_per_airport(results, splits, tails)
         + [""]
         + section_importances(results, splits)
         + [
+            "",
+            "## What no split here can answer",
+            "",
+            "Every split above is a split *within* the ten airports the training year",
+            "contains. The held-out-pair folds take away a pair and keep the airport,",
+            "which bounds what the geometry buys on a stand the model has not met and",
+            "says nothing about a *field* it has not met. That question --- what the",
+            "model does at the eleventh airport --- is the operational one, the",
+            "challenge's test set cannot pose it, and no identifier-based entry can",
+            "answer it at all. It has its own report:",
+            "[`transfer.md`](transfer.md), ten fits that train on nine airports and",
+            "predict the tenth.",
             "",
             "## What is not here yet",
             "",
