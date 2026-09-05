@@ -43,7 +43,18 @@ reports:
 9. **plus weather** -- the regime flags per airport-hour (Gate 2b), the one
    block from outside the challenge data. Skipped by the runner when the
    archive is not cached, and said so, rather than fitted on a missing column.
-10. **plus runway saturation** -- the cheap Gate 3: from the other departures'
+10. **plus the shrunk identifier encoding**, in three arms read against the
+   weather rung rather than against each other. The pair and the stand as
+   empirical-Bayes encodings shrunk toward the geometric unimpeded prediction
+   (``taxiout.encoding``): added alongside the identifier block, replacing the
+   stand within it, and replacing both the stand and the runway. The control
+   is the weather rung itself, unchanged. The second and third arms exist
+   because removing the model's capacity to memorise a thin pair may
+   generalise better than giving it a smoothed version of the same thing, and
+   because "replacing the pair categorical" has two readings in a frame where
+   ``pair`` is not itself a feature -- so both are run rather than one being
+   guessed at.
+11. **plus runway saturation** -- the cheap Gate 3: from the other departures'
    take-off times on the subject's runway, the share of consecutive gaps
    under ninety seconds, the smallest gap, and the span of the last three.
    Measured against the ceiling in ``reports/congestion.md``, found to be
@@ -87,6 +98,7 @@ from taxiout.congestion import (
     THROUGHPUT_FEATURES,
 )
 from taxiout.corridor import CORRIDOR_FEATURES
+from taxiout.encoding import ENCODING_FEATURES
 from taxiout.metar import WEATHER_FEATURES
 from taxiout.planlags import PLAN_LAG_FEATURES
 from taxiout.saturation import SATURATION_FEATURES
@@ -105,6 +117,13 @@ from taxiout.features import (
 # recovers the interaction through successive splits. It stays in the frame as
 # the key the PRU reference and the held-out-pair split are built on.
 IDENTIFIER_BLOCK: tuple[str, ...] = ("icao", "stand", "designator")
+
+# What a model may keep at an airport it has never seen: everything in the top
+# rung that is not an identifier. The airport, the stand and the runway all go
+# -- at an unseen airport none of the three has a level the model has met --
+# and what remains is fitted across the other airports and applied through the
+# held-out airport's own geometry. ``scripts/report_transfer.py`` reads this.
+TRANSFERABLE_EXCLUDED: tuple[str, ...] = ("icao", "stand", "designator", "pair")
 
 # Fixed once, for a compute budget, before any RMSE existed. L2 because the
 # metric is RMSE. No early stopping: see the module docstring.
@@ -140,6 +159,26 @@ BOOSTER_PARAMS: dict[str, object] = {
 }
 
 
+# The top rung's feature block, named once so the rungs that build on it say
+# so rather than repeating fifteen tuples and drifting from one another.
+WEATHER_BLOCK: tuple[str, ...] = (
+    IDENTIFIER_BLOCK
+    + TIME_FEATURES
+    + PLAN_FEATURES
+    + GEOMETRY_FEATURES
+    + QUALITY_FEATURES
+    + AIRCRAFT_FEATURES
+    + PLAN_LAG_FEATURES
+    + THROUGHPUT_FEATURES
+    + COVERAGE_FEATURES
+    + ARRIVAL_FEATURES
+    + DEMAND_FEATURES
+    + CONFIGURATION_FEATURES
+    + CORRIDOR_FEATURES
+    + WEATHER_FEATURES
+)
+
+
 @dataclass(frozen=True)
 class Rung:
     """One step of the ladder."""
@@ -159,8 +198,21 @@ class Rung:
 
     @property
     def uses_geometry(self) -> bool:
+        """Whether this rung reads the geometry at all, however indirectly.
+
+        ``ENCODING_FEATURES`` counts. The shrunk encodings are not in
+        ``GEOMETRY_FEATURES`` -- they are their own block -- but the quantity
+        they shrink toward is ``g_hat``, so a rung that carries them carries the
+        geometry with an extra step in front of it. Classifying them as
+        geometry-free would let an ablation call itself "geometry removed" while
+        the geometry was still arriving through the prior, and the contrast it
+        reported would shrink as an artefact of that definition rather than as a
+        finding. The claim contrast is measured between two rungs that carry no
+        encoding either way, so nothing currently printed moves; this keeps that
+        true if the claim is ever re-anchored above the arms.
+        """
         return self.kind == "geometric" or bool(
-            set(self.features) & set(GEOMETRY_FEATURES)
+            set(self.features) & (set(GEOMETRY_FEATURES) | set(ENCODING_FEATURES))
         )
 
 
@@ -340,47 +392,74 @@ LADDER: tuple[Rung, ...] = (
         key="weather",
         label="+ weather",
         kind="booster",
-        features=IDENTIFIER_BLOCK
-        + TIME_FEATURES
-        + PLAN_FEATURES
-        + GEOMETRY_FEATURES
-        + QUALITY_FEATURES
-        + AIRCRAFT_FEATURES
-        + PLAN_LAG_FEATURES
-        + THROUGHPUT_FEATURES
-        + COVERAGE_FEATURES
-        + ARRIVAL_FEATURES
-        + DEMAND_FEATURES
-        + CONFIGURATION_FEATURES
-        + CORRIDOR_FEATURES
-        + WEATHER_FEATURES,
+        features=WEATHER_BLOCK,
         note="visibility band, precipitation and freezing, per airport-hour (Gate 2b)",
+    ),
+    # The three encoding arms. Each is read against the weather rung and not
+    # against the arm before it: they are alternatives, not steps, and reading
+    # one against another would report the difference between two ways of
+    # spending the same block as though it were a block of its own.
+    Rung(
+        key="encoding-added",
+        label="+ shrunk encoding",
+        kind="booster",
+        features=WEATHER_BLOCK + ENCODING_FEATURES,
+        base="weather",
+        note=(
+            "the pair and the stand as empirical-Bayes encodings shrunk toward "
+            "the geometric unimpeded prediction, added alongside the identifier "
+            "block"
+        ),
+    ),
+    Rung(
+        key="encoding-for-stand",
+        label="+ shrunk encoding, replacing the stand",
+        kind="booster",
+        features=tuple(c for c in WEATHER_BLOCK if c != "stand") + ENCODING_FEATURES,
+        base="weather",
+        note=(
+            "the same, with the stand categorical removed: the encodings replace "
+            "the level the model would memorise a thin pair through, while the "
+            "runway stays because it is an operational variable and not a way of "
+            "identifying one cell"
+        ),
+    ),
+    Rung(
+        key="encoding-for-identifiers",
+        label="+ shrunk encoding, replacing stand and runway",
+        kind="booster",
+        features=tuple(c for c in WEATHER_BLOCK if c not in ("stand", "designator"))
+        + ENCODING_FEATURES,
+        base="weather",
+        note=(
+            "the wider reading of the same arm: both halves of the pair removed, "
+            "leaving the airport, so nothing but the encodings carries the cell"
+        ),
     ),
     Rung(
         key="saturation",
         label="+ runway saturation",
         kind="booster",
-        features=IDENTIFIER_BLOCK
-        + TIME_FEATURES
-        + PLAN_FEATURES
-        + GEOMETRY_FEATURES
-        + QUALITY_FEATURES
-        + AIRCRAFT_FEATURES
-        + PLAN_LAG_FEATURES
-        + THROUGHPUT_FEATURES
-        + COVERAGE_FEATURES
-        + ARRIVAL_FEATURES
-        + DEMAND_FEATURES
-        + CONFIGURATION_FEATURES
-        + CORRIDOR_FEATURES
-        + WEATHER_FEATURES
-        + SATURATION_FEATURES,
+        features=WEATHER_BLOCK + SATURATION_FEATURES,
+        # Explicit, because the encoding arms now sit between this rung and the
+        # one it was measured against. Without it this rung would silently be
+        # re-read against an arm, and a measured negative would change meaning
+        # without anybody editing the number.
+        base="weather",
         note=(
             "the share of consecutive take-off gaps under ninety seconds, the "
             "smallest gap, and the span of the last three, from other departures' "
             "take-off times on the subject's runway (the cheap Gate 3)"
         ),
     ),
+)
+
+# The arms, by key: alternatives to one another rather than steps of the
+# ladder, and excluded from the chain kept without the plan lags below.
+ENCODING_ARMS: tuple[str, ...] = (
+    "encoding-added",
+    "encoding-for-stand",
+    "encoding-for-identifiers",
 )
 
 
@@ -401,9 +480,15 @@ LADDER_PROPER: tuple[Rung, ...] = LADDER
 
 # The congestion and weather rungs kept without the plan lags, each read
 # against the one before it in this chain and the first against the aircraft
-# rung, so the report shows what each block is worth both gross and net.
+# rung, so the report shows what each block is worth both gross and net. The
+# encoding arms are excluded: they are alternatives rather than steps, and a
+# chain through them would read one arm against another.
 _NET_CHAIN = tuple(
-    r for r in LADDER if PLAN_LAG_FEATURES[0] in r.features and r.key != "plan-lags"
+    r
+    for r in LADDER
+    if PLAN_LAG_FEATURES[0] in r.features
+    and r.key != "plan-lags"
+    and r.key not in ENCODING_ARMS
 )
 _WITHOUT: list[Rung] = []
 _base = "identifiers-geometry-aircraft"
@@ -414,20 +499,59 @@ LADDER = LADDER + tuple(_WITHOUT)
 
 LADDER_BY_KEY: dict[str, Rung] = {r.key: r for r in LADDER}
 
-# The rung the submission is fitted from. Not the last rung of the ladder:
-# the saturation rung sits above it as a measured negative -- it costs half a
-# second in December and eight tenths in July, and takes none of the ceiling
-# -- and a block that was built, measured and bought nothing belongs in the
-# ladder and the write-up, not in the model. Named here so that
-# ``scripts/make_submission.py`` and the report's per-airport and importance
-# sections all read the same rung.
-SUBMISSION_KEY = "weather"
+# The rung the submission is fitted from: the shrunk encoding replacing the
+# stand, chosen by the rule in ``reports/baseline.md``'s encoding section.
+#
+# Two rungs of the ladder proper sit above it, for two different reasons.
+#
+# ``+ shrunk encoding, replacing stand and runway`` is the arm that goes one
+# step further and replaces the designator too. It is out on a mechanism
+# rather than on its score, which is indistinguishable from this arm's:
+# ``reports/geometry_gaps.md`` measures an intersection signature of up to 96 s
+# per designator that the routed distance cannot compute, so the runway
+# categorical carries something no encoding shrunk toward that distance can.
+#
+# The saturation rung is the other case, and the older one: a measured
+# negative that costs half a second in December and eight tenths in July,
+# takes none of the ceiling, and belongs in the ladder and the write-up rather
+# than in the model.
+#
+# Named here so that ``scripts/make_submission.py`` and the report's
+# per-airport and importance sections all read the same rung. Moving it here
+# is what puts the encoding into the submitted model: ``make_submission.py``
+# computes the encoding once over the training year -- out of fold for the
+# rows it fits on, by lookup for the rows it predicts -- as
+# ``taxiout.encoding`` describes.
+SUBMISSION_KEY = "encoding-for-stand"
+
+# The rung the encoding arms were read against, and it is *not* whichever rung
+# the submission happens to use. Before the arms shipped these were the same
+# string, and writing the encoding section against ``SUBMISSION_KEY`` was
+# harmless; the moment an arm displaced the control they came apart, and a
+# section that took its control from the shipped rung would have compared the
+# chosen arm against itself and reported a difference of zero. The control is a
+# property of the experiment, fixed when it was designed, so it is named
+# separately and does not move when the model does.
+ENCODING_CONTROL = "weather"
 TOP_RUNG: Rung = LADDER_BY_KEY[SUBMISSION_KEY]
 
 # The rungs of the ladder proper above it: blocks that were built, measured,
 # and left out of the model. The report measures each against the ceiling of
 # the rung it was added to.
 ABOVE_SUBMISSION: tuple[Rung, ...] = LADDER_PROPER[LADDER_PROPER.index(TOP_RUNG) + 1 :]
+
+# The top rung with every identifier removed. Fitted across nine airports and
+# applied to the tenth, this is what a model has left at an airport it has
+# never seen: the geometry of that airport's own taxiways, the clock, the
+# aircraft, the plan lags, the traffic around the movement and the weather --
+# and no level of any categorical that names a place. The shrunk encodings are
+# absent by the same rule: at an unseen airport every group has ``n = 0`` and
+# the encoding is the geometric prior with an extra step in front of it.
+TRANSFER_FEATURES: tuple[str, ...] = tuple(
+    c
+    for c in TOP_RUNG.features
+    if c not in TRANSFERABLE_EXCLUDED and c not in ENCODING_FEATURES
+)
 
 
 def base_of(rung: Rung) -> Rung | None:
@@ -561,9 +685,14 @@ class Booster:
 __all__ = [
     "BOOSTER_PARAMS",
     "ABOVE_SUBMISSION",
+    "ENCODING_ARMS",
     "LADDER_PROPER",
+    "ENCODING_CONTROL",
     "SUBMISSION_KEY",
     "TOP_RUNG",
+    "TRANSFERABLE_EXCLUDED",
+    "TRANSFER_FEATURES",
+    "WEATHER_BLOCK",
     "base_of",
     "IDENTIFIER_BLOCK",
     "LADDER",

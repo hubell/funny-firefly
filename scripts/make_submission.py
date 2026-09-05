@@ -58,6 +58,13 @@ from taxiout.challenge import (  # noqa: E402
     load_submitting,
     to_pandas,
 )
+from taxiout.encoding import (  # noqa: E402
+    ENCODING_FEATURES,
+    encode_split,
+    fit_encoding,
+    group_key,
+    with_encoding,
+)
 from taxiout.features import (  # noqa: E402
     MOVEMENT_COLUMNS,
     REQUIRED_COLUMNS,
@@ -77,6 +84,11 @@ ID = "MVT_ID_mvt"
 # The rung the submission uses. Not the last rung of the ladder: the
 # saturation rung sits above it as a measured negative and is deliberately
 # out of the model. ``taxiout.models`` names which rung this is and why.
+#
+# If that rung reads the shrunk encoding, this script computes it -- once over
+# the training year, out of fold for the rows it fits on and by lookup for the
+# rows it predicts. The refusal below still stands for any block this script
+# cannot build; the encoding is simply no longer one of them.
 RUNG = TOP_RUNG
 
 # Read by the record-quality term and never entered as a feature. The block
@@ -244,7 +256,55 @@ def main() -> int:
     )
     del train_moves
     y = pd.to_numeric(train[TARGET], errors="coerce")
+    # Guard 3, at submission. The record-quality rows are out of everything the
+    # encoding reads, for the same reason they are out of the physical fit: a
+    # defaulted block time is not a taxi time, and one of them inside a thin
+    # pair would otherwise *be* that pair's encoding in the shipped model.
     fit_rows = (~covered) & y.notna()
+
+    # The encoding, if the rung reads it. Computed once over the whole training
+    # year and in two forms, because the two sides of this script are asking
+    # different questions of it.
+    #
+    #   the training rows are encoded OUT OF FOLD, by ``encode_split``. Their
+    #   targets are in the fitting sample, so a row's own target must not reach
+    #   its own feature; fitting on in-sample encodings would teach the booster
+    #   to trust a column that is sharper at fit than at use.
+    #
+    #   the ranking rows are encoded by LOOKUP, from the whole sample. Their
+    #   targets are not in the sample at all, so there is no fold to be out of
+    #   -- which is what ``taxiout.encoding`` means by the ranking set carrying
+    #   no fold -- and a pair the training year never saw arrives with n = 0
+    #   and encodes to the bare geometric prior.
+    #
+    # Both share one fitted prior, passed explicitly, so the two sides cannot
+    # drift apart through two separate fits of the same quantity.
+    encoder = None
+    encoded_train = None
+    if set(ENCODING_FEATURES) & set(RUNG.features):
+        t_enc = time.time()
+        encoder = fit_encoding(X, y, fit_rows)
+        encoded_train = encode_split(X, y, fit_rows, prior=encoder.prior)
+        X = with_encoding(X, encoded_train)
+        print(
+            f"  encoding fitted on {encoder.fit_rows:,} unflagged rows "
+            f"({time.time() - t_enc:.0f} s)"
+        )
+
+    # A rung whose block this script cannot build must not be fitted on a
+    # column of nothing. ``build_features`` leaves a block missing rather than
+    # zero when its input was not supplied, and a booster given an all-null
+    # column will fit happily and predict from the rest, producing a submission
+    # that silently is not the rung it claims to be.
+    empty = [c for c in RUNG.features if X[c].isna().all()]
+    if empty:
+        print(
+            f"refusing to fit {RUNG.label}: this script cannot build "
+            + ", ".join(f"`{c}`" for c in empty)
+            + "; the column arrives missing and the rung would be fitted without it",
+            file=sys.stderr,
+        )
+        return 1
     model = Booster(RUNG.features).fit(X.loc[fit_rows], y[fit_rows])
     print(f"  fitted on {int(fit_rows.sum()):,} rows in {time.time() - t0:.0f} s")
 
@@ -257,6 +317,17 @@ def main() -> int:
         edges=edges,
         weather=weather,
     )
+    if encoder is not None:
+        columns = encoder.transform(Xr)
+        Xr = with_encoding(Xr, columns)
+        seen = pd.Series(
+            group_key(Xr, "pair").map(encoder.moments["pair"]["n"]).to_numpy(),
+            index=Xr.index,
+        ).fillna(0.0)
+        print(
+            f"  {int((seen <= 0).sum()):,} of {len(Xr):,} ranking rows sit on a pair "
+            "the training year never saw and encode to the geometric prior"
+        )
     physical = model.predict(Xr)
     tail = tail_model.predict(rank)
     pred = tails.combine(physical, tail)

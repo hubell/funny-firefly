@@ -25,12 +25,14 @@ from taxiout.challenge import (  # noqa: E402
     FORBIDDEN_FEATURE_INPUTS,
     SOURCE_PHASES,
 )
+from taxiout.encoding import ENCODING_FEATURES  # noqa: E402
 from taxiout.features import (  # noqa: E402
     AIRCRAFT_FEATURES,
     CATEGORICAL_FEATURES,
     EXTERNAL_SOURCES,
     FEATURE_COLUMNS,
     FEATURE_SOURCES,
+    FITTED_SOURCES,
     GEOMETRY_FEATURES,
     MOVEMENT_COLUMNS,
     QUALITY_FEATURES,
@@ -105,8 +107,49 @@ def test_every_source_names_a_known_phase_or_none():
     for name, sources in FEATURE_SOURCES.items():
         for src in sources:
             phase, column = source_phase(src)
-            assert phase in (None, *SOURCE_PHASES, *EXTERNAL_SOURCES), (name, src)
+            assert phase in (
+                None,
+                *SOURCE_PHASES,
+                *EXTERNAL_SOURCES,
+                *FITTED_SOURCES,
+            ), (name, src)
             assert column and "." not in column, (name, src)
+
+
+def test_the_fitting_sample_prefix_names_the_target_and_nothing_else():
+    """The source class the registry gained for the shrunk encoding.
+
+    ``TRAIN.`` says a feature reads the *target* of the rows the model is
+    fitted on. That is a different claim from ``DEP.TAXITIME_SEC_mvt``, which
+    would be false -- the ranking set blanks the taxi time of every departure
+    -- and the point of giving it a prefix of its own is that it cannot be
+    mistaken for one. Nothing but the target may appear under it: an ordinary
+    field of another row has a phase, and a phase is held to that phase's list.
+    """
+    from taxiout.features import FITTED_COLUMNS, TARGET
+
+    assert FITTED_COLUMNS == (TARGET,)
+    used = {
+        name: [src for src in sources if source_phase(src)[0] in FITTED_SOURCES]
+        for name, sources in FEATURE_SOURCES.items()
+    }
+    for name, sources in used.items():
+        for src in sources:
+            assert source_phase(src)[1] in FITTED_COLUMNS, (name, src)
+    # and only the encoding block declares one
+    assert {n for n, s in used.items() if s} == set(ENCODING_FEATURES)
+
+
+def test_the_encoding_block_declares_the_keys_and_the_fitted_target():
+    from taxiout.features import TARGET
+
+    for c in ENCODING_FEATURES:
+        assert FEATURE_SOURCES[c] == (
+            "ADEP_mvt",
+            "STAND_mvt",
+            "RUNWAY_mvt",
+            f"TRAIN.{TARGET}",
+        )
 
 
 def test_every_external_source_is_a_field_of_its_archive():
@@ -167,7 +210,7 @@ def test_required_columns_are_the_bare_sources_and_movement_columns_the_rest():
         source_phase(c)[1]
         for s_ in FEATURE_SOURCES.values()
         for c in s_
-        if source_phase(c)[0] not in (None, *EXTERNAL_SOURCES)
+        if source_phase(c)[0] not in (None, *EXTERNAL_SOURCES, *FITTED_SOURCES)
     }
     assert set(REQUIRED_COLUMNS) == bare
     assert set(MOVEMENT_COLUMNS) == prefixed | {"PHASE_mvt"}
@@ -477,12 +520,28 @@ def test_the_ladder_reads_the_congestion_blocks_net_of_the_plan_lags_and_keeps_t
 
 
 def test_the_submission_rung_is_not_the_last_rung_of_the_ladder():
-    """Saturation was built, measured, and left out of the model on purpose."""
+    """Two rungs sit above the submission, for two different reasons.
+
+    Saturation was built, measured, and left out because it bought nothing.
+    The stand-and-runway arm is the other case: its score is indistinguishable
+    from the shipped arm's, and it is out on a mechanism -- the designator
+    carries an intersection signature the routed distance cannot compute, so
+    the runway categorical is not the encoding's to replace. Both reasons are
+    recorded beside ``SUBMISSION_KEY``; this pins the shape.
+    """
+    from taxiout.encoding import ENCODING_FEATURES
     from taxiout.models import ABOVE_SUBMISSION, LADDER_PROPER, TOP_RUNG
     from taxiout.saturation import SATURATION_FEATURES
 
-    assert TOP_RUNG.key == "weather"
-    assert [r.key for r in ABOVE_SUBMISSION] == ["saturation"]
+    assert TOP_RUNG.key == "encoding-for-stand"
+    assert [r.key for r in ABOVE_SUBMISSION] == [
+        "encoding-for-identifiers",
+        "saturation",
+    ]
+    # the shipped rung carries the encoding, and keeps the runway categorical
+    assert set(ENCODING_FEATURES) <= set(TOP_RUNG.features)
+    assert "designator" in TOP_RUNG.features
+    assert "stand" not in TOP_RUNG.features
     # the rung is still on the ladder, and its block is still built
     assert LADDER_PROPER[-1].key == "saturation"
     assert set(SATURATION_FEATURES) <= set(LADDER_PROPER[-1].features)
