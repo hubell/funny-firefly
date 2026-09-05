@@ -6,7 +6,7 @@
 PYTHON ?= python3
 
 .PHONY: all data metar reports crosscheck data-review synthetic tails geometry-gaps \
-        congestion baseline sweep submission test lint licence-check clean help
+        congestion baseline transfer sweep submission test lint licence-check clean help
 
 help:
 	@echo "make data     fetch and cache OSM geometry      -> data/raw/<ICAO>.json.gz"
@@ -18,6 +18,7 @@ help:
 	@echo "make geometry-gaps  the unimpeded term against the data -> reports/geometry_gaps.md"
 	@echo "make congestion   how the excess term was built -> reports/congestion.md"
 	@echo "make baseline     run the ablation ladder      -> reports/baseline.md"
+	@echo "make transfer     leave one airport out, ten times -> reports/transfer.md"
 	@echo "make sweep        the one parameter sweep, October 2025 -> data/processed/sweep_october.csv"
 	@echo "make submission TEAM=<name>  fit and write     -> data/submissions/<name>_v<n>.parquet"
 	@echo "make test     run the unit tests                (no network, no challenge data)"
@@ -87,6 +88,13 @@ congestion:
 # ablation ladder. Needs the modelling extras; takes a few minutes.
 baseline:
 	$(PYTHON) scripts/run_baselines.py
+
+# Reads data/challenge/ and the matrices from 'make reports'. Ten fits: train
+# on nine airports, predict the tenth, with no identifier of the tenth in the
+# frame. Answers the question the challenge's test set cannot pose, and the one
+# no identifier-based entry can answer at all. An hour or more.
+transfer:
+	$(PYTHON) scripts/report_transfer.py
 
 # The one parameter sweep: fit January to September 2025, score October, on
 # the saturation rung's features, the top rung when it ran. Its numbers stay under data/processed/, gitignored;
