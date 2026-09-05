@@ -51,6 +51,15 @@ One frame per movement, built from ``taxiout.challenge``'s loaders and
   seconds in the trailing five and fifteen minutes, the smallest gap in
   the trailing five, and the time spanned by the last three gaps
   (``taxiout.saturation``). The cheap Gate 3, measured against the ceiling.
+- **The shrunk identifier encoding.** The (airport, stand, runway) pair and
+  the stand as empirical-Bayes encodings shrunk toward the geometric
+  unimpeded prediction rather than toward a group mean (``taxiout.encoding``).
+  The only block whose sources include a *target*, and the only one this
+  module cannot build on its own: the encoding has to be recomputed inside
+  every fold from that fold's own training rows, so the caller supplies it
+  and ``build_features`` leaves the two columns missing when it does not.
+  Missing, not zero -- "not computed" is not "no history" -- exactly as the
+  shared-corridor block behaves without its edge sets.
 
 Stands that do not join fall back to airport level rather than carrying nulls
 -- 3.7% of training departures and 3.3% of ranking departures are stands
@@ -72,6 +81,28 @@ every ``ARR.`` source is in ``AVAILABLE_FOR_ARRIVALS``, that ``AOBT_3_flt``
 appears under no prefix, and that the registry and the built frame agree
 column for column, so a feature added without a source entry fails the suite
 instead of slipping past it.
+
+Two prefixes name something other than a phase of the challenge data, and each
+is held to its own list rather than to either challenge one:
+
+- ``METAR.`` is an external archive, and its sources name that archive's own
+  fields (``taxiout.metar.FIELDS``).
+- ``TRAIN.`` is a source class the registry did not carry until the shrunk
+  encoding arrived: **the target of other rows on the training side of the
+  split**. It is not ``DEP.TAXITIME_SEC_mvt``, and writing it that way would
+  have been false -- ``TAXITIME_SEC_mvt`` is blanked for every ranking
+  departure, so a feature that read it from another *departure* would be
+  unavailable at inference. What the encoding reads is the target of rows the
+  model is fitted on, which is a different thing and is available by
+  construction: at inference the encoding is computed once over the whole 2025
+  training year and read by the 2026 ranking set, so it is 2025 predicting
+  2026 across a boundary no ranking row is on either side of, and there is no
+  fold to be out of. Within the ladder the same column is recomputed inside
+  every fold from that fold's own training rows, which is where the guarding
+  is needed and where ``tests/test_encoding.py`` does it. The registry names
+  the class explicitly so that a future feature reading a target has to say so
+  rather than hiding under ``DEP.``, and ``tests/test_features.py`` asserts
+  that a ``TRAIN.`` source names the target and nothing else.
 """
 
 from __future__ import annotations
@@ -90,6 +121,7 @@ from taxiout.corridor import (
     SOURCES as CORRIDOR_SOURCES,
     corridor_features,
 )
+from taxiout.encoding import ENCODING_FEATURES
 from taxiout.join import UNMATCHED, join_stands
 from taxiout.metar import (
     SOURCES as WEATHER_SOURCES,
@@ -114,6 +146,9 @@ TARGET = "TAXITIME_SEC_mvt"
 # these three raw columns, through the matrix.
 _KEYS: tuple[str, ...] = ("ADEP_mvt", "STAND_mvt", "RUNWAY_mvt")
 _TAKEOFF = "MVT_TIME_UTC_mvt"
+
+# The prefix for a source read from the fitting sample rather than from a row.
+_TRAINING_PREFIX = "TRAIN"
 
 IDENTIFIER_FEATURES: tuple[str, ...] = ("icao", "stand", "designator", "pair")
 
@@ -170,6 +205,7 @@ FEATURE_COLUMNS: tuple[str, ...] = (
     + CORRIDOR_FEATURES
     + WEATHER_FEATURES
     + SATURATION_FEATURES
+    + ENCODING_FEATURES
 )
 
 # Every feature column against the raw columns it reads. Checked against
@@ -197,12 +233,26 @@ FEATURE_SOURCES: dict[str, tuple[str, ...]] = {
     **WEATHER_SOURCES,
     # Runway saturation reads other departures' take-off times and nothing else.
     **SATURATION_SOURCES,
+    # The shrunk encoding reads the join keys -- through the pair key and
+    # through the geometry the prior is built from -- and the target of the
+    # rows the model is fitted on, under its own prefix. See the module
+    # docstring for why that is not ``DEP.TAXITIME_SEC_mvt``.
+    **{c: _KEYS + (f"{_TRAINING_PREFIX}.{TARGET}",) for c in ENCODING_FEATURES},
 }
 
 # Prefixes that name an external dataset rather than a phase of the challenge
 # data. A source under one of these is held to that dataset's field list
 # rather than to either challenge list.
 EXTERNAL_SOURCES: tuple[str, ...] = ("METAR",)
+
+# Prefixes that name the *fitting sample* rather than a row of the challenge
+# data: what a feature reads from the rows the model is fitted on. The one
+# member is the target, and no other column may appear under it -- a feature
+# that needs another row's ordinary field reads it under ``DEP.`` or ``ARR.``
+# and is held to that phase's list, which is the check this prefix must not be
+# allowed to slip past.
+FITTED_SOURCES: tuple[str, ...] = (_TRAINING_PREFIX,)
+FITTED_COLUMNS: tuple[str, ...] = (TARGET,)
 
 
 def source_phase(source: str) -> tuple[str | None, str]:
@@ -228,7 +278,9 @@ REQUIRED_COLUMNS: tuple[str, ...] = tuple(
 )
 
 # What the movement frame has to carry: every prefixed source of every block,
-# stripped, plus the phase that says which prefix a row answers to.
+# stripped, plus the phase that says which prefix a row answers to. The
+# external and fitting-sample prefixes are excluded: neither names a movement
+# row, so neither is something the movement frame could supply.
 MOVEMENT_COLUMNS: tuple[str, ...] = tuple(
     sorted(
         {"PHASE_mvt"}
@@ -236,7 +288,7 @@ MOVEMENT_COLUMNS: tuple[str, ...] = tuple(
             source_phase(c)[1]
             for sources in FEATURE_SOURCES.values()
             for c in sources
-            if source_phase(c)[0] not in (None, *EXTERNAL_SOURCES)
+            if source_phase(c)[0] not in (None, *EXTERNAL_SOURCES, *FITTED_SOURCES)
         }
     )
 )
@@ -359,6 +411,7 @@ def build_features(
     movements: pd.DataFrame | None = None,
     edges: pd.DataFrame | None = None,
     weather: pd.DataFrame | None = None,
+    encoded: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     """The feature frame for ``frame``, one row in, one row out, order kept.
 
@@ -381,6 +434,13 @@ def build_features(
     ``weather`` is the hourly regime table from ``taxiout.metar.regime_by_hour``
     over the cached archive. Left as ``None``, the weather block is missing
     throughout with its flag set, and the ladder skips its rung.
+
+    ``encoded`` is the shrunk-encoding block for *one split*, indexed like
+    ``frame`` (``taxiout.encoding.encode_split(...).columns``). Left as
+    ``None`` -- which is what every caller that fits more than one split
+    should do -- the block is NaN and is overlaid per fold instead, because a
+    single encoding reused across folds would give every held-out pair its own
+    mean and is the defect the whole construction guards against.
 
     The result carries exactly ``FEATURE_COLUMNS`` and the original index, so
     it can be set beside the target and the split masks without a join.
@@ -467,6 +527,16 @@ def build_features(
 
     for c, values in saturation_features(frame, movements).items():
         out[c] = values
+
+    # The shrunk encoding is not built here. It depends on the split -- on
+    # which rows the model may read a target from -- and this function knows
+    # nothing about splits, so the caller computes it per fold with
+    # ``taxiout.encoding.encode_split`` and overlays it with ``with_encoding``.
+    # Left out, the columns are missing rather than zero, and the ladder skips
+    # any rung that reads them, exactly as it does for the corridor block
+    # without its edge sets.
+    for c in ENCODING_FEATURES:
+        out[c] = np.nan if encoded is None or c not in encoded else encoded[c]
 
     for c in FEATURE_COLUMNS:
         if c in CATEGORICAL_FEATURES:
