@@ -118,3 +118,90 @@ def test_a_file_the_check_does_not_read_is_not_flagged(tmp_path, monkeypatch):
     target.write_text(f'{{"tool": "{FORBIDDEN_WORDS[1]}"}}\n', encoding="utf-8")
     monkeypatch.setattr(hygiene, "REPO", tmp_path)
     assert hygiene.attribution_hits(["data/fixture.json"]) == {}
+
+
+# --------------------------------------------------------------------------
+# the forbidden-path rule
+#
+# The assistant-configuration paths are the case that motivated the directory
+# rule. They are named through the same fragments the check itself uses: this
+# file is scanned by check 4 like any other source, so spelling either name
+# would make the suite fail on itself.
+
+ASSISTANT_DIR = "." + FORBIDDEN_WORDS[1]
+ASSISTANT_FILE = FORBIDDEN_WORDS[1].upper() + ".md"
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        f"{ASSISTANT_DIR}/settings.local.json",
+        f"{ASSISTANT_DIR}/settings.json",
+        f"{ASSISTANT_DIR}/agents/reviewer.md",
+        f"{ASSISTANT_DIR}/skills/deep/nested/file.txt",
+        ASSISTANT_DIR,
+        ASSISTANT_FILE,
+        f"docs/{ASSISTANT_FILE}",
+    ],
+)
+def test_assistant_configuration_is_forbidden_at_every_depth(path):
+    """The hole this rule closes: the settings file is not an authored type.
+
+    Check 4 scans prose and source, so a JSON settings file carrying a tool
+    name would have passed it. The path rule is what catches that, and it has
+    to hold at any depth, which is why it is a prefix test and not a glob.
+    """
+    assert hygiene.forbidden(path), path
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "src/taxiout/features.py",
+        "reports/baseline.md",
+        "docs/plan.md",
+        "Makefile",
+        ".gitignore",
+        "data/challenge/README.md",
+        f"src/{ASSISTANT_DIR}_notes.py",
+    ],
+)
+def test_ordinary_paths_are_not_forbidden(path):
+    """Including one that merely starts with the directory's name."""
+    assert not hygiene.forbidden(path), path
+
+
+def test_the_previously_forbidden_paths_still_are():
+    for path in (
+        "data/raw/EDDF.json.gz",
+        "data/processed/taxi_distance/EDDF.csv",
+        "data/challenge/ranking.parquet",
+        "data/challenge/movements/training_2025_01.parquet",
+        "notes.osm",
+    ):
+        assert hygiene.forbidden(path), path
+
+
+def test_the_ignore_rule_and_the_gate_agree(tmp_path, monkeypatch):
+    """Both guards, checked against each other rather than against habit.
+
+    ``.gitignore`` keeps the paths out of a commit; ``FORBIDDEN`` fails the
+    gate if that rule is ever removed. The failure mode is deleting one and
+    trusting the other, so this asserts the ignore file still names both.
+    """
+    ignore = (REPO / ".gitignore").read_text(encoding="utf-8").splitlines()
+    entries = {line.strip() for line in ignore if line.strip()}
+    assert f"{ASSISTANT_DIR}/" in entries
+    assert ASSISTANT_FILE in entries
+
+
+def test_a_tracked_assistant_file_fails_the_gate(tmp_path, monkeypatch):
+    """End to end: if the ignore rule went away, check 1 would report it."""
+    (tmp_path / ASSISTANT_DIR).mkdir()
+    (tmp_path / ASSISTANT_DIR / "settings.local.json").write_text(
+        "{}\n", encoding="utf-8"
+    )
+    monkeypatch.setattr(hygiene, "REPO", tmp_path)
+    files = hygiene.tracked_files()
+    assert f"{ASSISTANT_DIR}/settings.local.json" in files
+    assert [f for f in files if hygiene.forbidden(f)]

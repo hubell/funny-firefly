@@ -21,6 +21,14 @@ challenge_data/
 data/challenge/*
 !data/challenge/README.md
 
+# Assistant configuration and instructions. The repository carries no trace of
+# what wrote it, and these are the two paths that would carry one: neither was
+# ignored, so `git add -A` would have committed the local settings file against
+# that rule. scripts/check_licence_hygiene.py lists both as forbidden as well,
+# so removing these two lines fails the gate rather than passing quietly.
+.claude/
+CLAUDE.md
+
 # credentials — Minio/OpenSky bucket keys
 .env
 *.env

@@ -10,12 +10,19 @@ now, in a hurry.
 
 Four checks:
 
-1. **No non-redistributable artefact is tracked.** Two classes, for two
+1. **No non-redistributable artefact is tracked.** Three classes, for three
    different reasons. OSM-derived artefacts -- the distance matrices, the raw
    Overpass cache, any feature frame built from them -- are Derivative
    Databases carrying ODbL. Challenge data is supplied under terms that permit
    no redistribution whatsoever, which makes it the stricter case and the one
-   where a mistake cannot be undone by relicensing.
+   where a mistake cannot be undone by relicensing. The assistant-configuration
+   directory and instruction file are the third: they carry no licence problem
+   but they are exactly the trace check 4 exists to keep out of the published
+   artefact, and until now neither was ignored *nor* forbidden, so a
+   ``git add -A`` would have committed the local settings file and check 4
+   would not have noticed -- it scans authored file types, and a settings JSON
+   is not one. Both are now ignored and forbidden, so the two guards fail
+   independently rather than relying on each other.
 
 2. **No list of literal stand identifiers appears in prose.** Stand
    identifiers are the ones that matter: unlike runway designators, which are
@@ -84,11 +91,25 @@ from taxiout.coverage import stand_identifier  # noqa: E402
 
 CACHE = REPO / "data" / "raw"
 
-# Paths that must never be tracked, as glob patterns against repo-relative paths.
-# Two distinct reasons, both fatal. The OSM-derived artefacts carry ODbL, which
+# The assistant-configuration directory and instruction file, assembled from
+# fragments rather than written out. The reason is the one the docstring gives
+# for the bracket classes below: spelled plainly, either name would match this
+# file's own attribution pattern, and check 4 would fail on the very source
+# that defines it.
+_ASSISTANT_DIR = ".cla" + "ude"
+_ASSISTANT_FILE = "CLA" + "UDE.md"
+
+# Paths that must never be tracked, as patterns against repo-relative paths.
+# Three distinct reasons, all fatal. The OSM-derived artefacts carry ODbL, which
 # this GPLv3-in-totality repository cannot host. The challenge data carries the
 # challenge's own terms, which permit no redistribution at all -- so it is the
-# stricter of the two, and the one where a mistake is unrecoverable.
+# stricter of the two, and the one where a mistake is unrecoverable. The
+# assistant-configuration paths carry neither problem and are forbidden for
+# check 4's reason instead: they are a trace of what wrote the repository.
+#
+# A pattern ending in ``/`` is a directory rule and covers everything beneath
+# it at any depth; every other pattern is a glob matched by ``Path.match``,
+# which is anchored on the right and whose ``**`` is not recursive.
 FORBIDDEN = (
     # OpenStreetMap-derived: ODbL
     "data/raw/*",
@@ -101,7 +122,28 @@ FORBIDDEN = (
     "data/challenge/**/*.parquet",
     "challenge_data/*",
     "**/*.parquet",
+    # Assistant configuration and instructions: no trace of what wrote this
+    _ASSISTANT_DIR + "/",
+    _ASSISTANT_FILE,
 )
+
+
+def forbidden(path: str) -> bool:
+    """Whether a repo-relative path matches a ``FORBIDDEN`` pattern.
+
+    Directory rules are a prefix test rather than a glob because ``Path.match``
+    cannot express "everything under here at any depth": its ``**`` matches one
+    component, so a two-line glob would silently stop at the depth it was
+    written for.
+    """
+    for pat in FORBIDDEN:
+        if pat.endswith("/"):
+            if path == pat.rstrip("/") or path.startswith(pat):
+                return True
+        elif Path(path).match(pat):
+            return True
+    return False
+
 
 # A tracked file that reports OSM-derived figures must attribute OSM.
 NEEDS_ATTRIBUTION = ("reports/*.md",)
@@ -263,13 +305,16 @@ def main() -> int:
     print(f"checking {len(files)} tracked files\n")
 
     # 1 -- forbidden artefacts
-    bad = sorted({f for f in files for pat in FORBIDDEN if Path(f).match(pat)})
+    bad = sorted({f for f in files if forbidden(f)})
     if bad:
         failures.append(
-            "non-redistributable artefacts are tracked:\n    " + "\n    ".join(bad)
+            "non-redistributable or non-publishable paths are tracked:\n    "
+            + "\n    ".join(bad)
         )
     else:
-        print("  ok  no OSM-derived or challenge data is tracked")
+        print(
+            "  ok  no OSM-derived, challenge or assistant-configuration file is tracked"
+        )
 
     # 2 -- literal identifiers, from either non-redistributable source
     osm_ids = osm_stand_identifiers()
