@@ -88,6 +88,7 @@ from run_baselines import (  # noqa: E402
     load_departures,
     load_edge_sets,
     load_matrix,
+    load_airport_table,
     load_weather,
     num,
     pct,
@@ -318,6 +319,7 @@ def main() -> int:
         movements=movements,
         edges=load_edge_sets(),
         weather=weather,
+        airports=load_airport_table(),
     )
     del movements
     print(f"  {len(features):,} rows in {time.time() - t0:.0f} s")

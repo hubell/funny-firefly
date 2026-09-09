@@ -5,18 +5,21 @@
 
 PYTHON ?= python3
 
-.PHONY: all data metar reports crosscheck data-review synthetic tails geometry-gaps \
-        congestion baseline transfer sweep submission test lint licence-check clean help
+.PHONY: all data metar ourairports reports crosscheck data-review synthetic tails \
+        geometry-gaps congestion occupancy baseline transfer sweep submission test \
+        lint licence-check clean help
 
 help:
 	@echo "make data     fetch and cache OSM geometry      -> data/raw/<ICAO>.json.gz"
 	@echo "make metar    fetch and cache METARs            -> data/raw/metar/<ICAO>_<period>.csv"
+	@echo "make ourairports  fetch and cache OurAirports   -> data/raw/ourairports_airports.csv"
 	@echo "make reports  build graph, matrices and reports -> data/processed/, reports/"
 	@echo "make synthetic    the worked airport            -> reports/synthetic_airport.md, .svg"
 	@echo "make data-review  profile the challenge data   -> reports/data_review.md"
 	@echo "make tails        profile the record-quality term -> reports/tails.md"
 	@echo "make geometry-gaps  the unimpeded term against the data -> reports/geometry_gaps.md"
 	@echo "make congestion   how the excess term was built -> reports/congestion.md"
+	@echo "make occupancy    the stand as a shared resource -> reports/occupancy.md"
 	@echo "make baseline     run the ablation ladder      -> reports/baseline.md"
 	@echo "make transfer     leave one airport out, ten times -> reports/transfer.md"
 	@echo "make sweep        the one parameter sweep, October 2025 -> data/processed/sweep_october.csv"
@@ -44,6 +47,12 @@ data:
 # recorded in data/raw/metar/MANIFEST.json. Resumable per station and period.
 metar:
 	$(PYTHON) scripts/fetch_metar.py
+
+# Network, once. OurAirports' airport table, for the destination block's
+# coordinates; the request and the terms are recorded in
+# data/raw/ourairports_MANIFEST.json. Resumable: --refresh refetches.
+ourairports:
+	$(PYTHON) scripts/fetch_ourairports.py
 
 # Offline. Reads data/raw/, writes the matrices and every report.
 reports:
@@ -83,6 +92,13 @@ geometry-gaps:
 # holds on both sides of the data; fits no model. About a minute.
 congestion:
 	$(PYTHON) scripts/report_congestion.py
+
+# Reads data/challenge/ and the validation residuals 'make baseline' writes
+# under data/processed/residuals/. Writes how the stand-occupancy block was
+# built, whether the gap means the same on both sides, and where the physical
+# bound behind it holds. Fits no model. A few minutes.
+occupancy:
+	$(PYTHON) scripts/report_occupancy.py
 
 # Reads data/challenge/ and the matrices from 'make reports'. Writes the
 # ablation ladder. Needs the modelling extras; takes a few minutes.

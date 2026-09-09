@@ -102,6 +102,14 @@ modelling stage, measured against the target.
       no identifier of the tenth in the frame — the question the challenge's
       test set cannot pose, and the one no identifier-based entry can answer
       at all — [`reports/transfer.md`](reports/transfer.md)
+- [x] The stand as a shared resource: an arrival that on-blocks at the
+      subject's stand before it takes off bounds its taxi-out from below, from
+      fields the ranking set exposes in full —
+      [`reports/occupancy.md`](reports/occupancy.md)
+- [x] The operator as the callsign carries it, the destination as a bearing and
+      a distance, the public-holiday calendar, and the plan's own differences —
+      four blocks read against the submission rung in
+      [`reports/baseline.md`](reports/baseline.md)
 - [ ] Write-up
 
 ## What the data turned out to contain
@@ -201,6 +209,7 @@ airport in scope uses.
 ```bash
 make data      # cache OSM geometry from Overpass (network, resumable)
 make metar     # cache METARs from the Iowa State Mesonet (network, resumable)
+make ourairports # cache OurAirports' airport table (network, once)
 make reports   # coverage, distance matrices, routing + sensitivity reports
 make synthetic # the worked airport; reads nothing, so it runs anywhere
 make test      # unit tests, no network, no challenge data
@@ -209,6 +218,7 @@ make data-review  # needs the challenge data locally; writes reports/data_review
 make tails        # needs the challenge data; writes reports/tails.md
 make geometry-gaps  # needs the challenge data and the OSM cache; writes reports/geometry_gaps.md
 make congestion   # needs the challenge data; writes reports/congestion.md
+make occupancy    # needs the challenge data and the residuals; writes reports/occupancy.md
 make baseline     # needs the challenge data; writes reports/baseline.md
 make transfer     # needs the challenge data; writes reports/transfer.md
 make submission TEAM=<name>   # needs the challenge data; writes a submission
@@ -224,6 +234,7 @@ data review and everything after it need `pip install -e ".[modelling]"`.
 | ----- | ----- | ------ |
 | `scripts/fetch_osm.py` | Overpass API | `data/raw/<ICAO>.json.gz` |
 | `scripts/fetch_metar.py` | Iowa State Mesonet ASOS archive | `data/raw/metar/<ICAO>_<period>.csv`, `MANIFEST.json` |
+| `scripts/fetch_ourairports.py` | OurAirports `airports.csv` | `data/raw/ourairports_airports.csv`, `ourairports_MANIFEST.json` |
 | `scripts/report_coverage.py` | `data/raw/` | `reports/stand_coverage.md` |
 | `scripts/build_taxi_graph.py` | `data/raw/` | `data/processed/taxi_distance/`, `reports/taxi_routing.md` |
 | `scripts/check_penalty_sensitivity.py` | `data/raw/` | `reports/penalty_sensitivity.md` |
@@ -233,12 +244,14 @@ data review and everything after it need `pip install -e ".[modelling]"`.
 | `scripts/report_tails.py` | `data/challenge/` | `reports/tails.md` |
 | `scripts/report_geometry_gaps.py` | `data/challenge/`, `data/processed/taxi_distance/`, `data/raw/` | `reports/geometry_gaps.md` |
 | `scripts/report_congestion.py` | `data/challenge/`, `data/processed/taxi_distance/`, `data/raw/metar/`, `data/processed/residuals/` | `reports/congestion.md` |
-| `scripts/run_baselines.py` | `data/challenge/`, `data/processed/taxi_distance/`, `data/raw/metar/` | `reports/baseline.md`, `data/processed/residuals/` (gitignored) |
+| `scripts/report_occupancy.py` | `data/challenge/`, `data/processed/taxi_distance/`, `data/processed/residuals/` | `reports/occupancy.md` |
+| `scripts/run_baselines.py` | `data/challenge/`, `data/processed/taxi_distance/`, `data/raw/metar/`, `data/raw/ourairports_airports.csv` | `reports/baseline.md`, `data/processed/residuals/` (gitignored) |
 | `scripts/report_transfer.py` | `data/challenge/`, `data/processed/taxi_distance/`, `data/raw/metar/` | `reports/transfer.md` |
 | `scripts/sweep_params.py` | `data/challenge/`, `data/processed/taxi_distance/`, `data/raw/metar/` | `data/processed/sweep_october.csv` (gitignored) |
 | `scripts/make_submission.py` | `data/challenge/`, `data/processed/taxi_distance/`, `data/raw/metar/` | `data/submissions/<team>_v<n>.parquet` (gitignored) |
 
-Only `fetch_osm.py`, `fetch_metar.py` and `check_runways_ourairports.py` touch the network. `build_taxi_graph.py` runs all 11
+Only `fetch_osm.py`, `fetch_metar.py`, `fetch_ourairports.py` and
+`check_runways_ourairports.py` touch the network. `build_taxi_graph.py` runs all 11
 airports in about two minutes from the cache and takes `--airports`,
 `--runway-penalty` and `--max-snap-m` for sensitivity checks. Output is
 deterministic: repeated runs produce byte-identical files.
@@ -264,21 +277,54 @@ fetch may exercise the mirror rotation harder.
 - **OpenStreetMap** — © OpenStreetMap contributors, available under the
   [Open Database License](https://www.openstreetmap.org/copyright). Retrieved
   via the Overpass API.
-- **OurAirports** — released to the public domain; used to cross-check
-  OSM-derived runway designators and lengths.
+- **OurAirports** — two files, and it is now a **model input** as well as a
+  cross-check. `runways.csv` verifies OSM-derived runway designators and
+  lengths (`scripts/check_runways_ourairports.py`); `airports.csv`, fetched by
+  `scripts/fetch_ourairports.py` and cached, gitignored, under `data/raw/`
+  with the request recorded in `ourairports_MANIFEST.json`, supplies the
+  destination aerodrome's coordinates, from which the model reads an initial
+  bearing and a great-circle distance and nothing else. OurAirports states the
+  terms on its data page: "All data is released to the Public Domain, and
+  comes with no guarantee of accuracy or fitness for use."
 - **Iowa Environmental Mesonet, Iowa State University** — the ASOS/METAR
   archive, fetched by `scripts/fetch_metar.py` for the training year and the
   two ranking months at every listed airport and cached, gitignored, under
   `data/raw/metar/` with the request parameters recorded in
-  `MANIFEST.json`. This is the one additional dataset the model reads, and
-  it enters only as three regime flags per airport-hour (visibility band,
-  precipitation, freezing). The IEM's disclaimer page states the terms: the
-  materials "are in the public domain and may be used freely by anyone for
-  any lawful purpose", provided "without any warranty of accuracy", and
-  "Attributing the Iowa Environmental Mesonet of Iowa State University would
-  be appreciated" — which this line does. The observations themselves are
+  `MANIFEST.json`. It enters only as three regime flags per airport-hour
+  (visibility band, precipitation, freezing). The IEM's disclaimer page states
+  the terms: the materials "are in the public domain and may be used freely by
+  anyone for any lawful purpose", provided "without any warranty of accuracy",
+  and "Attributing the Iowa Environmental Mesonet of Iowa State University
+  would be appreciated" — which this line does. The observations themselves are
   METARs the airports publish; the archive is where a reader can re-fetch
   them from the recorded request.
+
+Those two are the additional *datasets*. One further external input is not a
+dataset at all and is listed separately so the distinction is not blurred:
+
+- **`holidays` (python-holidays), MIT** — a code dependency, pinned in
+  `pyproject.toml` under `modelling` and used at version 0.104 for the
+  committed reports. It computes each country's public-holiday calendar from
+  published rules; nothing is fetched and nothing is cached, so there is no
+  manifest to record and no archive for a reader to re-fetch — reinstalling
+  the pinned package is the reproduction. The model reads two flags from it:
+  whether the take-off date is a public holiday in the airport's country, and
+  whether the day either side is.
+
+Two datasets were considered for the model and are not used, recorded here
+because a reader should be able to see what was ruled out as well as what was
+taken. EUROCONTROL's own PRU open data at `ansperformance.eu/data` carries
+daily ATFM delay by cause and by airport, which is the closest thing in
+existence to the "phased delays" the challenge rationale describes; the
+portal's notice permits copying "provided that EUROCONTROL is mentioned as the
+source and it is not used for commercial purposes" and states that the
+information "may not be modified without prior written permission", which is
+non-commercial and no-derivatives, and this entry reads that as failing the
+prize rules' requirement that additional datasets be "openly available under
+an open source license" — the same reading that excluded OPDI in
+[`docs/prior_art.md`](docs/prior_art.md). ERA5 (Copernicus, CC-BY since July
+2025) clears the rule and was not pursued: the nearest test, the METAR's own
+wind, ceiling, temperature and thunderstorm fields, bought nothing.
 
 ODbL sorts derived artefacts into two kinds, and the difference decides what
 ships. A **Derivative Database** carries share-alike; a **Produced Work** — a
@@ -332,9 +378,13 @@ src/taxiout/
   challenge.py   challenge data access; which fields are hidden or excluded
   join.py        staged join of STAND_mvt / RUNWAY_mvt to the matrices
   windows.py     trailing and centred windows: closed, subject removed, truncation flagged
+  occupancy.py   the stand as a shared resource: the arrival that took it before the subject left
   congestion.py  throughput, arrivals, demand and configuration from the movements around a subject
   corridor.py    the shared-corridor load, from the routes' taxiway edge sets
   metar.py       weather as three regime flags per airport-hour
+  destination.py the destination as a bearing and a distance, from OurAirports
+  calendar.py    public holidays per airport country, from `holidays`
+  callsign.py    the operator, read off the callsign rather than the flight record
   exposure.py    the ranking months' regime against their training-year twins
   planlags.py    take-off against the planning values fixed before departure
   saturation.py  runway saturation, from other departures' take-off times
@@ -350,6 +400,7 @@ src/taxiout/
 scripts/
   fetch_osm.py                 cache OSM geometry (resumable, network)
   fetch_metar.py               cache METARs (resumable, network)
+  fetch_ourairports.py         cache OurAirports' airport table (network)
   report_coverage.py           reports/stand_coverage.md
   build_taxi_graph.py          distance matrices + reports/taxi_routing.md
   check_penalty_sensitivity.py reports/penalty_sensitivity.md
@@ -359,6 +410,7 @@ scripts/
   report_tails.py              reports/tails.md (needs challenge data)
   report_geometry_gaps.py      reports/geometry_gaps.md (needs challenge data + OSM cache)
   report_congestion.py         reports/congestion.md (needs challenge data)
+  report_occupancy.py          reports/occupancy.md (needs challenge data + residuals)
   run_baselines.py             reports/baseline.md (needs challenge data)
   report_transfer.py           reports/transfer.md (needs challenge data)
   sweep_params.py              the one parameter sweep, on October 2025
