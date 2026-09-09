@@ -78,6 +78,7 @@ def _movements(stands: list[str], **overrides) -> pd.DataFrame:
         {
             "MVT_ID_mvt": [float(1000 + i) for i in range(n)],
             "ADEP_mvt": ["ZZZZ"] * n,
+            "ADES_mvt": ["AAAA"] * n,
             "STAND_mvt": stands,
             "RUNWAY_mvt": ["27"] * n,
             "MVT_TIME_UTC_mvt": pd.to_datetime(["2025-03-04T08:30:00Z"] * n, utc=True),
@@ -87,6 +88,8 @@ def _movements(stands: list[str], **overrides) -> pd.DataFrame:
             "EOBT_1_flt": pd.to_datetime(["2025-03-04T08:00:00Z"] * n, utc=True),
             "WK_TBL_CAT_flt": ["M"] * n,
             "AIRCRAFT_TYPE_mvt": ["A320"] * n,
+            "AIRCRAFT_OPERATOR_flt": ["OP1"] * n,
+            "FLIGHT_mvt": [f"ZZZ{100 + i}" for i in range(n)],
         }
     )
     for k, v in overrides.items():
@@ -153,14 +156,36 @@ def test_the_encoding_block_declares_the_keys_and_the_fitted_target():
 
 
 def test_every_external_source_is_a_field_of_its_archive():
-    """The one block from outside the challenge data reads the archive's own fields."""
-    from taxiout.metar import FIELDS
+    """Each block from outside the challenge data reads its own archive's fields.
 
+    There are two, and each is held to its own list rather than to a shared
+    one: a field of the METAR archive is not a field of OurAirports, and a
+    single pooled list would let either block read the other's columns without
+    the audit noticing.
+    """
+    from taxiout.destination import FIELDS as OURAIRPORTS_FIELDS
+    from taxiout.metar import FIELDS as METAR_FIELDS
+
+    allowed = {"METAR": METAR_FIELDS, "OURAIRPORTS": OURAIRPORTS_FIELDS}
+    assert set(allowed) == set(EXTERNAL_SOURCES)
+    seen = set()
     for name, sources in FEATURE_SOURCES.items():
         for src in sources:
             phase, column = source_phase(src)
-            if phase == "METAR":
-                assert column in FIELDS, (name, src)
+            if phase in allowed:
+                assert column in allowed[phase], (name, src)
+                seen.add(phase)
+    # both prefixes are actually used; a prefix nobody reads is a list that
+    # cannot be wrong and therefore proves nothing
+    assert seen == set(allowed)
+
+
+def test_the_holiday_block_is_a_dependency_and_not_a_dataset():
+    """`holidays` computes calendars from rules, so it registers no external source."""
+    from taxiout.calendar import HOLIDAY_FEATURES
+
+    for c in HOLIDAY_FEATURES:
+        assert FEATURE_SOURCES[c] == ("ADEP_mvt", "MVT_TIME_UTC_mvt")
 
 
 def test_no_departure_source_is_a_hidden_field():
@@ -226,7 +251,14 @@ def test_every_feature_declares_at_least_one_source():
 
 
 def _with_arrivals(departures: pd.DataFrame) -> pd.DataFrame:
-    """A movement frame: the departures plus two arrivals at the same airport."""
+    """A movement frame: the departures plus two arrivals at the same airport.
+
+    Both arrivals took stand ``B5``, which is where the subjects push back
+    from, so the stand-occupancy block has something to read as well as the
+    congestion block. The later of the two on-blocked two minutes before the
+    subjects' take-off and flew the subjects' own type under a different
+    operator, so the two match flags are 1.0 and 0.0 rather than both alike.
+    """
     t = departures["MVT_TIME_UTC_mvt"].iloc[0]
     minutes = pd.Timedelta(minutes=1)
     arrivals = pd.DataFrame(
@@ -241,6 +273,9 @@ def _with_arrivals(departures: pd.DataFrame) -> pd.DataFrame:
             "TAXITIME_SEC_mvt": [360.0, 480.0],
             "SCHED_TIME_UTC_mvt": [t - 10 * minutes, t - 15 * minutes],
             "RUNWAY_mvt": ["27", "27"],
+            "AIRCRAFT_TYPE_mvt": ["A320", "B738"],
+            "AIRCRAFT_OPERATOR_flt": ["OP2", "OP2"],
+            "FLIGHT_mvt": ["AAA900", "AAA901"],
             # an arrival carries no departure plan, as in the data
             "EOBT_1_flt": [pd.NaT, pd.NaT],
             "LOBT_flt": [pd.NaT, pd.NaT],
@@ -248,7 +283,6 @@ def _with_arrivals(departures: pd.DataFrame) -> pd.DataFrame:
     )
     dep = departures.assign(
         PHASE_mvt="DEP",
-        ADES_mvt="AAAA",
         BLOCK_TIME_UTC_mvt=pd.NaT,
         TAXITIME_SEC_mvt=np.nan,
     )
@@ -287,7 +321,12 @@ def test_builder_ignores_the_forbidden_columns():
 
 
 def test_builder_reads_arrivals_fields_and_only_arrivals():
-    """Change the arrivals' taxi-in times: the arrival features move, nothing else."""
+    """Change the arrivals' taxi-in times: the arrival features move, nothing else.
+
+    Two blocks read that field and both must move: the congestion block's
+    trailing mean, and the stand-occupancy block's record of what the aircraft
+    before this one on the stand had just done.
+    """
     m = _matrix([("ZZZZ", "B5", "27", 1000.0)])
     base = _movements(["B5", "B5"])
     moves = _with_arrivals(base)
@@ -298,8 +337,64 @@ def test_builder_reads_arrivals_fields_and_only_arrivals():
     after = build_features(base, m, movements=changed)
     assert (after["txi_mean_15m"] == 1.0).all()
     assert (clean["txi_mean_15m"] == 420.0).all()
+    assert (clean["occ_prev_txi_s"] == 360.0).all()
+    assert (after["occ_prev_txi_s"] == 1.0).all()
     moved = [c for c in FEATURE_COLUMNS if not clean[c].equals(after[c])]
-    assert set(moved) == {c for c in FEATURE_COLUMNS if c.startswith("txi_mean_")}
+    assert set(moved) == {c for c in FEATURE_COLUMNS if c.startswith("txi_mean_")} | {
+        "occ_prev_txi_s"
+    }
+
+
+def test_the_occupancy_block_reads_the_arrivals_on_block_times():
+    """Move the arrivals' on-blocks past the take-off: the `occ_` columns go missing.
+
+    The stand-occupancy block is the one that reads a field the ranking set
+    hides for departures, from the rows that expose it. This is the proof that
+    it reads *arrivals'* on-block times and not something correlated with them:
+    push every arrival's on-block to after the subject's take-off and the stand
+    has no previous occupant, so every column that describes one goes to NaN
+    and `occ_missing` fires. What moves with it is the congestion block's own
+    on-block counts, which read the same field; the landing counts, which read
+    the landing time, do not.
+    """
+    m = _matrix([("ZZZZ", "B5", "27", 1000.0)])
+    base = _movements(["B5", "B5"])
+    moves = _with_arrivals(base)
+    clean = build_features(base, m, movements=moves)
+    assert clean["occ_gap1_s"].tolist() == [120.0, 120.0]
+    assert clean["occ_gap2_s"].tolist() == [240.0, 240.0]
+    # the schedule against that on-block: 08:00 minus 08:28, so the inbound
+    # reached the stand well after the outbound was due off it
+    assert clean["occ_gap1_sched_s"].tolist() == [-1680.0, -1680.0]
+    assert clean["occ_prev_late_s"].tolist() == [480.0, 480.0]
+    # the last arrival flew the subjects' type under a different operator
+    assert clean["occ_prev_same_type"].tolist() == [1.0, 1.0]
+    assert clean["occ_prev_same_op"].tolist() == [0.0, 0.0]
+    assert clean["occ_missing"].tolist() == [0.0, 0.0]
+
+    changed = moves.copy()
+    arr = changed["PHASE_mvt"] == "ARR"
+    changed.loc[arr, "BLOCK_TIME_UTC_mvt"] = changed.loc[
+        arr, "MVT_TIME_UTC_mvt"
+    ] + pd.Timedelta(minutes=20)
+    after = build_features(base, m, movements=changed)
+    assert after["occ_gap1_s"].isna().all()
+    assert after["occ_missing"].tolist() == [1.0, 1.0]
+    # the take-off is three days into the covered month, so the absence is a
+    # fact about the stand and not about the edge of the data
+    assert after["occ_truncated"].tolist() == [0.0, 0.0]
+
+    moved = {c for c in FEATURE_COLUMNS if not clean[c].equals(after[c])}
+    assert moved == {
+        "occ_gap1_s",
+        "occ_gap2_s",
+        "occ_gap1_sched_s",
+        "occ_prev_late_s",
+        "occ_prev_txi_s",
+        "occ_prev_same_type",
+        "occ_prev_same_op",
+        "occ_missing",
+    } | {c for c in FEATURE_COLUMNS if c.startswith(("onb_", "txi_n_", "txi_mean_"))}
 
 
 def test_time_features_are_anchored_on_take_off():
@@ -520,24 +615,24 @@ def test_the_ladder_reads_the_congestion_blocks_net_of_the_plan_lags_and_keeps_t
 
 
 def test_the_submission_rung_is_not_the_last_rung_of_the_ladder():
-    """Two rungs sit above the submission, for two different reasons.
+    """Rungs sit above the submission, for reasons the ladder records.
 
     Saturation was built, measured, and left out because it bought nothing.
-    The stand-and-runway arm is the other case: its score is indistinguishable
+    The stand-and-runway arm is another case: its score is indistinguishable
     from the shipped arm's, and it is out on a mechanism -- the designator
     carries an intersection signature the routed distance cannot compute, so
-    the runway categorical is not the encoding's to replace. Both reasons are
-    recorded beside ``SUBMISSION_KEY``; this pins the shape.
+    the runway categorical is not the encoding's to replace. Any Gate 2c rung
+    the chain did not reach is a third. All of them are recorded beside
+    ``SUBMISSION_KEY``; this pins the shape.
     """
     from taxiout.encoding import ENCODING_FEATURES
     from taxiout.models import ABOVE_SUBMISSION, LADDER_PROPER, TOP_RUNG
     from taxiout.saturation import SATURATION_FEATURES
 
-    assert TOP_RUNG.key == "encoding-for-stand"
-    assert [r.key for r in ABOVE_SUBMISSION] == [
-        "encoding-for-identifiers",
-        "saturation",
-    ]
+    assert TOP_RUNG.key == "plan-diffs"
+    # The Gate 2c chain ran to the top, so the only rung of the ladder proper
+    # left above the submission is the measured negative the ladder keeps.
+    assert [r.key for r in ABOVE_SUBMISSION] == ["saturation"]
     # the shipped rung carries the encoding, and keeps the runway categorical
     assert set(ENCODING_FEATURES) <= set(TOP_RUNG.features)
     assert "designator" in TOP_RUNG.features
@@ -547,3 +642,55 @@ def test_the_submission_rung_is_not_the_last_rung_of_the_ladder():
     assert set(SATURATION_FEATURES) <= set(LADDER_PROPER[-1].features)
     # but nothing the submission is fitted from reads it
     assert not set(SATURATION_FEATURES) & set(TOP_RUNG.features)
+
+
+def test_the_gate_2c_rungs_chain_on_the_arm_and_take_no_no_lag_twin():
+    """Four blocks, one on top of the next, the first on the arm.
+
+    Two things this pins. Each rung is read against the one below it in the
+    chain and the first against the arm the encoding section chose, so a rung's
+    number is what that block is worth net of the blocks under it. And none of
+    them gains a twin in the chain kept without the plan lags: that chain is the
+    plan-lag ablation of the ladder *below* the arms, and there is no arm
+    without the plan lags for a twin of these to be read against.
+    """
+    from taxiout.encoding import ENCODING_FEATURES
+    from taxiout.models import (
+        ENCODING_STAND_BLOCK,
+        GATE_2C_RUNGS,
+        LADDER_BY_KEY,
+        base_of,
+    )
+
+    expected_base = ["encoding-for-stand", *GATE_2C_RUNGS[:-1]]
+    for key, base in zip(GATE_2C_RUNGS, expected_base):
+        rung = LADDER_BY_KEY[key]
+        assert base_of(rung).key == base, key
+        # each rung is the one below it plus exactly one block
+        assert set(LADDER_BY_KEY[base].features) < set(rung.features), key
+        # every one of them stands on the arm, so every one carries the encoding
+        assert set(ENCODING_STAND_BLOCK) <= set(rung.features), key
+        assert set(ENCODING_FEATURES) <= set(rung.features), key
+        assert f"{key}-nolag" not in LADDER_BY_KEY, key
+
+
+def test_the_callsign_prefix_is_pooled_by_the_estimator_and_not_by_the_frame():
+    """The threshold belongs to the fitting sample, so it belongs to the fit.
+
+    ``build_features`` knows nothing about splits, so it carries the raw prefix;
+    the booster counts levels on the rows it is fitted on and maps the rest to
+    ``other``, which is the same arrangement the geometric fit uses for a wake
+    class with too few rows at an airport.
+    """
+    from taxiout.callsign import CALLSIGN_FEATURES, MIN_LEVEL_ROWS, OTHER_LEVEL
+    from taxiout.models import POOLED_CATEGORICALS
+
+    assert POOLED_CATEGORICALS == CALLSIGN_FEATURES
+    assert set(CALLSIGN_FEATURES) <= set(CATEGORICAL_FEATURES)
+    assert MIN_LEVEL_ROWS == 30
+    m = _matrix([("ZZZZ", "B5", "27", 1000.0)])
+    frame = _movements(["B5", "B5"], FLIGHT_mvt=["DLH123", "1234"])
+    f = build_features(frame, m)
+    # the frame carries the raw prefix, pooled by nothing
+    assert f["cs_prefix"].tolist() == ["DLH", "NA"]
+    assert OTHER_LEVEL not in set(f["cs_prefix"].cat.categories)

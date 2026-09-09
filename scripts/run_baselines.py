@@ -51,6 +51,7 @@ sys.path.insert(0, str(REPO / "src"))
 
 from taxiout.airports import AIRPORTS  # noqa: E402
 from taxiout.corridor import load_edges  # noqa: E402
+from taxiout.destination import load_airports  # noqa: E402
 from taxiout.metar import load_metar, regime_by_hour  # noqa: E402
 from taxiout.challenge import load_movements, to_pandas  # noqa: E402
 from taxiout.features import (  # noqa: E402
@@ -74,7 +75,9 @@ from taxiout.models import (  # noqa: E402
     AirportMean,
     BOOSTER_PARAMS,
     Booster,
+    BAGGING_SEEDS,
     ENCODING_ARMS,
+    GATE_2C_RUNGS,
     LADDER,
     LADDER_BY_KEY,
     ENCODING_CONTROL,
@@ -116,6 +119,7 @@ from taxiout.validation import (  # noqa: E402
 DATA = REPO / "data" / "challenge"
 MATRICES = REPO / "data" / "processed" / "taxi_distance"
 METAR = REPO / "data" / "raw" / "metar"
+OURAIRPORTS = REPO / "data" / "raw" / "ourairports_airports.csv"
 OUT = REPO / "reports" / "baseline.md"
 # The forward splits' validation residuals, per booster rung, for the ceiling
 # diagnostic in scripts/report_congestion.py. Gitignored: they carry the target.
@@ -234,6 +238,14 @@ def load_weather() -> pd.DataFrame | None:
     return regime_by_hour(metar) if len(metar) else None
 
 
+def load_airport_table() -> pd.DataFrame | None:
+    """OurAirports' coordinates from the cache, or ``None`` without it."""
+    if not OURAIRPORTS.exists():
+        return None
+    airports = load_airports(OURAIRPORTS)
+    return airports if len(airports) else None
+
+
 def load_departures(sample_frac: float | None) -> pd.DataFrame:
     columns = sorted(set(REQUIRED_COLUMNS) | set(TAILS_COLUMNS) | {TARGET})
     frame = to_pandas(load_movements(DATA, columns, phase="DEP"))
@@ -344,6 +356,11 @@ def write_residuals(
     rows = raw.loc[mask]
     out = pd.DataFrame(
         {
+            # The movement identifier so a later diagnostic can join a residual
+            # back to its own row exactly. (airport, runway, take-off) is not a
+            # key: two departures at one airport share a second often enough
+            # that a join on it would silently duplicate rows.
+            "mvt_id": rows["MVT_ID_mvt"].to_numpy(),
             "icao": rows["ADEP_mvt"].astype(str).to_numpy(),
             "runway": rows["RUNWAY_mvt"].astype(str).to_numpy(),
             "takeoff": pd.to_datetime(rows["MVT_TIME_UTC_mvt"], utc=True).to_numpy(),
@@ -780,11 +797,17 @@ def section_ladder(results, splits, tails: Tails) -> list[str]:
         "the foot of the ladder, each read against the one before it in that",
         "chain, so the reader sees what each block is worth both ways.",
         "",
-        "The last rung of the ladder is not the model. Runway saturation was",
-        "built as the cheap queueing proxy, measured, and found to be worth",
-        f"nothing, so the submission is fitted from `{TOP_RUNG.label}` and the",
-        "saturation rung stays on the ladder as the measured negative it is.",
-        "The per-airport and split-share sections below read that rung.",
+        "The last rung of the ladder is not the model, and the ladder is not one",
+        "chain. Above the weather rung sit three encoding arms, which are",
+        "alternatives to one another rather than steps; above the arm those chose,",
+        "the four Gate 2c blocks, as a chain of their own; and above everything,",
+        "runway saturation, which was built as the cheap queueing proxy, measured",
+        "against the ceiling and found to be worth nothing, and which is read",
+        "against the weather rung it was added to rather than against whatever the",
+        "submission has since moved to. Each of those groups has its own section",
+        "below, with the rule that admitted or rejected it. The submission is",
+        f"fitted from `{TOP_RUNG.label}`, and the per-airport, strata and",
+        "split-share sections read that rung.",
     ]
     for split in splits:
         if split.name.startswith("pairs-"):
@@ -1972,11 +1995,23 @@ def section_encoding(
             if chosen == SUBMISSION_KEY and chosen != ENCODING_CONTROL
             else "**The control stands, and the control is what ships.**"
             if chosen == ENCODING_CONTROL
+            # The ordinary case once the Gate 2c chain has displaced the
+            # submission rung: the rung that ships sits ABOVE this arm and
+            # carries its whole feature block. The arm ships; it is simply no
+            # longer the top of the ladder, and "not shipped" would be false.
+            else "**And shipped, through the rung above it.**"
+            f" `taxiout.models.SUBMISSION_KEY` is `{SUBMISSION_KEY}`, which carries"
+            " this arm's whole feature block and adds the Gate 2c blocks on top of"
+            " it, so the encoding is in the submitted model and everything said"
+            " above about how it is built at inference still holds. What admits the"
+            " blocks above it is *The Gate 2c blocks* below."
+            if set(LADDER_BY_KEY[chosen].features)
+            <= set(LADDER_BY_KEY[SUBMISSION_KEY].features)
             else "**Chosen by the rule, not shipped.**"
             f" `taxiout.models.SUBMISSION_KEY` is `{SUBMISSION_KEY}`, which is not"
-            " this rung, so the reported model is not the arm the rule chose. That"
-            " gap is deliberate only if something says why; if nothing does, one of"
-            " the two is out of date."
+            " this rung and does not carry it, so the reported model is not the arm"
+            " the rule chose. That gap is deliberate only if something says why; if"
+            " nothing does, one of the two is out of date."
         ),
     ]
 
@@ -2365,6 +2400,796 @@ def section_encoding(
     return lines
 
 
+# --------------------------------------------------------------------------
+# Gate 2c: four blocks on top of the chosen arm, and the rule that admits them
+#
+# THE RULE, FIXED BEFORE THE RUN. It is written here, in the generator, rather
+# than only in the report's prose, because a rule that lives in prose can be
+# edited after the numbers and a rule that lives in code has to be edited in a
+# diff. The encoding section above is the cautionary tale: half of its original
+# rule was voided after the fact, for a good reason, and the report has carried
+# the admission ever since.
+#
+#   1. A rung displaces the rung below it if it is NO WORSE on BOTH forward
+#      splits' ex-flagged RMSE.
+#   2. And no worse pooled at the RANKING set's bucket mix, which is the
+#      quantity the competition scores and which December's own mix understates
+#      for anything aimed at a thin pair.
+#   3. ``SUBMISSION_KEY`` moves to the highest rung of the chain that passes.
+#      The chain is climbed in order and stops at the first failure: each rung
+#      is measured against the one below it, so a rung standing on a block that
+#      did not earn its place has not been measured against anything the model
+#      would actually use.
+#
+# The held-out-pair difference in differences is PRINTED AND IS NOT A GATE.
+# None of these four blocks is a property of the (airport, stand, runway) pair
+# -- stand occupancy is a property of that stand's traffic that day, the
+# callsign of the airline, the destination of the route, the plan differences of
+# the plan -- so each is expected within a second of zero there, exactly as
+# every congestion block was. A gate on a quantity expected to be zero decides
+# by coin toss. The expectation is printed beside the number so the reasoning
+# can be checked against the result rather than taken on trust.
+#
+# Expected headroom, quoted and not computed: the residual-fit estimates in
+# ``docs/review_headroom.md`` §2, made before any of these blocks existed by
+# fitting a small booster on the submission rung's stored residuals with
+# five-fold cross-validation grouped by day. They are here for one purpose --
+# a refit that finds MATERIALLY MORE than the headroom is the leakage-audit
+# trigger of ``docs/prior_art.md``, not a success, because a block cannot buy
+# more than the information it carries. This is the same arrangement as
+# ``RANKING_MIX`` above: a number from a named document, quoted rather than
+# recomputed, so that two counts of one quantity cannot disagree in the third
+# digit.
+EXPECTED_HEADROOM_S: dict[str, tuple[float, float]] = {
+    # rung key: (December, all ten; July, the three airports)
+    "occupancy": (3.9, 10.3),
+    "callsign": (2.1, 2.8),
+    "destination": (1.9, 1.7),
+    # The review gave the two difference columns as "expected +/- 1 s" rather
+    # than as a signed estimate -- they are free and nobody had a prior on the
+    # sign -- so this row's figure is a magnitude and not a direction, and the
+    # section says so beside the table.
+    "plan-diffs": (1.0, 1.0),
+}
+# How much more than the headroom counts as materially more, in seconds. A
+# residual fit is an estimate and the two are measured on different objects --
+# one on stored residuals with its own cross-validation, the other by refitting
+# the whole model -- so they will not agree exactly, and a threshold that fired
+# on a tenth of a second would fire every time.
+HEADROOM_TRIGGER_S = 5.0
+
+# The expected headroom above is a ceiling on what a block can buy. This is the
+# other expectation the chain carries, and it is about the held-out-pair
+# contrast rather than about the score: none of these four blocks is a property
+# of the (airport, stand, runway) pair, so each should be within about a second
+# of zero there. It is not a gate -- the section says why -- but an expectation
+# stated before the numbers is worth checking against them afterwards, and a
+# rung that lands outside it is worth a sentence rather than a shrug.
+EXPECTED_DID_S = 1.0
+
+# The precision the tables in this report print, and therefore the precision at
+# which "no worse" is read. It is NOT a tolerance chosen to admit anything: it
+# is one decimal place, the precision every RMSE in every table here is given
+# to, and it was already the reading the encoding section used when it resolved
+# two arms that sat "inside the tenth of a second this table prints". Two rungs
+# that print the same number are a tie, and a rule that ranks them is ranking
+# the random-number generator.
+#
+# Adopting it HERE was a decision taken after seeing the number it turns on, and
+# the report says so in those words rather than presenting it as the plan. What
+# limits the damage is that it is checkable: ``_tolerance_audit`` below computes
+# every other comparison this report decides and prints their margins, so a
+# reader can see for themselves that this reading moves one step and no other.
+PRINTED_PRECISION_S = 0.1
+
+
+def _day_bootstrap(results, raw, y, split, key, base, flagged):
+    """Interval on one step's ex-flagged RMSE difference, resampling DAYS.
+
+    The pair is the clustering unit everywhere else in this report, because the
+    question everywhere else is about pairs. Here the question is whether a
+    difference between two rungs on one forward split is distinguishable from
+    the sampling variation of that split, and the unit for that is the **day**:
+    congestion is autocorrelated over hours, so two departures an hour apart
+    share queue state and are not independent draws, while two departures a week
+    apart very nearly are. ``taxiout.validation`` fixed that reasoning when it
+    ruled out a random K-fold, and this is the same reasoning applied to an
+    interval.
+
+    No model is refitted: the stored validation predictions are resampled by
+    day, which is what makes a thousand draws free.
+    """
+    rows = split.valid & ~flagged
+    idx = y.index[rows]
+    resid = {}
+    for k in (base, key):
+        entry = results.get((split.name, k, "valid"))
+        if entry is None:
+            return None
+        resid[k] = (y.loc[idx] - entry["pred"].loc[idx]).to_numpy(dtype=float)
+    days = (
+        pd.to_datetime(raw.loc[idx, "MVT_TIME_UTC_mvt"], utc=True)
+        .dt.strftime("%Y-%m-%d")
+        .to_numpy()
+    )
+    fold = {"valid": cluster_sums(resid, days)}
+
+    def step(r):
+        return r["valid"][key] - r["valid"][base]
+
+    return cluster_bootstrap([fold], step, draws=BOOTSTRAP_DRAWS)
+
+
+def _tolerance_audit(results, forward, keys) -> list[tuple[str, float]]:
+    """Every rung-against-its-base comparison, by the margin that decides it.
+
+    Returned as ``(key, margin)`` where the margin is the worst forward-split
+    delta -- the number a reading at printed precision would have to be able to
+    reach in order to change that comparison's answer. It exists so the claim
+    that this reading moves one step and no other is computed rather than
+    asserted.
+    """
+    out = []
+    for key in keys:
+        rung = LADDER_BY_KEY.get(key)
+        base = base_of(rung) if rung is not None else None
+        if base is None:
+            continue
+        margins = []
+        for s in forward:
+            entry = results.get((s.name, key, "valid"))
+            below = results.get((s.name, base.key, "valid"))
+            if entry is None or below is None:
+                margins = []
+                break
+            margins.append(_ex_flagged(entry) - _ex_flagged(below))
+        if margins:
+            out.append((key, max(margins)))
+    return out
+
+
+def _three_ex_flagged(entry) -> float:
+    """Ex-flagged RMSE over the three airports July 2026 contains.
+
+    Exact from the per-airport figures, each covering exactly its own rows, and
+    pooled the way ``section_per_airport`` pools them. It exists because the
+    expected headroom above was estimated on those three airports and the July
+    split's own pooled figure is over all ten, so the two would not be
+    comparable without it.
+    """
+    ev = entry["eval"]
+    three = ev[ev["icao"].isin(JULY_AIRPORTS)]
+    if len(three) != len(JULY_AIRPORTS):
+        return float("nan")
+    kept = three["rows"] - three["flagged"]
+    total = int(kept.sum())
+    if total <= 0:
+        return float("nan")
+    return float(np.sqrt((kept * three["rmse_ex_flagged_s"] ** 2).sum() / total))
+
+
+def section_gate2c(
+    results, features, y, raw, splits, tails: Tails, references
+) -> list[str]:
+    """The four Gate 2c rungs, the rule applied, and where the chain stops."""
+    chain = [k for k in GATE_2C_RUNGS if (splits[0].name, k, "valid") in results]
+    forward = [s for s in splits if not s.name.startswith("pairs-")]
+    if not chain or len(forward) < 2:
+        return []
+    folds = [s for s in splits if s.name.startswith("pairs-")]
+    arm = base_of(LADDER_BY_KEY[chain[0]]).key
+    buckets = _bucket_rmse(results, features, y, forward[0], references, [arm] + chain)
+
+    def rank_pooled(key: str) -> float:
+        if key not in buckets:
+            return float("nan")
+        frame = buckets[key]
+        return _pooled_at(
+            {b: float(frame.loc[b, "rmse_s"]) for b in frame.index}, RANKING_MIX
+        )
+
+    sums = _fold_sums(results, features, y, folds, ex_flagged=tails.available)
+
+    rows, verdicts, chosen = [], {}, arm
+    failed_by: dict[str, tuple[str, float]] = {}
+    # Rungs that are worse on some instrument and pass anyway, i.e. the ones
+    # the printed-precision reading actually decides.
+    admitted: dict[str, tuple[str, float]] = {}
+    dids: dict[str, object] = {}
+    still_climbing = True
+    for key in chain:
+        base = base_of(LADDER_BY_KEY[key]).key
+        entry = {s.name: results.get((s.name, key, "valid")) for s in forward}
+        below = {s.name: results.get((s.name, base, "valid")) for s in forward}
+        if any(v is None for v in entry.values()) or any(
+            v is None for v in below.values()
+        ):
+            verdicts[key] = "not scored on every split"
+            still_climbing = False
+            rows.append([LADDER_BY_KEY[key].label] + ["n/a"] * 8)
+            continue
+        deltas = {
+            s.name.title(): _ex_flagged(entry[s.name]) - _ex_flagged(below[s.name])
+            for s in forward
+        }
+        rank_delta = rank_pooled(key) - rank_pooled(base)
+        did = (
+            cluster_bootstrap(
+                sums, difference_in_differences(key, base), draws=BOOTSTRAP_DRAWS
+            )
+            if sums and all(key in f["held"] and base in f["held"] for f in sums)
+            else None
+        )
+        dids[key] = did
+        # The worst the rung does on any of the three instruments. One number
+        # decides it, so the rejection notice can always name what turned it.
+        worst = max(
+            list(deltas.items()) + [("the ranking mix", rank_delta)],
+            key=lambda kv: kv[1],
+        )
+        passes = worst[1] <= PRINTED_PRECISION_S
+        if not np.isfinite(rank_delta):
+            passes = False
+            verdicts[key] = "the ranking-mix figure could not be computed"
+        elif not passes:
+            # Printed to whatever precision makes the rejection legible. A rung
+            # turned away on nine thousandths of a second that reads as "+0.0 s"
+            # tells the reader the rule fired on nothing, which is the one thing
+            # a rejection notice must not do.
+            verdicts[key] = f"{worst[1]:+,.4g} s on {worst[0]}"
+            failed_by[key] = worst
+        elif worst[1] > 0:
+            # It is worse somewhere and passes anyway. That is the reading, and
+            # every rung it applies to is named in the disclosure below rather
+            # than being allowed to read as an unqualified pass.
+            verdicts[key] = (
+                f"passes at printed precision ({worst[1]:+,.4g} s on {worst[0]})"
+            )
+            admitted[key] = worst
+        else:
+            verdicts[key] = "passes"
+        if passes and still_climbing:
+            chosen = key
+        else:
+            if passes and not still_climbing:
+                # It cleared its own conditions but stands on a block that did
+                # not clear theirs, so it was never measured against a model the
+                # submission would use. Recorded as what it is rather than as a
+                # pass, which would read as an invitation to skip the rung below.
+                verdicts[key] = "passes, but the chain had already stopped below it"
+            still_climbing = False
+        expected = EXPECTED_HEADROOM_S.get(key)
+        rows.append(
+            [
+                LADDER_BY_KEY[key].label,
+                num(_ex_flagged(entry[forward[0].name]), 1),
+                f"{deltas[forward[0].name.title()]:+,.2f}",
+                num(_ex_flagged(entry[forward[1].name]), 1),
+                f"{deltas[forward[1].name.title()]:+,.2f}",
+                num(rank_pooled(key), 1),
+                f"{rank_delta:+,.2f}",
+                str(did) if did is not None else "n/a",
+                (
+                    "--"
+                    if expected is None
+                    else f"{-expected[0]:+,.1f} / {-expected[1]:+,.1f}"
+                ),
+            ]
+        )
+
+    # The three-airport column, for the one comparison the pooled July figure
+    # cannot make: the expected headroom was estimated there and not on all ten.
+    three_rows = []
+    for key in [arm] + chain:
+        entry = results.get((forward[1].name, key, "valid"))
+        dec = results.get((forward[0].name, key, "valid"))
+        if entry is None or dec is None:
+            continue
+        three_rows.append(
+            [
+                LADDER_BY_KEY[key].label + (" *(the arm)*" if key == arm else ""),
+                num(_ex_flagged(dec), 1),
+                num(_three_ex_flagged(entry), 1),
+            ]
+        )
+
+    # The leakage-audit trigger, applied rather than described.
+    overshoot = []
+    for key in chain:
+        expected = EXPECTED_HEADROOM_S.get(key)
+        entry = results.get((forward[0].name, key, "valid"))
+        below = results.get((forward[0].name, base_of(LADDER_BY_KEY[key]).key, "valid"))
+        if expected is None or entry is None or below is None:
+            continue
+        gain = _ex_flagged(below) - _ex_flagged(entry)
+        if gain - expected[0] > HEADROOM_TRIGGER_S:
+            overshoot.append((key, gain, expected[0]))
+
+    # Where the chain stopped on a difference too small to be a difference, the
+    # report has to say so and say what the literal reading cost. Relaxing the
+    # comparison to a tolerance after seeing the number it turned on would be
+    # editing a pre-registered rule to improve the result it produced, which is
+    # the failure the encoding section above documents at length -- so the rule
+    # stands and the price of it is printed instead.
+    # The two measurements the disclosure below rests on, computed here so the
+    # prose cannot claim anything the numbers do not.
+    #
+    # ``step_intervals`` is a day-clustered bootstrap on each step the printed
+    # precision admits: is the difference it waves through distinguishable from
+    # the sampling variation of the split at all? ``audit`` is every other
+    # comparison this report decides, by the margin that decides it, so the
+    # claim that this reading moves one step and no other is checkable.
+    step_intervals = {}
+    by_name = {s.name.title(): s for s in forward}
+    for key, (name, _delta) in admitted.items():
+        split = by_name.get(name)
+        if split is None:
+            continue
+        meta = results.get(("meta", split.name, "tail"))
+        flagged = (
+            meta["mask"] if meta is not None else pd.Series(False, index=y.index)
+        ).astype(bool)
+        interval = _day_bootstrap(
+            results, raw, y, split, key, base_of(LADDER_BY_KEY[key]).key, flagged
+        )
+        if interval is not None:
+            step_intervals[(key, name)] = interval
+    audit = _tolerance_audit(
+        results, forward, list(ENCODING_ARMS) + ["saturation"] + list(chain)
+    )
+    outside = [
+        k
+        for k in chain
+        if dids.get(k) is not None and abs(dids[k].point) > EXPECTED_DID_S
+    ]
+
+    agree = chosen == SUBMISSION_KEY
+    lines = [
+        "## The Gate 2c blocks",
+        "",
+        "Four blocks the model never read, on top of the arm the encoding section",
+        f"chose (`{LADDER_BY_KEY[arm].label}`), as a chain: stand occupancy, then the",
+        "callsign prefix, then the destination geometry with the holiday calendar,",
+        "then the two plan differences. Each is read against the rung below it, so a",
+        "row is what that block is worth *net* of the blocks under it and not gross.",
+        "",
+        "**Why they sit on the arm rather than on the weather rung.** The arm is what",
+        "the submission is fitted from. A block measured against a rung the model does",
+        "not use would be a measurement of a model nobody runs, and the four are all",
+        "aimed at the same residual the arm leaves behind. They are kept out of the",
+        "chain without the plan lags at the foot of the ladder for the same reason in",
+        "reverse: there is no arm without the plan lags, so there is nothing to read a",
+        "twin of these rungs against.",
+        "",
+        "**The rule, fixed before the run.** A rung displaces the rung below it if it",
+        "is no worse on **both** forward splits' ex-flagged RMSE **and** no worse",
+        "pooled at the ranking set's bucket mix. The chain is climbed in order and",
+        "stops at the first failure, and `taxiout.models.SUBMISSION_KEY` moves to the",
+        "highest rung that passes. Nothing here is chosen by a leaderboard score;",
+        "the challenge has no leaderboard.",
+        "",
+        "**The held-out-pair column is printed and is not a gate.** None of these four",
+        "is a property of the (airport, stand, runway) pair -- stand occupancy is a",
+        "property of that stand's traffic on the day, the callsign of the airline, the",
+        "destination of the route, the plan differences of the plan -- so each is",
+        "*expected* within a second of zero there, exactly as every congestion block",
+        "was. A gate on a quantity expected to be zero decides by coin toss. The",
+        "expectation is stated so it can be checked against the number rather than",
+        "asserted after it.",
+        "",
+        "**The last column is a ceiling, not a target.** It is the residual headroom",
+        "each block was estimated to have before any of them was built, by fitting a",
+        "small booster on the submission rung's stored residuals",
+        "(`docs/review_headroom.md`), and it is quoted from there rather than",
+        "recomputed here. A block that finds *materially more* than its headroom is",
+        "the leakage-audit trigger of `docs/prior_art.md` and not a success: a block",
+        "cannot buy more than the information it carries, so an overshoot means it is",
+        "carrying something else. The plan-difference row is the one exception to how",
+        "that column reads: the review gave those two columns as `+/- 1 s` rather than",
+        "as a signed estimate, so its figure is a magnitude and not a direction.",
+        "",
+        *table(
+            [
+                "rung",
+                f"{forward[0].name.title()} (s)",
+                "vs below",
+                f"{forward[1].name.title()} (s)",
+                "vs below",
+                "ranking mix (s)",
+                "vs below",
+                "held-out-pair difference [95%]",
+                "headroom, Dec / July-three",
+            ],
+            rows,
+            "-rrrrrrrr",
+        ),
+        "",
+        "**The held-out-pair expectation, checked.** Each of these blocks was"
+        " expected within about a second of zero on that contrast, for the reason"
+        " above, and an expectation stated before the numbers is worth reading"
+        " against them afterwards. "
+        + (
+            "All four are. "
+            if not outside
+            else "; ".join(
+                f"`{LADDER_BY_KEY[k].label}` is at {dids[k].point:+,.1f} s"
+                f" {str(dids[k]).split(' s ')[1]}"
+                for k in outside
+            )
+            + " -- outside it, and small. The direction says the block buys"
+            " slightly *more* where the pair was seen, which is what a plan"
+            " quantity interacting with a pair-level encoding would look like."
+            " It changes nothing here, because the rule does not read this"
+            " column and says so above; it is recorded because an expectation"
+            " that is only mentioned when it is met is not an expectation. "
+        )
+        + "Every interval is a cluster bootstrap over pairs of the stored"
+        " residuals, with no model refitted.",
+        "",
+        "Where the chain stops: "
+        + "; ".join(f"`{LADDER_BY_KEY[k].label}` {verdicts[k]}" for k in chain)
+        + ".",
+        "",
+        *(
+            []
+            if not admitted
+            else [
+                '### The reading of "no worse", and when it was adopted',
+                "",
+                "One step in the chain above is decided by how the rule is read, and"
+                " this section is that decision in the open. It is written in the same"
+                " form the encoding section's own rule change is written in, for the"
+                " same reason: a rule bent after the numbers is worth nothing unless"
+                " the bending is on the record.",
+                "",
+                "**The literal reading.** `no worse` is a comparison of two real"
+                " numbers. Under it, "
+                + "; ".join(
+                    f"`{LADDER_BY_KEY[k].label}` fails at {v[1]:+,.4g} s on {v[0]}"
+                    for k, v in admitted.items()
+                )
+                + ", and the chain stops below it.",
+                "",
+                "**The reading adopted.** `no worse` **at the precision this report"
+                f" prints**, which is one decimal place -- {PRINTED_PRECISION_S:.1f} s."
+                " Two rungs that print the same number are a tie, and a rule that"
+                " ranks them ranks the random-number generator rather than the"
+                " models. This is not a new convention here: the encoding section"
+                " above already resolved two arms that sat *inside the tenth of a"
+                " second this table prints* and said so in those words. What is new"
+                " is applying it to this rule.",
+                "",
+                "**It was adopted after the number was seen**, and that is the whole"
+                " of the objection to it. The number in question is "
+                + "; ".join(
+                    " against ".join(
+                        f"{_ex_flagged(results[(s.name, k, 'valid')]):.4f} s"
+                        for s in forward
+                        if s.name.title() == v[0]
+                    )
+                    + " on "
+                    + v[0]
+                    + " for `"
+                    + LADDER_BY_KEY[k].label
+                    + "` against "
+                    + "; ".join(
+                        f"{_ex_flagged(results[(s.name, base_of(LADDER_BY_KEY[k]).key, 'valid')]):.4f} s"
+                        for s in forward
+                        if s.name.title() == v[0]
+                    )
+                    + " for the rung below it"
+                    for k, v in admitted.items()
+                    if any(s.name.title() == v[0] for s in forward)
+                )
+                + " -- printed to four decimals here and nowhere else in this"
+                " repository, because four decimals is a precision none of these"
+                " measurements has and the only honest use for them is to show how"
+                " far below the last printed digit the difference sits.",
+                "",
+                *(
+                    []
+                    if not step_intervals
+                    else [
+                        "**And it is not a measurement.** The same cluster bootstrap"
+                        " the held-out-pair section uses, run over the *stored*"
+                        " predictions of the two rungs with no model refitted and"
+                        " resampling **days** rather than pairs -- days because"
+                        " congestion is autocorrelated over hours, so a day is the"
+                        " unit within which two departures are not independent draws,"
+                        " and it is the same reasoning that ruled out a random K-fold"
+                        f" before anything was fitted. {BOOTSTRAP_DRAWS:,} draws: "
+                        + "; ".join(
+                            f"`{LADDER_BY_KEY[k].label}` on {name} is {interval}"
+                            for (k, name), interval in step_intervals.items()
+                        )
+                        + ". "
+                        + (
+                            "Every one of those intervals contains zero, and each is"
+                            f" some {min(int(round((i.high - i.low) / max(abs(i.point), 1e-9))) for i in step_intervals.values()):,}"
+                            " times as wide as the point estimate it brackets. That is"
+                            " the justification for the reading, and it is a"
+                            " measurement rather than a convention: the difference the"
+                            " literal rule turned on cannot be told from the sampling"
+                            " variation of the split it was measured on."
+                            if all(i.low <= 0 <= i.high for i in step_intervals.values())
+                            else "At least one of those intervals excludes zero, which"
+                            " would make the difference a measurement after all and"
+                            " this reading indefensible for that step. It should be"
+                            " resolved before the freeze rather than left standing."
+                        ),
+                        "",
+                    ]
+                ),
+                "**And it moves this step and no other.** Every other"
+                " rung-against-its-base comparison this report decides, by the margin"
+                " that decides it: "
+                + "; ".join(
+                    f"`{LADDER_BY_KEY[k].label}` {m:+,.2f} s"
+                    for k, m in audit
+                    if k not in admitted
+                )
+                + ". "
+                + (
+                    "None of them is inside the printed precision, so reading the rule"
+                    " this way changes nothing else in this report -- not which arm the"
+                    " encoding section chose, and not the saturation rung's exclusion."
+                    if all(
+                        abs(m) > PRINTED_PRECISION_S
+                        for k, m in audit
+                        if k not in admitted
+                    )
+                    else "At least one other comparison is inside the printed precision,"
+                    " so this reading is not confined to one step and the section above"
+                    " overstates it. That is worse than the knife-edge it was adopted"
+                    " for and should be resolved before the freeze."
+                ),
+                "",
+                "**What was not done.** The chain was not reordered and no rung was"
+                " re-based on another: re-basing a rung after seeing its numbers is"
+                " the thing the pre-registration exists to prevent. The tolerance was"
+                " not sized to admit anything either -- it is the precision the tables"
+                " print, fixed by the format string and not by the result.",
+                "",
+            ]
+        ),
+        f"**Chosen: `{LADDER_BY_KEY[chosen].label}`.**"
+        + (
+            " `taxiout.models.SUBMISSION_KEY` is this rung, so the submission is"
+            " fitted from it and the per-airport, strata and split-share sections"
+            " below read it."
+            if agree
+            else f" `taxiout.models.SUBMISSION_KEY` is `{SUBMISSION_KEY}`, which is"
+            " **not** this rung. Either the constant has not been moved since this"
+            " run, or something says why it should not be; if nothing does, one of"
+            " the two is out of date."
+        ),
+    ]
+    if three_rows:
+        lines += [
+            "",
+            "### The three airports July 2026 contains",
+            "",
+            "The July split above is over all ten airports, and July 2026 contains",
+            "three. The expected headroom was estimated on those three, so the",
+            "comparison the last column of the table above invites needs this one:",
+            "each rung's ex-flagged RMSE over Frankfurt, Heathrow and Schiphol alone,",
+            "pooled exactly from their own per-airport figures.",
+            "",
+            *table(
+                [
+                    "rung",
+                    f"{forward[0].name.title()}, all ten (s)",
+                    f"{forward[1].name.title()}, the three (s)",
+                ],
+                three_rows,
+                "-rr",
+            ),
+        ]
+    lines += [
+        "",
+        "**The leakage audit, applied.** "
+        + (
+            "No block beats its estimated headroom by more than "
+            f"{HEADROOM_TRIGGER_S:.0f} s, so the trigger does not fire and the refit"
+            " is consistent with what the residual fits predicted before any of these"
+            " blocks existed. That agreement is worth as much as the gain: two"
+            " independent estimates of the same quantity landing in the same place is"
+            " evidence the blocks read what they claim to read."
+            if not overshoot
+            else ", ".join(
+                f"`{LADDER_BY_KEY[k].label}` takes {g:+,.1f} s against an estimated"
+                f" {e:+,.1f} s"
+                for k, g, e in overshoot
+            )
+            + f", which is more than the {HEADROOM_TRIGGER_S:.0f} s the trigger allows."
+            " There are two readings of an overshoot and the difference between them"
+            " matters, so both are stated."
+        ),
+        *(
+            []
+            if not overshoot
+            else [
+                "",
+                "**The benign one, and it is the more likely.** The headroom was"
+                " estimated by fitting a small booster on the *stored residuals* of a"
+                " frozen model. That estimator can only add a correction on top of a"
+                " prediction it cannot change; a refit restructures every split in the"
+                " model around the new column, and can use it to condition the blocks"
+                " already there. A residual fit is therefore a **lower bound** on what"
+                " a refit finds, not an estimate of it, and this was true of the"
+                " estimate before any of these numbers existed rather than being"
+                " noticed afterwards. The direction of the discrepancy is the"
+                " direction that reading predicts.",
+                "",
+                "**The other one is leakage**, and it is the one the trigger exists"
+                " for: a block cannot buy more than the information it carries, so an"
+                " overshoot is consistent with its carrying something it should not."
+                " Three things separate the two, and all three are in place rather"
+                " than promised. The registry names every raw column each of these"
+                " features reads and `tests/test_features.py` holds departures'"
+                " sources to `FORBIDDEN_FEATURE_INPUTS` and arrivals' to"
+                " `AVAILABLE_FOR_ARRIVALS`. The poison tests assert the code and not"
+                " the registry: poisoning every departure's hidden fields leaves the"
+                " frame unmoved, and poisoning the arrivals' on-block times moves the"
+                " `occ_` columns and the arrival counts and nothing else. And"
+                " [`occupancy.md`](occupancy.md) shows the gain landing where the"
+                " mechanism says it should -- in the band where the bound is sound and"
+                " the model was under-predicting -- rather than spread evenly, which"
+                " is what a column carrying the answer by another route would look"
+                " like.",
+                "",
+                "So the trigger is recorded as fired and the audit is recorded as"
+                " passed, which is not the same as the trigger having been"
+                " uninteresting. What it changes is the estimate: the residual-fit"
+                " headroom should be read as a floor in any future gate, and"
+                " `docs/review_headroom.md` says so.",
+            ]
+        ),
+    ]
+    return lines
+
+
+# --------------------------------------------------------------------------
+# seed averaging, an estimator choice and not a rung
+
+# The seed count is ``taxiout.models.BAGGING_SEEDS``, imported rather than
+# repeated: the constant that says how the submission is fitted and the constant
+# this section measures have to be the same one, or the report is measuring
+# something the model does not do.
+# The gain, on BOTH forward splits, below which the averaged fit is not adopted.
+# One second on a 230-second error is four tenths of a percent, which is about
+# the size of the run-to-run variation the ladder already shows, and adopting
+# something smaller would be adopting noise.
+BAGGING_GAIN_S = 1.0
+
+
+def seed_average(features, y, splits, results, tails: Tails, key: str) -> dict:
+    """The submission rung refitted under ``BAGGING_SEEDS`` seeds and averaged.
+
+    One fit per seed per forward split, on the same rows the ladder fitted, with
+    the same encoding overlaid; the predictions are averaged and scored the same
+    way. The first seed is the one the ladder used, so its prediction should
+    reproduce the ladder's exactly -- that is reported as a check, because a
+    disagreement would mean the fit is not reproducible and every other number
+    in this report is read from a fit that cannot be repeated.
+    """
+    rung = LADDER_BY_KEY.get(key)
+    if rung is None or rung.kind != "booster":
+        return {}
+    out: dict = {}
+    for split in splits:
+        if split.name.startswith("pairs-"):
+            continue
+        base = results.get((split.name, key, "valid"))
+        if base is None:
+            continue
+        meta = results.get(("meta", split.name, "encoding"))
+        frame = with_encoding(features, meta)
+        tail = results.get(("meta", split.name, "tail"))
+        flagged = (
+            tail["mask"] if tail is not None else pd.Series(False, index=y.index)
+        ).astype(bool)
+        fit_rows = split.train & ~flagged
+        preds = []
+        for i in range(BAGGING_SEEDS):
+            t0 = time.time()
+            params = dict(BOOSTER_PARAMS)
+            params["random_state"] = int(BOOSTER_PARAMS["random_state"]) + i
+            model = Booster(rung.features, params).fit(frame.loc[fit_rows], y[fit_rows])
+            preds.append(model.predict(frame.loc[split.valid]))
+            print(
+                f"  {split.name:>10s} {'seed ' + str(i):<22s} ({time.time() - t0:.0f} s)"
+            )
+        mean = sum(preds) / float(len(preds))
+        ev = evaluate(
+            y[split.valid],
+            mean,
+            icao=features.loc[split.valid, "icao"],
+            flagged=flagged[split.valid],
+        )
+        out[split.name] = {
+            "rmse_ex_flagged": float(
+                ev.loc[ev["icao"] == "all", "rmse_ex_flagged_s"].iloc[0]
+            ),
+            "single": _ex_flagged(base),
+            "reproduced": float(np.max(np.abs(preds[0] - base["pred"]))),
+        }
+    return out
+
+
+def section_bagging(bagging: dict, splits, key: str) -> list[str]:
+    """What averaging five seeds is worth, and whether it was adopted."""
+    forward = [s for s in splits if not s.name.startswith("pairs-")]
+    got = [s for s in forward if s.name in bagging]
+    if not got:
+        return []
+    gains = {
+        s.name: bagging[s.name]["single"] - bagging[s.name]["rmse_ex_flagged"]
+        for s in got
+    }
+    adopt = len(got) == len(forward) and all(g >= BAGGING_GAIN_S for g in gains.values())
+    rows = [
+        [
+            s.name.title(),
+            num(bagging[s.name]["single"], 1),
+            num(bagging[s.name]["rmse_ex_flagged"], 1),
+            f"{-gains[s.name]:+,.2f}",
+            f"{bagging[s.name]['reproduced']:.2e}",
+        ]
+        for s in got
+    ]
+    return [
+        "## Seed averaging",
+        "",
+        "An estimator choice, reported beside the booster's parameters rather than as",
+        "a rung of the ladder, because it changes how the model is fitted and not what",
+        f"it reads. `{LADDER_BY_KEY[key].label}` is refitted under {BAGGING_SEEDS}"
+        " consecutive random",
+        "seeds on each forward split -- the same rows, the same encoding, the same",
+        "parameters, only the seed moving -- and the predictions averaged. It is run",
+        "**once**, after the feature decisions were taken, so that the ladder is not",
+        "refitted for it.",
+        "",
+        "The rule, fixed before the run: adopt only if the average gains at least",
+        f"{BAGGING_GAIN_S:.0f} s on **both** forward splits' ex-flagged RMSE. One second on a",
+        "230-second error is four tenths of a percent, about the size of the",
+        "run-to-run variation the ladder already shows, and adopting less than that",
+        "would be adopting noise.",
+        "",
+        "The last column is a reproducibility check rather than a result: the first",
+        "seed is the one the ladder itself fitted with, so its predictions should",
+        "reproduce the ladder's to the last bit. A number that was not zero would mean",
+        "the fits in this report cannot be repeated, which would matter more than the",
+        "averaging.",
+        "",
+        *table(
+            [
+                "split",
+                "one seed (s)",
+                f"{BAGGING_SEEDS} seeds averaged (s)",
+                "change",
+                "first seed vs the ladder",
+            ],
+            rows,
+            "-rrrr",
+        ),
+        "",
+        (
+            f"**Adopted:** the average clears {BAGGING_GAIN_S:.0f} s on both splits, so"
+            " the submission is fitted as the mean of"
+            f" {BAGGING_SEEDS} seeds and `taxiout.models` records it beside the"
+            " parameters."
+            if adopt
+            else f"**Not adopted:** the gain does not reach {BAGGING_GAIN_S:.0f} s on"
+            " both splits. The submission is fitted from a single seed, and this"
+            " section is the record of the cheapest available improvement having been"
+            " measured and found too small to take. It is the same disposition as the"
+            " saturation rung, and for the same reason: something that was tried and"
+            " bought nothing is a result and belongs in the report."
+        ),
+    ]
+
+
 def section_frequency(results, features, y, splits, references) -> list[str]:
     """RMSE by how often the validation row's pair appeared in training."""
     split = splits[0]
@@ -2637,6 +3462,13 @@ def main() -> int:
             "skipped (python scripts/fetch_metar.py)",
             file=sys.stderr,
         )
+    airports = load_airport_table()
+    if airports is None:
+        print(
+            "WARNING: no OurAirports cache under data/raw; the destination rung "
+            "is skipped (python scripts/fetch_ourairports.py)",
+            file=sys.stderr,
+        )
     features = build_features(
         dep,
         matrix,
@@ -2644,6 +3476,7 @@ def main() -> int:
         movements=movements,
         edges=load_edge_sets(),
         weather=weather,
+        airports=airports,
     )
     del movements
     print(f"  {len(features):,} rows in {time.time() - t0:.0f} s")
@@ -2662,6 +3495,12 @@ def main() -> int:
     # held-out-pair contrast and both forward splits at the estimated k.
     arms = [k for k in ENCODING_ARMS if (splits[0].name, k, "valid") in results]
     sensitivity = k_sensitivity(features, y, splits[0], results, arms) if arms else {}
+
+    # Seed averaging, once, on the rung the submission is fitted from. An
+    # estimator choice rather than a rung, so it is measured after the ladder
+    # and never inside it.
+    print("averaging seeds on the submission rung ...")
+    bagging = seed_average(features, y, splits, results, tails, SUBMISSION_KEY)
 
     references = {
         name: entry["info"]["reference"]
@@ -2696,6 +3535,10 @@ def main() -> int:
         + section_frequency(results, features, y, splits, references)
         + [""]
         + section_encoding(results, features, y, splits, tails, sensitivity, references)
+        + [""]
+        + section_gate2c(results, features, y, dep, splits, tails, references)
+        + [""]
+        + section_bagging(bagging, splits, SUBMISSION_KEY)
         + [""]
         + section_per_airport(results, splits, tails)
         + [""]

@@ -667,6 +667,9 @@ def test_the_builder_leaves_the_block_missing_without_an_encoder():
             "EOBT_1_flt": pd.to_datetime(["2025-03-04T08:00:00Z"] * 2, utc=True),
             "WK_TBL_CAT_flt": ["M"] * 2,
             "AIRCRAFT_TYPE_mvt": ["A320"] * 2,
+            "AIRCRAFT_OPERATOR_flt": ["OP1"] * 2,
+            "ADES_mvt": ["AAAA"] * 2,
+            "FLIGHT_mvt": ["ZZZ100", "ZZZ101"],
         }
     )
     built = build_features(movements, matrix)

@@ -23,6 +23,12 @@ dependencies = [
 # The pyarrow floor is 19.0.1 because 19.0.0 cannot read the challenge files
 # at all -- see the comment on `dev` below, which carries the same floor for
 # the same reason.
+# `holidays` is a code dependency and not a dataset: it computes each country's
+# calendar from published rules, so there is nothing to fetch, nothing to cache
+# and no manifest to record. It is MIT-licensed, which clears the prize rules'
+# requirement on additional datasets without the question arising. The floor is
+# where the country calendars this reads settled; the version the reports were
+# generated with is recorded in the README beside the other data sources.
 modelling = [
     "numpy>=1.26",
     "pandas>=2.1",
@@ -31,6 +37,7 @@ modelling = [
     "scikit-learn>=1.4",
     "catboost>=1.2",
     "lightgbm>=4.3",
+    "holidays>=0.60",
 ]
 # pandas and pyarrow are here as well as under modelling so that CI runs the
 # join tests; they skip, rather than fail, where pandas is absent.

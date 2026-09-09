@@ -2,7 +2,7 @@
 """The Gate 1 feature frame, and a registry of what every column reads.
 
 One frame per movement, built from ``taxiout.challenge``'s loaders and
-``taxiout.join.join_stands``. Eleven blocks:
+``taxiout.join.join_stands``. The blocks, in the order the frame carries them:
 
 - **Identifiers.** Airport, stand, runway, and the pair. These are what the
   ablation ladder's saturated rung uses and what the held-out-pair split
@@ -60,6 +60,26 @@ One frame per movement, built from ``taxiout.challenge``'s loaders and
   and ``build_features`` leaves the two columns missing when it does not.
   Missing, not zero -- "not computed" is not "no history" -- exactly as the
   shared-corridor block behaves without its edge sets.
+- **Stand occupancy.** The gap from the last arrival's on-block at the
+  subject's own stand to the subject's take-off, and what that arrival was
+  (``taxiout.occupancy``). A stand holds one aircraft, so an arrival that
+  on-blocked there before the subject took off means the subject had already
+  pushed, and the gap is a lower bound on its taxi-out built from fields the
+  ranking set exposes for arrivals in full.
+- **The callsign prefix.** The leading three letters of ``FLIGHT_mvt``, which
+  are the ICAO airline designator (``taxiout.callsign``). The operator, taken
+  from the movement side rather than from ``AIRCRAFT_OPERATOR_flt``, because
+  the flight-side record is absent on the one to two percent of departures
+  that are the hardest rows in the data.
+- **The destination, and the calendar.** The initial great-circle bearing and
+  the distance to the destination aerodrome, from OurAirports' public-domain
+  coordinates (``taxiout.destination``), and whether the take-off date is a
+  public holiday in the airport's country or the day beside one
+  (``taxiout.calendar``). The bearing is a proxy for the departure route and so
+  for which runway entry and holding point the aircraft queues at.
+- **Plan differences.** ``EOBT - SCHED`` and ``LOBT - EOBT``
+  (``taxiout.planlags``): the pairwise differences of the plan lags, which
+  cancel the take-off and are properties of the plan alone.
 
 Stands that do not join fall back to airport level rather than carrying nulls
 -- 3.7% of training departures and 3.3% of ranking departures are stands
@@ -87,6 +107,11 @@ is held to its own list rather than to either challenge one:
 
 - ``METAR.`` is an external archive, and its sources name that archive's own
   fields (``taxiout.metar.FIELDS``).
+- ``OURAIRPORTS.`` is the second, and is held the same way to
+  ``taxiout.destination.FIELDS``. The holiday block has no prefix of its own on
+  purpose: ``holidays`` is a code dependency that computes calendars from
+  published rules rather than a dataset that is fetched, so there is no field
+  list to hold it to and its sources are the subject's own exposed columns.
 - ``TRAIN.`` is a source class the registry did not carry until the shrunk
   encoding arrived: **the target of other rows on the training side of the
   split**. It is not ``DEP.TAXITIME_SEC_mvt``, and writing it that way would
@@ -110,6 +135,16 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+from taxiout.calendar import (
+    HOLIDAY_FEATURES,
+    SOURCES as HOLIDAY_SOURCES,
+    holiday_features,
+)
+from taxiout.callsign import (
+    CALLSIGN_FEATURES,
+    SOURCES as CALLSIGN_SOURCES,
+    callsign_features,
+)
 from taxiout.congestion import (
     CATEGORICAL as CONGESTION_CATEGORICAL,
     CONGESTION_FEATURES,
@@ -121,6 +156,11 @@ from taxiout.corridor import (
     SOURCES as CORRIDOR_SOURCES,
     corridor_features,
 )
+from taxiout.destination import (
+    DESTINATION_FEATURES,
+    SOURCES as DESTINATION_SOURCES,
+    destination_features,
+)
 from taxiout.encoding import ENCODING_FEATURES
 from taxiout.join import UNMATCHED, join_stands
 from taxiout.metar import (
@@ -128,9 +168,17 @@ from taxiout.metar import (
     WEATHER_FEATURES,
     weather_features,
 )
+from taxiout.occupancy import (
+    OCCUPANCY_FEATURES,
+    SOURCES as OCCUPANCY_SOURCES,
+    occupancy_features,
+)
 from taxiout.planlags import (
+    DIFF_SOURCES as PLAN_DIFF_SOURCES,
+    PLAN_DIFF_FEATURES,
     PLAN_LAG_FEATURES,
     SOURCES as PLAN_LAG_SOURCES,
+    plandiff_features,
     planlag_features,
 )
 from taxiout.routing import AGGREGATED_FIELDS
@@ -191,6 +239,14 @@ PLAN_FEATURES: tuple[str, ...] = ("lobt_iobt_s", "lobt_iobt_missing")
 # the stand identifier absorbs on a seen pair and nothing absorbs on a new
 # one; the type is the finer version of the same thing. A null class is the
 # unjoined flight-side block and is carried as a class of its own.
+#
+# The operator is the third thing an aircraft carries and it is deliberately
+# not in this tuple. It enters as the callsign prefix (``taxiout.callsign``),
+# on a rung of its own well above this one, for two reasons: the callsign is
+# present where ``AIRCRAFT_OPERATOR_flt`` is null, which is exactly the rows
+# that are hardest; and a block added here would move the number of every rung
+# from this one upwards, which is not a thing to do to a measured ladder for a
+# block worth two seconds.
 AIRCRAFT_FEATURES: tuple[str, ...] = ("wake_class", "aircraft_type")
 
 FEATURE_COLUMNS: tuple[str, ...] = (
@@ -206,6 +262,15 @@ FEATURE_COLUMNS: tuple[str, ...] = (
     + WEATHER_FEATURES
     + SATURATION_FEATURES
     + ENCODING_FEATURES
+    # The Gate 2c blocks, appended in the order the ladder climbs them rather
+    # than filed beside the blocks they resemble. The frame's column order is
+    # nothing to a boosted tree, and appending keeps every earlier block's
+    # position fixed, which is what makes a diff of this tuple readable.
+    + OCCUPANCY_FEATURES
+    + CALLSIGN_FEATURES
+    + DESTINATION_FEATURES
+    + HOLIDAY_FEATURES
+    + PLAN_DIFF_FEATURES
 )
 
 # Every feature column against the raw columns it reads. Checked against
@@ -238,12 +303,26 @@ FEATURE_SOURCES: dict[str, tuple[str, ...]] = {
     # rows the model is fitted on, under its own prefix. See the module
     # docstring for why that is not ``DEP.TAXITIME_SEC_mvt``.
     **{c: _KEYS + (f"{_TRAINING_PREFIX}.{TARGET}",) for c in ENCODING_FEATURES},
+    # Gate 2c. Stand occupancy is the one block here that reads another row's
+    # hidden-for-departures fields, and it reads them from *arrivals*, which
+    # expose them in full; the registry says so under ``ARR.`` and the test
+    # holds it to ``AVAILABLE_FOR_ARRIVALS``.
+    **OCCUPANCY_SOURCES,
+    **CALLSIGN_SOURCES,
+    # The destination block reads a second external dataset, under a prefix of
+    # its own and held to that file's field list exactly as ``METAR.`` is.
+    **DESTINATION_SOURCES,
+    # The holiday block reads no dataset at all: ``holidays`` computes the
+    # calendars from published rules, so its sources are the subject's own two
+    # exposed columns and there is nothing external to register.
+    **HOLIDAY_SOURCES,
+    **PLAN_DIFF_SOURCES,
 }
 
 # Prefixes that name an external dataset rather than a phase of the challenge
 # data. A source under one of these is held to that dataset's field list
 # rather than to either challenge list.
-EXTERNAL_SOURCES: tuple[str, ...] = ("METAR",)
+EXTERNAL_SOURCES: tuple[str, ...] = ("METAR", "OURAIRPORTS")
 
 # Prefixes that name the *fitting sample* rather than a row of the challenge
 # data: what a feature reads from the rows the model is fitted on. The one
@@ -295,7 +374,7 @@ MOVEMENT_COLUMNS: tuple[str, ...] = tuple(
 
 # Columns the model treats as categorical rather than ordered.
 CATEGORICAL_FEATURES: tuple[str, ...] = (
-    IDENTIFIER_FEATURES + AIRCRAFT_FEATURES + CONGESTION_CATEGORICAL
+    IDENTIFIER_FEATURES + AIRCRAFT_FEATURES + CONGESTION_CATEGORICAL + CALLSIGN_FEATURES
 )
 
 # What a null categorical is called. Null-ness is information here -- a null
@@ -412,6 +491,7 @@ def build_features(
     edges: pd.DataFrame | None = None,
     weather: pd.DataFrame | None = None,
     encoded: pd.DataFrame | None = None,
+    airports: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     """The feature frame for ``frame``, one row in, one row out, order kept.
 
@@ -434,6 +514,12 @@ def build_features(
     ``weather`` is the hourly regime table from ``taxiout.metar.regime_by_hour``
     over the cached archive. Left as ``None``, the weather block is missing
     throughout with its flag set, and the ladder skips its rung.
+
+    ``airports`` is OurAirports' coordinate table
+    (``taxiout.destination.load_airports``); the destination block is computed
+    from it. Left as ``None``, that block is missing with its flag set, exactly
+    as the weather block behaves without its archive, and the ladder skips the
+    rung that reads it.
 
     ``encoded`` is the shrunk-encoding block for *one split*, indexed like
     ``frame`` (``taxiout.encoding.encode_split(...).columns``). Left as
@@ -526,6 +612,21 @@ def build_features(
         out[c] = values
 
     for c, values in saturation_features(frame, movements).items():
+        out[c] = values
+
+    for c, values in occupancy_features(frame, movements).items():
+        out[c] = values
+
+    for c, values in callsign_features(frame).items():
+        out[c] = values
+
+    for c, values in destination_features(frame, airports).items():
+        out[c] = values
+
+    for c, values in holiday_features(frame).items():
+        out[c] = values
+
+    for c, values in plandiff_features(frame).items():
         out[c] = values
 
     # The shrunk encoding is not built here. It depends on the split -- on

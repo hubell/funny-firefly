@@ -3,15 +3,18 @@
 """Fit the model on the training year and write a submission file.
 
 One model, the submission rung of the ladder in ``taxiout.models``: every block
-of the feature frame except the runway-saturation one -- the identifiers, the
-take-off clock, the plan's own delay signal and its lags, the distance-matrix
-block with its join-quality flags, the aircraft, the congestion blocks and the
-shared corridor, and the weather regimes. Saturation was built and measured and
-bought nothing, and ``taxiout.models`` says so where it names the rung. Fitted
-on the full 2025 movement files with the rows ``taxiout.tails`` covers excluded,
-then combined with that term on the rows it covers. Nothing here is chosen by a
-leaderboard score; the rung and the hyperparameters are the ones
-``reports/baseline.md`` was generated with.
+of the feature frame except the runway-saturation one -- the airport and runway
+identifiers, the take-off clock, the plan's own delay signal, its lags and their
+differences, the distance-matrix block with its join-quality flags, the
+aircraft, the congestion blocks and the shared corridor, the weather regimes,
+the shrunk identifier encoding in place of the stand categorical, and the four
+Gate 2c blocks: stand occupancy, the callsign prefix, the destination geometry
+and the holiday calendar. Saturation was built and measured and bought nothing,
+and ``taxiout.models`` says so where it names the rung. Fitted on the full 2025
+movement files with the rows ``taxiout.tails`` covers excluded, then combined
+with that term on the rows it covers. Nothing here is chosen by a leaderboard
+score; the rung and the hyperparameters are the ones ``reports/baseline.md`` was
+generated with.
 
 The file goes to ``data/submissions/<team>_v<n>.parquet``, and the script
 checks with git that the path is ignored before writing a byte. Predictions
@@ -25,9 +28,10 @@ the template is missing or extra, so none of that is reimplemented here.
 
 Needs the challenge data under ``data/challenge/``, the distance matrices and
 edge sets under ``data/processed/taxi_distance/`` (``make reports``), the METAR
-cache under ``data/raw/metar/`` (``make metar``), which the weather block reads
-and without which this refuses to write, and the modelling extras. Takes a few
-minutes.
+cache under ``data/raw/metar/`` (``make metar``) and the OurAirports table under
+``data/raw/`` (``make ourairports``), which the weather and destination blocks
+read and without either of which this refuses to write, and the modelling
+extras. Takes a few minutes.
 
 Usage
 -----
@@ -51,6 +55,7 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
 
 from taxiout.corridor import load_edges  # noqa: E402
+from taxiout.destination import load_airports  # noqa: E402
 from taxiout.metar import load_metar, regime_by_hour  # noqa: E402
 from taxiout.challenge import (  # noqa: E402
     load_movements,
@@ -72,11 +77,17 @@ from taxiout.features import (  # noqa: E402
     airport_fallback,
     build_features,
 )
-from taxiout.models import TOP_RUNG, Booster, booster_backend  # noqa: E402
+from taxiout.models import (  # noqa: E402
+    BAGGING_SEEDS,
+    TOP_RUNG,
+    SeedAverage,
+    booster_backend,
+)
 
 DATA = REPO / "data" / "challenge"
 MATRICES = REPO / "data" / "processed" / "taxi_distance"
 METAR = REPO / "data" / "raw" / "metar"
+OURAIRPORTS = REPO / "data" / "raw" / "ourairports_airports.csv"
 SUBMISSIONS = REPO / "data" / "submissions"
 
 ID = "MVT_ID_mvt"
@@ -211,11 +222,19 @@ def main() -> int:
             file=sys.stderr,
         )
         return 1
+    if not OURAIRPORTS.exists():
+        print(
+            "no OurAirports cache under data/raw; the submission rung reads the "
+            "destination geometry. Run: python scripts/fetch_ourairports.py",
+            file=sys.stderr,
+        )
+        return 1
 
     print("loading ...")
     matrix = load_matrix()
     fallback = airport_fallback(matrix)
     weather = regime_by_hour(load_metar(METAR))
+    airports = load_airports(OURAIRPORTS)
     train_columns = sorted(set(REQUIRED_COLUMNS) | set(TAILS_TRAIN_COLUMNS) | {TARGET})
     rank_columns = sorted(set(REQUIRED_COLUMNS) | set(TAILS_PREDICT_COLUMNS) | {ID})
     train = to_pandas(load_movements(DATA, train_columns, phase="DEP")).reset_index(
@@ -253,6 +272,7 @@ def main() -> int:
         movements=train_moves,
         edges=edges,
         weather=weather,
+        airports=airports,
     )
     del train_moves
     y = pd.to_numeric(train[TARGET], errors="coerce")
@@ -305,8 +325,15 @@ def main() -> int:
             file=sys.stderr,
         )
         return 1
-    model = Booster(RUNG.features).fit(X.loc[fit_rows], y[fit_rows])
-    print(f"  fitted on {int(fit_rows.sum()):,} rows in {time.time() - t0:.0f} s")
+    # Seed averaging, adopted on the measurement in ``reports/baseline.md``:
+    # the same rung fitted under BAGGING_SEEDS consecutive seeds and the
+    # predictions averaged. An estimator choice and not a rung, so the ladder
+    # stays single-seed and this is the one place it applies.
+    model = SeedAverage(RUNG.features).fit(X.loc[fit_rows], y[fit_rows])
+    print(
+        f"  fitted on {int(fit_rows.sum()):,} rows under {BAGGING_SEEDS} seeds "
+        f"in {time.time() - t0:.0f} s"
+    )
 
     print("predicting ...")
     Xr = build_features(
@@ -316,6 +343,7 @@ def main() -> int:
         movements=rank_moves,
         edges=edges,
         weather=weather,
+        airports=airports,
     )
     if encoder is not None:
         columns = encoder.transform(Xr)

@@ -54,13 +54,23 @@ reports:
    because "replacing the pair categorical" has two readings in a frame where
    ``pair`` is not itself a feature -- so both are run rather than one being
    guessed at.
-11. **plus runway saturation** -- the cheap Gate 3: from the other departures'
+11. **the Gate 2c blocks, four rungs in a chain on top of the chosen arm** --
+   stand occupancy, the callsign prefix, the destination geometry with the
+   holiday calendar, and the two plan differences. They sit on the arm rather
+   than on the weather rung because the arm is what the submission is fitted
+   from, and each is read against the rung below it in the chain so the report
+   says what each is worth net of the others. They are the fields the model
+   never read: the exposed arrival columns that bound the hidden one through
+   the stand, the operator as the callsign carries it, where the aircraft is
+   going, and the calendar.
+12. **plus runway saturation** -- the cheap Gate 3: from the other departures'
    take-off times on the subject's runway, the share of consecutive gaps
    under ninety seconds, the smallest gap, and the span of the last three.
    Measured against the ceiling in ``reports/congestion.md``, found to be
-   worth nothing, and therefore **not** in the submission: ``TOP_RUNG`` is
-   the weather rung below it. The rung stays on the ladder because a cheap
-   queue proxy that was built, measured and bought nothing is a result.
+   worth nothing, and therefore **not** in the submission. The rung stays on
+   the ladder because a cheap queue proxy that was built, measured and bought
+   nothing is a result. It is read against the weather rung it was added to,
+   not against whatever rung the submission has since moved to.
 
 Each rung is scored twice, once plain and once with the record-quality term on
 top. That term lives in ``taxiout.tails`` and is deliberately not reimplemented
@@ -90,6 +100,13 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
+from taxiout.calendar import HOLIDAY_FEATURES
+from taxiout.callsign import (
+    CALLSIGN_FEATURES,
+    OTHER_LEVEL,
+    frequent_levels,
+    pool_rare,
+)
 from taxiout.congestion import (
     ARRIVAL_FEATURES,
     CONFIGURATION_FEATURES,
@@ -98,9 +115,11 @@ from taxiout.congestion import (
     THROUGHPUT_FEATURES,
 )
 from taxiout.corridor import CORRIDOR_FEATURES
+from taxiout.destination import DESTINATION_FEATURES
 from taxiout.encoding import ENCODING_FEATURES
 from taxiout.metar import WEATHER_FEATURES
-from taxiout.planlags import PLAN_LAG_FEATURES
+from taxiout.occupancy import OCCUPANCY_FEATURES
+from taxiout.planlags import PLAN_DIFF_FEATURES, PLAN_LAG_FEATURES
 from taxiout.saturation import SATURATION_FEATURES
 from taxiout.features import (
     AIRCRAFT_FEATURES,
@@ -158,6 +177,28 @@ BOOSTER_PARAMS: dict[str, object] = {
     "verbose": -1,
 }
 
+# Seed averaging, adopted 8 September. The submission rung is fitted five times
+# with nothing changed but the seed and the predictions averaged. It is an
+# ESTIMATOR CHOICE and not a rung of the ladder: it changes how the model is
+# fitted and not what it reads, so the ladder stays single-seed -- an ablation
+# is about blocks, and averaging every rung would spend five times the compute
+# to move every number by the same amount.
+#
+# Measured once, after the feature decisions were taken, by the rule fixed
+# before it ran: adopt only if the average gains at least one second on BOTH
+# forward splits' ex-flagged RMSE. It gains 1.10 s in December and 1.37 s in
+# July, so it is adopted; on the rung below this one it gained 0.78 and 0.98
+# and would not have been. ``reports/baseline.md``'s *Seed averaging* section is
+# the measurement, and it carries a reproducibility check with it: the first of
+# the five seeds is the one the ladder itself fits with, so its predictions
+# reproduce the ladder's exactly, which they do to the last bit.
+#
+# One second on a 220-second error is under half a percent. It is taken because
+# it is free and measured, and it is reported as what it is rather than as a
+# modelling result: averaging seeds is variance reduction, and nothing about the
+# aircraft or the airport is understood any better for it.
+BAGGING_SEEDS = 5
+
 
 # The top rung's feature block, named once so the rungs that build on it say
 # so rather than repeating fifteen tuples and drifting from one another.
@@ -177,6 +218,25 @@ WEATHER_BLOCK: tuple[str, ...] = (
     + CORRIDOR_FEATURES
     + WEATHER_FEATURES
 )
+
+# The arm the submission is fitted from, named once. The rung that defines it
+# and the four Gate 2c rungs that build on it all read this tuple, so an edit to
+# the arm cannot leave the rungs above it standing on the old block -- which is
+# a failure that would show up as four rungs quietly measuring something else.
+ENCODING_STAND_BLOCK: tuple[str, ...] = (
+    tuple(c for c in WEATHER_BLOCK if c != "stand") + ENCODING_FEATURES
+)
+
+# Categoricals whose rare levels are pooled to ``other`` at fit time, counted on
+# the rows the model is fitted on. This is a property of the *fitted estimator*
+# and not of the feature frame, which is why it lives here rather than in
+# ``taxiout.features``: it is the same arrangement the geometric fit uses for
+# the wake class, where a class with too few rows at an airport is pooled inside
+# ``fit_geometric`` and the fitted object maps an unseen one to ``other`` at
+# prediction. The callsign prefix is the one column that needs it -- some three
+# hundred airline designators, most of them a handful of flights a year -- and
+# pooling keeps the ranking set from presenting a level the model never saw.
+POOLED_CATEGORICALS: tuple[str, ...] = CALLSIGN_FEATURES
 
 
 @dataclass(frozen=True)
@@ -415,7 +475,7 @@ LADDER: tuple[Rung, ...] = (
         key="encoding-for-stand",
         label="+ shrunk encoding, replacing the stand",
         kind="booster",
-        features=tuple(c for c in WEATHER_BLOCK if c != "stand") + ENCODING_FEATURES,
+        features=ENCODING_STAND_BLOCK,
         base="weather",
         note=(
             "the same, with the stand categorical removed: the encodings replace "
@@ -434,6 +494,74 @@ LADDER: tuple[Rung, ...] = (
         note=(
             "the wider reading of the same arm: both halves of the pair removed, "
             "leaving the airport, so nothing but the encodings carries the cell"
+        ),
+    ),
+    # Gate 2c: four blocks on top of the chosen arm, as a chain. Each is read
+    # against the one before it and the first against the arm, so a rung's
+    # number is what that block is worth net of the blocks below it. They sit on
+    # the arm and not on the weather rung because the arm is the rung the
+    # submission is fitted from, and a block measured against a rung the model
+    # does not use would be measuring a model nobody runs.
+    Rung(
+        key="occupancy",
+        label="+ stand occupancy",
+        kind="booster",
+        features=ENCODING_STAND_BLOCK + OCCUPANCY_FEATURES,
+        base="encoding-for-stand",
+        note=(
+            "the gap from the last arrival's on-block at the subject's stand to "
+            "its take-off, that arrival's lateness, taxi-in, type and operator "
+            "against the subject's, and the gap to the previous departure from "
+            "the same stand -- a stand holds one aircraft, so an arrival that "
+            "on-blocked there before the subject took off bounds the subject's "
+            "taxi-out from below"
+        ),
+    ),
+    Rung(
+        key="callsign",
+        label="+ callsign prefix",
+        kind="booster",
+        features=ENCODING_STAND_BLOCK + OCCUPANCY_FEATURES + CALLSIGN_FEATURES,
+        base="occupancy",
+        note=(
+            "the operator, as the leading three letters of the callsign rather "
+            "than as the flight-side field: the same information, and present "
+            "on the one to two percent of departures with no Network Manager "
+            "record, which are the worst rows in the data"
+        ),
+    ),
+    Rung(
+        key="destination",
+        label="+ destination and holidays",
+        kind="booster",
+        features=ENCODING_STAND_BLOCK
+        + OCCUPANCY_FEATURES
+        + CALLSIGN_FEATURES
+        + DESTINATION_FEATURES
+        + HOLIDAY_FEATURES,
+        base="callsign",
+        note=(
+            "the initial great-circle bearing and the distance to the "
+            "destination, from OurAirports' coordinates, and whether the "
+            "take-off date is a public holiday in the airport's country or the "
+            "day beside one"
+        ),
+    ),
+    Rung(
+        key="plan-diffs",
+        label="+ plan differences",
+        kind="booster",
+        features=ENCODING_STAND_BLOCK
+        + OCCUPANCY_FEATURES
+        + CALLSIGN_FEATURES
+        + DESTINATION_FEATURES
+        + HOLIDAY_FEATURES
+        + PLAN_DIFF_FEATURES,
+        base="destination",
+        note=(
+            "the filed off-block against the schedule and the last against the "
+            "first, which the booster already sees as two lags and can only "
+            "reach by splitting on each in turn"
         ),
     ),
     Rung(
@@ -462,6 +590,16 @@ ENCODING_ARMS: tuple[str, ...] = (
     "encoding-for-identifiers",
 )
 
+# The Gate 2c chain, in the order it is climbed. Named here so the runner's
+# acceptance section reads the same order the ladder is built in rather than
+# rediscovering it from the ``base`` links.
+GATE_2C_RUNGS: tuple[str, ...] = (
+    "occupancy",
+    "callsign",
+    "destination",
+    "plan-diffs",
+)
+
 
 def _without_plan_lags(rung: Rung, base: str) -> Rung:
     return Rung(
@@ -480,15 +618,23 @@ LADDER_PROPER: tuple[Rung, ...] = LADDER
 
 # The congestion and weather rungs kept without the plan lags, each read
 # against the one before it in this chain and the first against the aircraft
-# rung, so the report shows what each block is worth both gross and net. The
-# encoding arms are excluded: they are alternatives rather than steps, and a
-# chain through them would read one arm against another.
+# rung, so the report shows what each block is worth both gross and net.
+#
+# Every rung carrying the shrunk encoding is excluded, which is the arms and the
+# four Gate 2c rungs that stand on one. The arms are alternatives rather than
+# steps, so a chain through them would read one arm against another; the Gate 2c
+# rungs sit *on* an arm, so a twin of one would have to be read against a rung
+# that does not exist -- there is no arm without the plan lags, and there is no
+# reason to build one, since the question this chain answers is what the
+# congestion blocks are worth gross of a signal that arrived after them. Stated
+# as a property of the features rather than as a list of keys, so a rung added
+# above the arms is excluded by construction instead of by somebody remembering.
 _NET_CHAIN = tuple(
     r
     for r in LADDER
     if PLAN_LAG_FEATURES[0] in r.features
     and r.key != "plan-lags"
-    and r.key not in ENCODING_ARMS
+    and not set(r.features) & set(ENCODING_FEATURES)
 )
 _WITHOUT: list[Rung] = []
 _base = "identifiers-geometry-aircraft"
@@ -499,22 +645,44 @@ LADDER = LADDER + tuple(_WITHOUT)
 
 LADDER_BY_KEY: dict[str, Rung] = {r.key: r for r in LADDER}
 
-# The rung the submission is fitted from: the shrunk encoding replacing the
-# stand, chosen by the rule in ``reports/baseline.md``'s encoding section.
+# The rung the submission is fitted from: the arm that replaces the stand with
+# the shrunk encoding, and then all four Gate 2c blocks -- stand occupancy, the
+# callsign prefix, the destination geometry with the holiday calendar, and the
+# plan's own differences. Chosen by two rules, each written down before the
+# numbers that applied it: the encoding section's for the arm, and the Gate 2c
+# section's for how far up the chain above it the submission goes.
 #
-# Two rungs of the ladder proper sit above it, for two different reasons.
+# One thing about that second rule is not clean, and ``reports/baseline.md``
+# devotes a subsection to it rather than a footnote. The rule says a rung must
+# be "no worse" than the rung below it, and ``+ destination and holidays`` came
+# out 0.0093 s worse on July while improving December by 1.16 s and the ranking
+# mix by 1.13. Read as a comparison of two real numbers, that stops the chain
+# and strands two rungs; read at the precision the report prints -- one decimal
+# place, which is what every RMSE in every table here is given to -- the two
+# rungs print the same number and it is a tie. The second reading is the one
+# adopted, it was adopted after the number was seen, and the report says so in
+# those words, prints the figures to four decimals so the reader can see how
+# far below the last printed digit the difference sits, gives a day-clustered
+# bootstrap interval on the step that straddles zero by two orders of
+# magnitude, and computes every other comparison in the report to show that
+# this reading moves that one step and no other. The precedent is in the same
+# report: the encoding section already resolved two arms that sat "inside the
+# tenth of a second this table prints".
 #
-# ``+ shrunk encoding, replacing stand and runway`` is the arm that goes one
-# step further and replaces the designator too. It is out on a mechanism
-# rather than on its score, which is indistinguishable from this arm's:
-# ``reports/geometry_gaps.md`` measures an intersection signature of up to 96 s
-# per designator that the routed distance cannot compute, so the runway
-# categorical carries something no encoding shrunk toward that distance can.
+# Two rungs of the ladder proper sit above this one.
 #
-# The saturation rung is the other case, and the older one: a measured
-# negative that costs half a second in December and eight tenths in July,
-# takes none of the ceiling, and belongs in the ladder and the write-up rather
-# than in the model.
+# The saturation rung is the older case: a measured negative that costs half a
+# second in December and eight tenths in July, takes none of the ceiling, and
+# belongs in the ladder and the write-up rather than in the model.
+#
+# ``+ shrunk encoding, replacing stand and runway`` is out too, though it sits
+# below this rung on the ladder and so no longer appears in
+# ``ABOVE_SUBMISSION``. It goes one step further than the shipped arm and
+# replaces the designator as well, and it is out on a mechanism rather than on
+# its score, which is indistinguishable: ``reports/geometry_gaps.md`` measures
+# an intersection signature of up to 96 s per designator that the routed
+# distance cannot compute, so the runway categorical carries something no
+# encoding shrunk toward that distance can.
 #
 # Named here so that ``scripts/make_submission.py`` and the report's
 # per-airport and importance sections all read the same rung. Moving it here
@@ -522,7 +690,7 @@ LADDER_BY_KEY: dict[str, Rung] = {r.key: r for r in LADDER}
 # computes the encoding once over the training year -- out of fold for the
 # rows it fits on, by lookup for the rows it predicts -- as
 # ``taxiout.encoding`` describes.
-SUBMISSION_KEY = "encoding-for-stand"
+SUBMISSION_KEY = "plan-diffs"
 
 # The rung the encoding arms were read against, and it is *not* whichever rung
 # the submission happens to use. Before the arms shipped these were the same
@@ -602,6 +770,14 @@ class Booster:
     parameters translated across. Categoricals are passed as categoricals
     rather than expanded: for a tree model that is what a one-hot buys, at a
     fraction of the memory.
+
+    A categorical named in ``POOLED_CATEGORICALS`` has its rare levels pooled to
+    ``other`` at fit time, counted on the rows this model is fitted on, and any
+    level absent from that set is mapped to ``other`` at prediction. The
+    threshold belongs to the fit and not to the frame, which is the whole reason
+    it is here: the fitting sample is what decides whether a level has enough
+    rows to be worth a split, and the ranking set then cannot present a level
+    the model never saw.
     """
 
     def __init__(self, features: tuple[str, ...], params: dict | None = None) -> None:
@@ -610,7 +786,9 @@ class Booster:
         self.backend = booster_backend()
         self.model = None
         self.categorical = tuple(c for c in self.features if c in CATEGORICAL_FEATURES)
+        self.pooled = tuple(c for c in self.features if c in POOLED_CATEGORICALS)
         self._levels: dict[str, pd.Index | None] = {}
+        self._kept: dict[str, frozenset[str]] = {}
 
     def _design(self, X: pd.DataFrame) -> pd.DataFrame:
         out = X[list(self.features)].copy()
@@ -620,6 +798,16 @@ class Booster:
 
     def fit(self, X: pd.DataFrame, y: pd.Series) -> "Booster":
         design = self._design(X)
+        for c in self.pooled:
+            values = design[c].astype(str)
+            self._kept[c] = frequent_levels(values)
+            # ``other`` is a level even where nothing was pooled into it, so that
+            # a level the fit never saw has somewhere to go at prediction rather
+            # than falling through to a null the model was never fitted on.
+            design[c] = pd.Categorical(
+                pool_rare(values, self._kept[c]),
+                categories=sorted(set(self._kept[c]) | {OTHER_LEVEL}),
+            )
         if self.backend == "lightgbm":
             import lightgbm as lgb
 
@@ -663,6 +851,8 @@ class Booster:
         if self.model is None:
             raise RuntimeError("predict before fit")
         design = X[list(self.features)].copy()
+        for c in self.pooled:
+            design[c] = pool_rare(design[c].astype(str), self._kept.get(c, frozenset()))
         for c in self.categorical:
             levels = self._levels.get(c)
             if self.backend == "catboost":
@@ -682,12 +872,73 @@ class Booster:
         return pd.Series(raw, index=list(self.features)).sort_values(ascending=False)
 
 
+class SeedAverage:
+    """``BAGGING_SEEDS`` boosters over the same rows, their predictions averaged.
+
+    The estimator the submission is fitted with, and nothing the ladder uses:
+    ``BAGGING_SEEDS`` says why. The seeds run consecutively from the one
+    ``BOOSTER_PARAMS`` carries, so the first member is exactly the model every
+    rung of the ladder is fitted with -- which is what lets the report check
+    that its own fits reproduce, and what makes the average an addition to that
+    model rather than a different one.
+
+    The same interface as ``Booster``, so a caller swaps one for the other and
+    nothing else changes.
+    """
+
+    def __init__(
+        self,
+        features: tuple[str, ...],
+        params: dict | None = None,
+        seeds: int = BAGGING_SEEDS,
+    ) -> None:
+        self.features = tuple(features)
+        self.params = dict(BOOSTER_PARAMS if params is None else params)
+        self.seeds = int(seeds)
+        self.models: list[Booster] = []
+
+    def fit(self, X: pd.DataFrame, y: pd.Series) -> "SeedAverage":
+        base = int(self.params["random_state"])
+        self.models = []
+        for i in range(self.seeds):
+            params = dict(self.params)
+            params["random_state"] = base + i
+            self.models.append(Booster(self.features, params).fit(X, y))
+        return self
+
+    def predict(self, X: pd.DataFrame) -> pd.Series:
+        if not self.models:
+            raise RuntimeError("predict before fit")
+        total = None
+        for model in self.models:
+            p = model.predict(X)
+            total = p if total is None else total + p
+        return total / float(len(self.models))
+
+    def importances(self) -> pd.Series:
+        """The members' split shares, averaged.
+
+        Averaged rather than summed so the scale is one model's and the number
+        is comparable with a single fit's, which is what every table that reads
+        it assumes.
+        """
+        got = [m.importances() for m in self.models]
+        got = [s for s in got if len(s)]
+        if not got:
+            return pd.Series(dtype=float)
+        return pd.concat(got, axis=1).mean(axis=1).sort_values(ascending=False)
+
+
 __all__ = [
+    "BAGGING_SEEDS",
     "BOOSTER_PARAMS",
     "ABOVE_SUBMISSION",
     "ENCODING_ARMS",
+    "ENCODING_STAND_BLOCK",
+    "GATE_2C_RUNGS",
     "LADDER_PROPER",
     "ENCODING_CONTROL",
+    "POOLED_CATEGORICALS",
     "SUBMISSION_KEY",
     "TOP_RUNG",
     "TRANSFERABLE_EXCLUDED",
@@ -699,6 +950,7 @@ __all__ = [
     "LADDER_BY_KEY",
     "AirportMean",
     "Booster",
+    "SeedAverage",
     "Rung",
     "booster_backend",
 ]
