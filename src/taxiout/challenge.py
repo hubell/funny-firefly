@@ -47,24 +47,34 @@ FORBIDDEN_FEATURE_INPUTS: tuple[str, ...] = (
     HIDDEN_FOR_TEST_DEPARTURES + EXCLUDED_BY_DECISION
 )
 
-# What an *arrival* row exposes in the ranking set, measured in
-# ``reports/data_review.md``: every one of these is null in 0.0% of ranking
-# arrivals. Two of them are the very fields hidden for departures. That is
-# not a contradiction but the rule -- a feature may read any field the
-# ranking set exposes for the rows it reads from -- and the feature registry
-# says which phase a source is read from so the test can hold each side to
-# its own list. ``AOBT_3_flt`` is excluded for every phase by decision.
+# What an *arrival* row exposes in the ranking set. The admission rule is
+# measured rather than assumed: a column enters this list when
+# ``reports/data_review.md`` puts it at **1% or less null in the ranking
+# arrivals**, and the rate is recorded beside it so a reader can check the
+# rule rather than the list. Most of these are at 0.00%; the two flight-side
+# columns are at 0.76%, which is the share of arrivals whose left join to the
+# Network Manager record found nothing, and a null there is a level of its own
+# rather than a hole -- the blocks that read them carry NaN for that row and
+# say so.
+#
+# Two of these are the very fields hidden for departures. That is not a
+# contradiction but the rule -- a feature may read any field the ranking set
+# exposes for the rows it reads from -- and the feature registry says which
+# phase a source is read from so the test can hold each side to its own list.
+# ``AOBT_3_flt`` is excluded for every phase by decision.
 AVAILABLE_FOR_ARRIVALS: tuple[str, ...] = (
-    "MVT_TIME_UTC_mvt",
-    "BLOCK_TIME_UTC_mvt",
-    "TAXITIME_SEC_mvt",
-    "SCHED_TIME_UTC_mvt",
-    "RUNWAY_mvt",
-    "STAND_mvt",
-    "ADES_mvt",
-    "ADEP_mvt",
-    "PHASE_mvt",
-    "MVT_ID_mvt",
+    "MVT_TIME_UTC_mvt",  # 0.00%
+    "BLOCK_TIME_UTC_mvt",  # 0.00%
+    "TAXITIME_SEC_mvt",  # 0.00%
+    "SCHED_TIME_UTC_mvt",  # 0.00%
+    "RUNWAY_mvt",  # 0.00%
+    "STAND_mvt",  # 0.00%
+    "ADES_mvt",  # 0.00%
+    "ADEP_mvt",  # 0.00%
+    "PHASE_mvt",  # 0.00%
+    "MVT_ID_mvt",  # 0.00%
+    "AIRCRAFT_TYPE_mvt",  # 0.00%
+    "AIRCRAFT_OPERATOR_flt",  # 0.76%
 )
 
 # Phase prefixes a registered source may carry. A bare column name is the
