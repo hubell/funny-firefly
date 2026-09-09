@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import inspect
+
 import pytest
 
 pd = pytest.importorskip("pandas")
@@ -11,11 +13,16 @@ np = pytest.importorskip("numpy")
 from taxiout.challenge import FORBIDDEN_FEATURE_INPUTS  # noqa: E402
 from taxiout.features import source_phase  # noqa: E402
 from taxiout.planlags import (  # noqa: E402
+    DIFF_SOURCES,
     MOVEMENT_COLUMNS,
+    PLAN_DIFF_FEATURES,
     PLAN_LAG_FEATURES,
     SOURCES,
+    plandiff_features,
     planlag_features,
 )
+
+PLAN_COLUMNS = ("EOBT_1_flt", "LOBT_flt", "SCHED_TIME_UTC_mvt")
 
 T0 = pd.Timestamp("2025-03-04T10:00:00Z")
 
@@ -58,6 +65,28 @@ def _field() -> pd.DataFrame:
 
 def _subject(m):
     return m[m["MVT_ID_mvt"] == 100.0].reset_index(drop=True)
+
+
+def _plans(*, eobt=40, lobt=45, sched=25) -> pd.DataFrame:
+    """One departure whose three planning values differ, in minutes past ``T0``."""
+    return pd.DataFrame([departure(300, 60, "27", eobt=eobt, lobt=lobt, sched=sched)])
+
+
+STAMP_COLUMNS = ("MVT_TIME_UTC_mvt",) + PLAN_COLUMNS
+
+
+def _microseconds(frame: pd.DataFrame) -> pd.DataFrame:
+    """The same frame with every timestamp column held at microsecond resolution.
+
+    Both stamps of a subtraction have to move: pandas resolves a mixed pair
+    at the finer of the two, so a microsecond plan against a nanosecond
+    take-off would come back to nanoseconds and hide the very thing this is
+    built to expose.
+    """
+    out = frame.copy()
+    for c in STAMP_COLUMNS:
+        out[c] = out[c].dt.as_unit("us")
+    return out
 
 
 def test_the_subjects_own_lags_are_take_off_minus_the_plan():
@@ -134,3 +163,81 @@ def test_a_movement_frame_without_the_plans_is_refused():
     m = _field().drop(columns=["EOBT_1_flt"])
     with pytest.raises(KeyError):
         planlag_features(_subject(_field()), m)
+
+
+def test_the_differences_are_the_plan_against_itself():
+    f = plandiff_features(_plans())
+    assert f["eobt_minus_sched_s"].iloc[0] == 15 * 60
+    assert f["lobt_minus_eobt_s"].iloc[0] == 5 * 60
+
+
+def test_a_missing_planning_value_takes_the_differences_that_read_it():
+    both = plandiff_features(_plans(eobt=None))
+    assert np.isnan(both["eobt_minus_sched_s"].iloc[0])
+    assert np.isnan(both["lobt_minus_eobt_s"].iloc[0])
+    no_lobt = _plans()
+    no_lobt["LOBT_flt"] = pd.NaT
+    f = plandiff_features(no_lobt)
+    assert np.isnan(f["lobt_minus_eobt_s"].iloc[0])
+    assert f["eobt_minus_sched_s"].iloc[0] == 15 * 60
+
+
+def test_the_differences_are_indexed_like_the_departures():
+    m = _plans()
+    m.index = pd.Index([41])
+    f = plandiff_features(m)
+    assert list(f.index) == [41]
+    assert list(f.columns) == list(PLAN_DIFF_FEATURES)
+
+
+def test_the_differences_read_the_subjects_own_row_and_need_no_movements():
+    assert list(inspect.signature(plandiff_features).parameters) == ["departures"]
+    # no take-off, no runway, no identifier: the three planning values suffice
+    f = plandiff_features(_plans()[list(PLAN_COLUMNS)])
+    assert f["eobt_minus_sched_s"].iloc[0] == 15 * 60
+    assert f["lobt_minus_eobt_s"].iloc[0] == 5 * 60
+
+
+def test_the_difference_sources_are_exposed_planning_columns_of_the_subject():
+    assert list(DIFF_SOURCES) == list(PLAN_DIFF_FEATURES)
+    for name, sources in DIFF_SOURCES.items():
+        for src in sources:
+            phase, column = source_phase(src)
+            assert phase is None, (name, src)
+            assert column not in FORBIDDEN_FEATURE_INPUTS, (name, src)
+            assert column != "AOBT_3_flt"
+            assert column in PLAN_COLUMNS, (name, src)
+
+
+def test_both_blocks_are_the_same_whatever_resolution_the_stamps_arrive_at():
+    """The parquet files carry microseconds; every other test here builds nanoseconds.
+
+    Both blocks reach the same subtraction, so a resolution-blind one would
+    take the lags and the differences down together, by a factor of a
+    thousand on the real data and with no missing value or exception to show
+    for it. ``tests/test_windows.py`` pins the property for the window
+    machinery, which is where this repository first paid for it; the plan
+    lags run through that machinery *and* subtract on their own, so the
+    guard has to be repeated on this side.
+    """
+    plans = _microseconds(_plans())
+    assert str(plans["EOBT_1_flt"].dtype) == "datetime64[us, UTC]"  # the setup took
+    d = plandiff_features(plans)
+    assert d["eobt_minus_sched_s"].iloc[0] == 15 * 60
+    assert d["lobt_minus_eobt_s"].iloc[0] == 5 * 60
+
+    field = _microseconds(_field())
+    f = planlag_features(_subject(field), field)
+    assert f["lag_eobt_s"].iloc[0] == 20 * 60
+    assert f["lag_sched_s"].iloc[0] == 20 * 60
+    assert f["lag_missing"].iloc[0] == 0.0
+    # the runway mean too: it is these seconds averaged, not a fresh reading
+    assert f["lag_eobt_rwy15m"].iloc[0] == pytest.approx((27 + 10 + 15) * 60 / 3)
+
+
+def test_the_lags_and_the_differences_are_separate_blocks():
+    assert set(PLAN_LAG_FEATURES).isdisjoint(PLAN_DIFF_FEATURES)
+    assert set(SOURCES).isdisjoint(DIFF_SOURCES)
+    # the differences carry no flag of their own: the lags' one already says it
+    assert len(PLAN_DIFF_FEATURES) == 2
+    assert "lag_missing" in SOURCES
