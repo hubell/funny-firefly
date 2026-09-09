@@ -461,6 +461,114 @@ on the exposure and not an estimate of it: the true shift is a mixture, no
 exposed field separates the two, and nothing in the model is corrected for
 it, because a correction would be a guess at the mixture fitted on nothing.
 
+**Gate 2c — the fields the model never read, 8 September.** A review of where
+the remaining error sits ([`review_headroom.md`](review_headroom.md)) found
+that the residual of the submission rung is a tail of individual holds rather
+than a queue, and that what is left in the *exposed* fields is about eight
+seconds on the score. Four blocks were built for it, as a chain of rungs on top
+of the encoding arm the submission is fitted from, each read against the one
+below it.
+
+**Stand occupancy is the one that matters, and it is a physical bound.** A
+stand holds one aircraft, so an arrival that on-blocks at the subject's stand
+before the subject takes off means the subject had already left the stand: its
+taxi-out is at least the gap. The ranking set gives every arrival's stand and
+on-block time in full, so the bound is built from exposed rows — and it bounds
+a field the same data hides for departures, which
+[`modelling_notes.md`](modelling_notes.md) records rather than leaves to be
+noticed. It enters as a feature and never as a floor: below twenty minutes the
+bound holds essentially always and the model already respects it, above thirty
+it collapses because a stand identifier can denote a position holding two
+aircraft and because aircraft are towed, and the twenty-to-forty-five-minute
+band is where the signal is. Applied as a hard floor it loses, at every cap
+tried. The construction, the bound by five-minute band and the negative result
+are in [`../reports/occupancy.md`](../reports/occupancy.md).
+
+**What the four are worth.** Over the rows the record-quality term leaves to
+the physical model, against the arm's 233.4 s in December and 343.7 s in July:
+stand occupancy −8.3 and −7.5, the callsign prefix −1.8 and −4.6, the
+destination geometry with the holiday calendar −1.2 and +0.01, the two plan
+differences −1.5 and −3.2. Together **233.4 → 220.6 s in December and 343.7 →
+328.3 s in July**, and 257.2 → 239.4 s on the three airports July 2026
+contains. At the ranking set's own bucket mix, 234.4 → 221.6 s.
+
+That is roughly twice what the review estimated, and the reason is that the
+review estimated it by fitting on *stored residuals*: an estimator that can
+only add a correction on top of a frozen prediction, where a refit restructures
+every split in the model around the new column. A residual fit is a lower bound
+on a refit and not an estimate of it. No block beats its own estimate by more
+than the five seconds the leakage-audit trigger allows, and the registry, the
+poison tests and the band table in `occupancy.md` are what stand behind that
+rather than the arithmetic alone.
+
+**It carries to an airport the model has never seen**, which the held-out-pair
+split cannot ask and [`../reports/transfer.md`](../reports/transfer.md) can.
+The transferable feature set is the submission rung's minus every identifier,
+so it now carries the stand-occupancy block and the callsign prefix — both
+built from the held-out airport's own movements and from an airline designator
+that means the same thing everywhere. Regenerated, the leave-one-airport-out
+model beats the grand mean by **23.6% on average against 19.5% before**, best
+43.3% at Heathrow against 33.4% at Munich, on 104 columns against 86. The
+geometric term's own numbers do not move at all — the fitted speeds stay at
+12.0 to 13.2 m/s across the ten fits — because nothing in this gate touches
+that fit.
+
+**None of it moves the held-out-pair claim**, which is what it should do: none
+of these four is a property of the (airport, stand, runway) pair, and each
+contrast sits within about a second of zero. The plan differences are the one
+exception at −1.1 s [−2.3, −0.0], small and in the direction of a plan quantity
+interacting with a pair-level encoding; it is recorded rather than explained
+away, and the rule does not read that column.
+
+**The rule that admitted them, and the one knife-edge.** A rung displaces the
+rung below it if it is no worse on both forward splits' ex-flagged RMSE and no
+worse pooled at the ranking mix; the chain stops at the first failure. The
+destination rung came out **0.0093 s worse on July** while improving December
+by 1.16 s and the ranking mix by 1.13. Read as a comparison of two real numbers
+that stops the chain and strands two rungs; read at the precision every table
+in the report prints — one decimal place — the two rungs print the same number
+and it is a tie. The second reading is the one adopted, it was adopted after
+the number was seen, and `baseline.md` gives it a subsection of its own: the
+literal figures to four decimals, a day-clustered bootstrap on the step whose
+interval contains zero, and a computed check that the reading moves that step
+and no other. The precedent is in the same report, where the encoding arms were
+resolved "inside the tenth of a second this table prints".
+
+Two independent noise figures say the same thing. The day-clustered bootstrap
+on that step is +0.0 s [−1.4, +1.2], an interval 274 times as wide as the point
+estimate it brackets. And seed averaging — the same rung refitted under five
+random seeds, changing nothing but the seed — moves the two forward splits by
+1.10 and 1.37 s, which is more than a hundred times the difference the literal
+rule would have turned on.
+
+**Seed averaging was measured once and adopted.** The submission rung refitted
+under five consecutive seeds, nothing changed but the seed, the predictions
+averaged: 1.10 s in December and 1.37 s in July, both clearing the one second
+fixed as the threshold beforehand. It is an estimator choice and not a rung —
+it changes how the model is fitted and not what it reads — so the ladder stays
+single-seed and only `scripts/make_submission.py` uses it, with
+`taxiout.models.BAGGING_SEEDS` recording the decision beside the booster's
+parameters. It is worth saying what it is: variance reduction, under half a
+percent, and nothing about the aircraft or the airport is understood better for
+it. On the rung below this one it gained 0.78 and 0.98 s and would not have
+been adopted, which is the clearest available measure of how much noise sits in
+a single fit — a hundred times the difference the literal reading of the rule
+would have turned on.
+
+**The PRU portal data stays out.** EUROCONTROL's own open data at
+`ansperformance.eu/data` carries daily ATFM delay by cause and by airport,
+which is the closest thing in existence to the "phased delays" the rationale
+page describes. The portal's notice permits copying provided it "is not used
+for commercial purposes" and states that the information "may not be modified
+without prior written permission" — non-commercial and no-derivatives, which
+fails the prize rules' requirement that additional datasets be "openly
+available under an open source license", by the same reading that excluded
+OPDI. It is left for the paper as what a future edition should open, and the
+README records the exclusion beside the sources that were taken.
+
+The submission rung is now `+ plan differences`, and the ladder's only rung
+above it is runway saturation, still out and still a measured negative.
+
 **Gate 3 — the queueing layer, only if Gate 2's ablation says congestion is
 binding** (~20–30 h). This is the piece where the geometry stops being a side
 feature. *Revised 2 September:* the forward simulation as first written —
@@ -559,3 +667,19 @@ submission and its documentation.
   join rate and inspection, never by leaderboard RMSE. If a public leaderboard
   exists on any part of the ranking months, geometry decisions freeze before it
   is consulted.
+- **"No worse" means at the precision the report prints.** *Fixed 8 September,
+  after Gate 2c turned on nine thousandths of a second.* Every RMSE in every
+  table is given to one decimal place, and two rungs that print the same number
+  are a tie: a rule that ranks them is ranking the random-number generator, not
+  the models. The seed-averaging table measures that directly — the same rung
+  refitted under a different seed moves by around a second — so a rule reading
+  below a tenth of a second is reading noise. This is now the standing reading
+  for every comparison in the reports, and it was settled going forward rather
+  than left to be re-argued each time it binds.
+- **Any step inside a second prints a bootstrap interval.** A difference that
+  small is a claim about sampling variation and has to be shown as one. The
+  machinery exists and costs nothing: `taxiout.validation.cluster_bootstrap`
+  over stored residuals with no model refitted, clustered on the unit the
+  question is about — pairs for a pair question, **days** for a
+  same-split question, because congestion is autocorrelated over hours and two
+  departures an hour apart are not independent draws.

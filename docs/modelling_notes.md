@@ -403,6 +403,31 @@ each of those rather than the module claiming them. The prefix exists so that
 the next feature to read a target has to say so in the registry instead of
 hiding under a phase.
 
+**Stand occupancy bounds the hidden field from inside the challenge data, and
+that is said here rather than left to be noticed.** *Added 8 September, Gate
+2c.* A stand holds one aircraft, so an arrival that on-blocks at the subject's
+stand before the subject takes off means the subject had already left the
+stand: its taxi-out is at least the gap between that on-block and its take-off.
+Every field the block reads is exposed — the ranking set gives an arrival's
+stand and on-block time in full, and it is `AVAILABLE_FOR_ARRIVALS` that says
+so — and the rule above therefore admits it: a feature may read what the
+ranking set exposes *for the rows it reads from*.
+
+Two things about it are worth stating plainly rather than leaving to a reader
+to work out. The arrival it reads on-blocked *after* the subject's own
+off-block, so the block is admissible under the challenge's post-hoc framing
+and not under an operational one — exactly the standing of every
+take-off-anchored window the model already carries, and no worse, but also no
+better. And what it constructs is a lower bound on `TAXITIME_SEC_mvt`, which is
+the field the ranking set hides: not a copy of it, not a reconstruction of it
+from outside the data, but a bound on it built from rows the organisers chose
+to expose. Nothing in the rules forbids that, and `AOBT_3_flt` is excluded by
+decision for being a *noisy copy* rather than for being informative; a physical
+constraint between two exposed rows is a different object. The block is
+therefore kept, and the bound is reported for what it is — including where it
+is false, which [`../reports/occupancy.md`](../reports/occupancy.md) measures,
+and including the negative result that applying it as a hard floor loses.
+
 The plan lags are the one block that reads, through other departures, a
 quantity that contains their taxi-out: take-off minus a planning value fixed
 before departure — the flight plan's first and last off-block estimates and
