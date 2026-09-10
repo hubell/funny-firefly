@@ -27,8 +27,11 @@ from taxiout.features import source_phase  # noqa: E402
 from taxiout.occupancy import (  # noqa: E402
     MOVEMENT_COLUMNS,
     OCCUPANCY_FEATURES,
+    OCCUPANCY_TFREE_FEATURES,
     SOURCES,
+    TFREE_SOURCES,
     occupancy_features,
+    occupancy_tfree_features,
 )
 
 # What this block reads from an arrival's row, written out so the registry is
@@ -373,3 +376,95 @@ def test_poisoning_the_arrivals_on_blocks_moves_the_gaps():
     after = occupancy_features(_subject(m), poisoned)
     assert after["occ_prev_txi_s"].iloc[0] == 1.0
     assert after["occ_gap1_s"].iloc[0] == 600.0
+
+
+# --------------------------------------------------------------------------
+# the schedule-anchored twin
+
+
+def test_the_schedule_anchor_picks_a_different_arrival_than_the_take_off():
+    """The whole point of the twin, on the fixture's own subject.
+
+    Subject 100 is scheduled off at 45 and takes off at 60. Its stand received
+    one arrival on-blocking at 20 and another at 50 -- after it was due off,
+    before it actually went. The take-off-anchored block reads the on-block at
+    50; the schedule-anchored one cannot see it and reads the one at 20.
+    """
+    m = _afternoon()
+    subject = _subject(m)
+    took_off = occupancy_features(subject, m)
+    scheduled = occupancy_tfree_features(subject, m)
+    assert took_off["occ_gap1_s"].iloc[0] == 600.0  # on-block 50 -> take-off 60
+    # 45 - 20 = 25 minutes, and it is the arrival the other one skipped
+    assert scheduled["occt_gap1_sched_s"].iloc[0] == 1500.0
+    # that arrival was due at 25 and on-blocked at 20, so it was early
+    assert scheduled["occt_prev_late_s"].iloc[0] == -300.0
+    assert scheduled["occt_prev_txi_s"].iloc[0] == 280.0
+
+
+def test_the_schedule_anchored_block_does_not_move_with_the_take_off():
+    """The property the twin exists for, asserted rather than assumed.
+
+    ``occ_gap1_sched_s`` cancels the take-off algebraically but is still chosen
+    by it, so moving the take-off alone moves it. Nothing in the twin may move.
+    """
+    m = _afternoon()
+    first = occupancy_tfree_features(_subject(m), m)
+    moved = m.copy()
+    later = moved["MVT_ID_mvt"] == 100.0
+    moved.loc[later, "MVT_TIME_UTC_mvt"] = when(600)  # nine hours later
+    moved = _micro(moved)
+    second = occupancy_tfree_features(_subject(moved), moved)
+    for column in OCCUPANCY_TFREE_FEATURES:
+        a, b = first[column].iloc[0], second[column].iloc[0]
+        assert (np.isnan(a) and np.isnan(b)) or a == b, column
+    # and the take-off-anchored block does move, which is why the twin exists
+    assert (
+        occupancy_features(_subject(m), m)["occ_gap1_s"].iloc[0]
+        != occupancy_features(_subject(moved), moved)["occ_gap1_s"].iloc[0]
+    )
+
+
+def test_the_schedule_anchored_block_reads_no_departure_take_off():
+    """Its registry names the schedule, never ``MVT_TIME_UTC_mvt`` bare."""
+    for column, sources in TFREE_SOURCES.items():
+        for src in sources:
+            phase, name = source_phase(src)
+            assert not (phase is None and name == "MVT_TIME_UTC_mvt"), (column, src)
+        assert "SCHED_TIME_UTC_mvt" in sources, column
+
+
+def test_the_schedule_anchored_registry_names_every_column_and_nothing_else():
+    assert list(TFREE_SOURCES) == list(OCCUPANCY_TFREE_FEATURES)
+
+
+def test_the_schedule_anchored_departure_sources_are_never_hidden_fields():
+    for column, sources in TFREE_SOURCES.items():
+        for src in sources:
+            phase, name = source_phase(src)
+            if phase in (None, "DEP"):
+                assert name not in FORBIDDEN_FEATURE_INPUTS, (column, src)
+
+
+def test_the_schedule_anchored_arrival_sources_are_all_exposed_for_arrivals():
+    for column, sources in TFREE_SOURCES.items():
+        for src in sources:
+            phase, name = source_phase(src)
+            if phase == "ARR":
+                assert name in AVAILABLE_FOR_ARRIVALS, (column, src)
+
+
+def test_the_schedule_anchored_block_carries_exactly_its_columns():
+    m = _afternoon()
+    subject = _subject(m)
+    out = occupancy_tfree_features(subject, m)
+    assert list(out.columns) == list(OCCUPANCY_TFREE_FEATURES)
+    assert list(out.index) == list(subject.index)
+
+
+def test_a_stand_with_no_arrival_before_the_schedule_is_missing_or_truncated():
+    """C03's only arrival never on-blocked, so the twin abstains there too."""
+    m = _afternoon()
+    out = occupancy_tfree_features(_subject(m, 102.0), m)
+    assert np.isnan(out["occt_gap1_sched_s"].iloc[0])
+    assert out["occt_missing"].iloc[0] + out["occt_truncated"].iloc[0] == 1.0

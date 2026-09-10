@@ -13,16 +13,31 @@ stand and then held.
 It is a feature and never a floor. Measured on the December validation rows,
 by minutes from the last arrival's on-block at the stand to the subject's
 take-off: below twenty minutes the bound holds in 99 to 100% of rows and the
-model already respects it. The signal is the twenty-to-forty-five minute
-band -- 1% of rows, residual bias +185 s -- where the arrival at that stand
-is either the subject's own inbound after a fast turnaround or a different
-aircraft that took the stand once the subject had pushed back. The previous
-arrival's aircraft type and operator tell the two apart: in that band the
-bias is +239 s where the type differs and +55 s where it matches. Above
-thirty minutes the bound collapses even when type and operator both differ,
-because a stand identifier can denote a position that holds two aircraft and
-because aircraft are towed. Applied as a hard floor it was measured to lose
-1 to 20 s; carried as a feature, the booster learns the band it holds in.
+model already respects it.
+
+**The twenty-to-forty-five-minute band is where the bound is the mechanism.**
+It is about 1% of the rows, the model under-predicted them by +185 s at
+twenty-to-thirty and +120 s at thirty-to-forty-five, and the previous
+arrival's aircraft type and operator say which of two things happened: the
+subject's own inbound after a fast turnaround, or a different aircraft that
+took the stand once the subject had pushed back. Where the type differs the
+bias is +239 s and where it matches it is +55 s, and it is the differing-type
+rows that the bound actually speaks about. Above forty-five minutes the bound
+collapses even when type and operator both differ, because a stand identifier
+can denote a position that holds two aircraft and because aircraft are towed.
+Applied as a hard floor it was measured to lose 1 to 20 s; carried as a
+feature, the booster learns the band it holds in.
+
+**Most of what the block buys is not the bound.** The band above carries 22%
+of the block's reduction in squared error in December and 36% on the three
+airports July 2026 contains -- a minority on every leg measured, and the
+figures are in ``reports/occupancy.md`` rather than here. What the rest is,
+is the stand's recent history: the previous arrival's lateness and taxi-in,
+and whether it was the subject's own aircraft returning. At gaps past an hour
+that is a turnaround-pattern signal about the stand's day and it bounds
+nothing at all -- in December those rows are 48% of the reduction. Both halves
+are admissible on the same footing, and this block should be described as the
+stand's recent history with a bound inside it rather than as a bound.
 
 There is no re-occupation flag among the columns. ``occ_gap1_s`` is that
 flag with the threshold left in it, and the threshold is the booster's to
@@ -47,8 +62,9 @@ on-block time is not an occupation of a stand at all and is dropped before
 the sequence is built, since ``taxiout.windows.seconds`` would otherwise
 sort it to the front of its stand and hand out the gap to a sentinel.
 
-Where the stand received no arrival before the take-off -- 0.6% of the
-December rows -- two flags say which of the two reasons applies:
+Where the stand received no arrival before the take-off -- 0.09% of the
+training year and 0.007% of the December validation rows, so the block
+abstains on almost nothing -- two flags say which of the two reasons applies:
 ``occ_missing`` for a take-off far enough into its covered block that the
 absence is a fact about the stand, and
 ``occ_truncated`` for one near enough to the block's start that the previous
@@ -154,6 +170,117 @@ def _gather(values: np.ndarray, index: np.ndarray, ok: np.ndarray, fill=np.nan):
     if not len(values):
         return np.full(len(index), fill)
     return np.where(ok, values[np.clip(index, 0, len(values) - 1)], fill)
+
+
+OCCUPANCY_TFREE_FEATURES: tuple[str, ...] = (
+    "occt_gap1_sched_s",
+    "occt_prev_late_s",
+    "occt_prev_txi_s",
+    "occt_prev_same_type",
+    "occt_prev_same_op",
+    "occt_missing",
+    "occt_truncated",
+)
+
+# The schedule-anchored twin's anchor: the subject's scheduled time, and the
+# stand it is measured at. The subject's take-off appears nowhere.
+_TFREE_ANCHOR = ("SCHED_TIME_UTC_mvt", "ADEP_mvt", "STAND_mvt")
+_TFREE_PREVIOUS = _TFREE_ANCHOR + (
+    "ARR.ADES_mvt",
+    "ARR.STAND_mvt",
+    "ARR.BLOCK_TIME_UTC_mvt",
+)
+
+TFREE_SOURCES: dict[str, tuple[str, ...]] = {
+    "occt_gap1_sched_s": _TFREE_PREVIOUS,
+    "occt_prev_late_s": _TFREE_PREVIOUS + ("ARR.SCHED_TIME_UTC_mvt",),
+    "occt_prev_txi_s": _TFREE_PREVIOUS + ("ARR.TAXITIME_SEC_mvt",),
+    "occt_prev_same_type": _TFREE_PREVIOUS
+    + ("AIRCRAFT_TYPE_mvt", "ARR.AIRCRAFT_TYPE_mvt"),
+    "occt_prev_same_op": _TFREE_PREVIOUS
+    + ("AIRCRAFT_OPERATOR_flt", "ARR.AIRCRAFT_OPERATOR_flt"),
+    "occt_missing": _TFREE_PREVIOUS,
+    "occt_truncated": _TFREE_PREVIOUS,
+}
+
+
+def occupancy_tfree_features(
+    departures: pd.DataFrame, movements: pd.DataFrame
+) -> pd.DataFrame:
+    """The stand-occupancy block re-anchored on the SCHEDULE, not the take-off.
+
+    A diagnostic twin of ``occupancy_features``, and the answer to one question:
+    how much of what the stand-occupancy block buys survives if the block is
+    forbidden the subject's take-off time entirely?
+
+    Dropping the three columns that carry ``MVT_TIME_UTC_mvt`` in their
+    arithmetic does **not** answer it. ``occ_gap1_sched_s`` cancels the take-off
+    algebraically -- it is ``SCHED - onblock`` -- but the *selection* of which
+    arrival is the stand's last runs ``bounds(code, tt - _FAR_S, tt)``, so the
+    take-off decides which on-block the subtraction is against, and every
+    ``_gather``ed column inherits that choice. Moving the take-off ten minutes
+    with the schedule and both on-blocks held fixed moves ``occ_gap1_sched_s``
+    by eighty and flips both match flags.
+
+    So the anchor moves instead. The stand's last arrival is the last one to
+    on-block at or before the subject's **scheduled** time, every column is
+    read from that arrival, and the coverage flag is judged against the
+    schedule too. What comes out is admissible under an operational framing --
+    at the moment the subject is due off the stand, all of it is known.
+
+    Read against the same rung as the full block, the difference between the two
+    is what the take-off anchor is worth. Diagnostic only: these columns are not
+    on the ladder's chain and not in the submission.
+    """
+    for c in MOVEMENT_COLUMNS:
+        if c not in movements.columns:
+            raise KeyError(f"movements need {c!r}")
+    out = pd.DataFrame(index=departures.index)
+    sched = departures["SCHED_TIME_UTC_mvt"]
+    ss = seconds(sched)
+    key = _stand_key(departures["ADEP_mvt"], departures["STAND_mvt"])
+
+    arr = _phase(movements, "ARR")
+    arr_key = _stand_key(arr["ADES_mvt"], arr["STAND_mvt"])
+    onblock = pd.to_datetime(arr["BLOCK_TIME_UTC_mvt"], utc=True)
+    held = (arr_key != "") & onblock.notna().to_numpy()
+    arr, arr_key, onblock = arr[held], arr_key[held], onblock[held]
+    events = Sorted.build(arr_key, onblock)
+    order = events.order
+    onb = seconds(onblock)[order].astype(float)
+
+    code = events.group_codes(key)
+    # The one line that makes this block take-off free: the search is bounded
+    # at the schedule.
+    lo, hi = events.bounds(code, ss - _FAR_S, ss)
+    last = hi - 1
+    found = last >= lo
+
+    # ``SCHED - onblock`` directly, rather than as a difference of two
+    # take-off-anchored quantities. Positive where the inbound reached the
+    # stand before the outbound was due off it.
+    out["occt_gap1_sched_s"] = ss.astype(float) - _gather(onb, last, found)
+    out["occt_prev_late_s"] = _gather(
+        _delta_seconds(onblock, arr["SCHED_TIME_UTC_mvt"])[order], last, found
+    )
+    out["occt_prev_txi_s"] = _gather(
+        pd.to_numeric(arr["TAXITIME_SEC_mvt"], errors="coerce").to_numpy(float)[order],
+        last,
+        found,
+    )
+    for column, name in (
+        ("AIRCRAFT_TYPE_mvt", "occt_prev_same_type"),
+        ("AIRCRAFT_OPERATOR_flt", "occt_prev_same_op"),
+    ):
+        mine = _labels(departures[column])
+        theirs = _gather(_labels(arr[column])[order], last, found, fill=None)
+        known = ~pd.isna(mine) & ~pd.isna(theirs)
+        out[name] = np.where(known, (mine == theirs).astype(float), np.nan)
+
+    early = ss < coverage_start(sched) + COVERAGE_MARGIN_S
+    out["occt_missing"] = (~found & ~early).astype(float)
+    out["occt_truncated"] = (~found & early).astype(float)
+    return out[list(OCCUPANCY_TFREE_FEATURES)]
 
 
 def occupancy_features(departures: pd.DataFrame, movements: pd.DataFrame) -> pd.DataFrame:
