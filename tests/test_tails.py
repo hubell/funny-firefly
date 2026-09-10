@@ -267,3 +267,75 @@ def test_combine_rejects_misaligned_inputs():
         combine(pd.Series([1.0, 2.0], index=[5, 6]), tail)
     with pytest.raises(ValueError):
         combine(np.array([1.0]), tail)
+
+
+# --------------------------------------------------------------------------
+# the recorded-taxi tail, and the one place the rule lives
+
+
+def test_the_fit_row_rule_drops_the_recorded_taxi_tail():
+    from taxiout.models import TAIL_EXCLUSION_ADOPTED_H, fit_rows
+
+    y = pd.Series([600.0, 3600.0, 14400.0, 87341.0, float("nan")])
+    train = pd.Series([True] * 5)
+    flagged = pd.Series([False] * 5)
+    kept = fit_rows(train, flagged, y)
+    if TAIL_EXCLUSION_ADOPTED_H is None:
+        assert kept.tolist() == [True] * 5
+        return
+    # the day-shift goes; exactly four hours stays, the comparison being strict
+    assert kept.tolist() == [True, True, True, False, True]
+    # a missing target is NOT this rule's business: ``NaN > x`` is False, so it
+    # passes through, and the caller's own training mask is what excludes it
+    # (``scripts/make_submission.py`` passes ``y.notna()``). Asserted so that a
+    # future change to make this rule drop nulls is a deliberate one.
+    assert bool(kept.iloc[4])
+
+
+def test_the_fit_row_rule_still_drops_the_flagged_rows():
+    from taxiout.models import fit_rows
+
+    y = pd.Series([600.0, 700.0])
+    train = pd.Series([True, True])
+    assert fit_rows(train, pd.Series([False, True]), y).tolist() == [True, False]
+    assert fit_rows(pd.Series([False, True]), pd.Series([False, False]), y).tolist() == [
+        False,
+        True,
+    ]
+
+
+def test_every_script_that_fits_reads_the_same_fit_row_rule():
+    """The ladder, the submission and the transfer report, from one constant.
+
+    They came apart once over the seed count, and the fix was to name the
+    constant in one place and import it. A second fit-side rule invented in one
+    script would put a different model in the submission than the one
+    ``reports/baseline.md`` measures, and nothing would say so.
+    """
+    import pathlib
+
+    root = pathlib.Path(__file__).resolve().parents[1]
+    for name in ("run_baselines.py", "make_submission.py", "report_transfer.py"):
+        text = (root / "scripts" / name).read_text()
+        assert "fit_rows as fitting_rows" in text, name
+        # and no script may re-derive the exclusion for itself
+        assert "TAIL_EXCLUSION_ADOPTED_H * 3600" not in text, name
+
+
+def test_the_submission_cannot_seed_average_against_the_rule():
+    """The estimator choice is a constant too, for the same reason.
+
+    ``reports/baseline.md`` applies the pre-registered rule and prints whether
+    seed averaging was adopted. If ``make_submission`` decided that for itself,
+    the shipped model could average five seeds while the report said it had
+    been measured and not adopted -- which is what happened to the fit rows.
+    """
+    import pathlib
+
+    root = pathlib.Path(__file__).resolve().parents[1]
+    text = (root / "scripts" / "make_submission.py").read_text()
+    assert "SEED_AVERAGE_ADOPTED" in text
+    # the averaging must be reached through the constant, never unconditionally
+    for line in text.splitlines():
+        if "SeedAverage(" in line and "import" not in line:
+            assert "if SEED_AVERAGE_ADOPTED" in text, line

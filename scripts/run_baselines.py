@@ -52,7 +52,8 @@ sys.path.insert(0, str(REPO / "src"))
 from taxiout.airports import AIRPORTS  # noqa: E402
 from taxiout.corridor import load_edges  # noqa: E402
 from taxiout.destination import load_airports  # noqa: E402
-from taxiout.metar import load_metar, regime_by_hour  # noqa: E402
+from taxiout.congestion import CONGESTION_FEATURES  # noqa: E402
+from taxiout.metar import WEATHER_FEATURES, load_metar, regime_by_hour  # noqa: E402
 from taxiout.challenge import load_movements, to_pandas  # noqa: E402
 from taxiout.features import (  # noqa: E402
     GEOMETRY_FEATURES,
@@ -78,13 +79,16 @@ from taxiout.models import (  # noqa: E402
     BAGGING_SEEDS,
     ENCODING_ARMS,
     GATE_2C_RUNGS,
+    TAIL_EXCLUSION_ADOPTED_H,
     LADDER,
     LADDER_BY_KEY,
     ENCODING_CONTROL,
+    SEED_AVERAGE_ADOPTED,
     SUBMISSION_KEY,
     TOP_RUNG,
     base_of,
     booster_backend,
+    fit_rows as fitting_rows,
 )
 from taxiout.unimpeded import (  # noqa: E402
     MIN_CLASS_ROWS,
@@ -291,7 +295,7 @@ def fit_and_predict(
     excess held as a constant, which is what Gate 2 exists to replace with a
     model; it is fitted on training rows and never on the set being reported.
     """
-    fit_rows = train & unflagged
+    fit_rows = fitting_rows(train, ~unflagged, y)
     info: dict = {}
     offsets: list[pd.Series] | None = None
     if rung.kind == "airport-mean":
@@ -746,6 +750,10 @@ def _rung_rows(results, split_name: str, which: str, tails: Tails) -> list[list[
     rows = []
     base = None
     for rung in LADDER:
+        # A diagnostic is not a step, and this table's "vs below" column would
+        # print it as one. The section that owns its question prints it.
+        if rung.diagnostic:
+            continue
         entry = results.get((split_name, rung.key, which))
         if entry is None:
             continue
@@ -856,6 +864,8 @@ def _fold_sums(results, features, y, folds, *, ex_flagged: bool, airport=None):
             idx = y.index[rows]
             resid = {}
             for rung in LADDER:
+                if rung.diagnostic:
+                    continue
                 e = results.get((s.name, rung.key, which))
                 if e is None:
                     continue
@@ -1337,7 +1347,7 @@ def k_sensitivity(features, y, split, results, arms, *, scales=K_SENSITIVITY_SCA
     flagged = (
         tail["mask"] if tail is not None else pd.Series(False, index=y.index)
     ).astype(bool)
-    fit_rows = split.train & ~flagged
+    fit_rows = fitting_rows(split.train, flagged, y)
     out: dict = {}
     for scale in scales:
         t0 = time.time()
@@ -2434,9 +2444,14 @@ def section_encoding(
 # ``docs/review_headroom.md`` §2, made before any of these blocks existed by
 # fitting a small booster on the submission rung's stored residuals with
 # five-fold cross-validation grouped by day. They are here for one purpose --
-# a refit that finds MATERIALLY MORE than the headroom is the leakage-audit
-# trigger of ``docs/prior_art.md``, not a success, because a block cannot buy
-# more than the information it carries. This is the same arrangement as
+# a refit that finds MATERIALLY MORE than the headroom trips this gate's own
+# leakage audit, not a success, because a block cannot buy
+# more than the information it carries. The trigger is a constant of this gate
+# and NOT the one in ``docs/prior_art.md``, which is deliberately a ratio -- a
+# cut of more than roughly 64% of the ex-tail airport-mean baseline, or a
+# validation-to-leaderboard gap -- because that file records that an absolute
+# threshold transfers badly between targets. Attributing an absolute figure to
+# it inverts its point. This is the same arrangement as
 # ``RANKING_MIX`` above: a number from a named document, quoted rather than
 # recomputed, so that two counts of one quantity cannot disagree in the third
 # digit.
@@ -2457,6 +2472,19 @@ EXPECTED_HEADROOM_S: dict[str, tuple[float, float]] = {
 # the whole model -- so they will not agree exactly, and a threshold that fired
 # on a tenth of a second would fire every time.
 HEADROOM_TRIGGER_S = 5.0
+
+# How close to the trigger counts as a near miss worth disclosing. A threshold
+# test reported only as pass or fail hides the case that matters most -- the one
+# that missed by a hundredth of a second -- and this report already has a
+# subsection about a rule that turned on nine thousandths. Same reasoning, other
+# direction.
+HEADROOM_NEAR_MISS_S = 1.0
+
+
+def _closest(margins):
+    """The block that came nearest to tripping the audit, fired or not."""
+    return max(margins, key=lambda m: m[4])
+
 
 # The expected headroom above is a ceiling on what a block can buy. This is the
 # other expectation the chain carries, and it is about the held-out-pair
@@ -2483,21 +2511,41 @@ EXPECTED_DID_S = 1.0
 PRINTED_PRECISION_S = 0.1
 
 
-def _day_bootstrap(results, raw, y, split, key, base, flagged):
-    """Interval on one step's ex-flagged RMSE difference, resampling DAYS.
+# The units one step's interval is clustered by. The day is the one the
+# reasoning picks: congestion is autocorrelated over hours, so two departures an
+# hour apart share queue state and are not independent draws, while two a week
+# apart very nearly are -- the same reasoning ``taxiout.validation`` used to
+# rule out a random K-fold. The other two are printed beside it so that the
+# choice can be seen not to carry the conclusion. A row-level cluster is the
+# ordinary unclustered bootstrap, which is the most optimistic of the three.
+CLUSTER_UNITS: tuple[str, ...] = ("day", "airport-day", "row")
 
-    The pair is the clustering unit everywhere else in this report, because the
-    question everywhere else is about pairs. Here the question is whether a
-    difference between two rungs on one forward split is distinguishable from
-    the sampling variation of that split, and the unit for that is the **day**:
-    congestion is autocorrelated over hours, so two departures an hour apart
-    share queue state and are not independent draws, while two departures a week
-    apart very nearly are. ``taxiout.validation`` fixed that reasoning when it
-    ruled out a random K-fold, and this is the same reasoning applied to an
-    interval.
 
-    No model is refitted: the stored validation predictions are resampled by
-    day, which is what makes a thousand draws free.
+def _cluster_labels(raw, features, idx, unit: str) -> np.ndarray:
+    days = (
+        pd.to_datetime(raw.loc[idx, "MVT_TIME_UTC_mvt"], utc=True)
+        .dt.strftime("%Y-%m-%d")
+        .to_numpy()
+    )
+    if unit == "day":
+        return days
+    if unit == "airport-day":
+        return (features.loc[idx, "icao"].astype(str) + "|" + days).to_numpy()
+    return np.arange(len(idx))
+
+
+def _step_intervals_by_unit(
+    results, raw, features, y, split, key, base, flagged
+) -> dict[str, object]:
+    """One step's ex-flagged RMSE difference, by each clustering unit.
+
+    The question is whether a difference between two rungs on one forward split
+    is distinguishable from the sampling variation of that split. The answer
+    should not depend on which unit is resampled; printing all three is how that
+    is shown rather than assumed.
+
+    No model is refitted: the stored validation predictions are resampled, which
+    is what makes a thousand draws free.
     """
     rows = split.valid & ~flagged
     idx = y.index[rows]
@@ -2505,19 +2553,376 @@ def _day_bootstrap(results, raw, y, split, key, base, flagged):
     for k in (base, key):
         entry = results.get((split.name, k, "valid"))
         if entry is None:
-            return None
+            return {}
         resid[k] = (y.loc[idx] - entry["pred"].loc[idx]).to_numpy(dtype=float)
+
+    def step(r):
+        return r["valid"][key] - r["valid"][base]
+
+    out = {}
+    for unit in CLUSTER_UNITS:
+        fold = {"valid": cluster_sums(resid, _cluster_labels(raw, features, idx, unit))}
+        out[unit] = cluster_bootstrap([fold], step, draws=BOOTSTRAP_DRAWS)
+    return out
+
+
+# Bands of the gap to the stand's last arrival, in minutes, for the
+# decomposition of what the stand-occupancy block buys. Wider than the
+# five-minute bands ``reports/occupancy.md`` uses to ask where the *bound*
+# holds, because the question here is where the *gain* lands, and a band has to
+# hold enough rows for a sum of squares to mean anything.
+GAIN_BAND_EDGES_MIN: tuple[float, ...] = (0, 20, 30, 45, 60, 120, np.inf)
+
+# Where the block's own docstring puts the mechanism: past twenty minutes the
+# subject has certainly left the stand, and before forty-five the arrival that
+# took it is still close enough to bound the taxi-out. Two of the bands above,
+# because the bands are cut finer than the claim is made.
+BOUND_BANDS: tuple[str, ...] = ("20-30", "30-45")
+BOUND_BAND_LABEL = "20-45"
+
+
+def _gain_bands(gap_min: pd.Series) -> pd.Series:
+    labels = [
+        (
+            f"over {GAIN_BAND_EDGES_MIN[i]:.0f}"
+            if not np.isfinite(GAIN_BAND_EDGES_MIN[i + 1])
+            else f"{GAIN_BAND_EDGES_MIN[i]:.0f}-{GAIN_BAND_EDGES_MIN[i + 1]:.0f}"
+        )
+        for i in range(len(GAIN_BAND_EDGES_MIN) - 1)
+    ]
+    return pd.cut(
+        gap_min,
+        bins=list(GAIN_BAND_EDGES_MIN),
+        labels=labels,
+        right=False,
+        ordered=True,
+    )
+
+
+def _gain_by_band(results, features, y, split, key, base, flagged, icaos=None):
+    """Where one block's gain lands, by band of the gap to the stand's arrival.
+
+    The block buys a reduction in the sum of squared error, and an SSE is
+    additive over rows in a way an RMSE is not -- so the cut can be attributed
+    to disjoint sets of rows and the shares add to the whole. Returns
+    ``(rows, total_cut, rmse_before, rmse_after)`` where each row is
+    ``[band, n, share of the cut, bias before, bias after]``, computed from the
+    stored validation predictions of the two rungs with no model refitted.
+
+    ``bias`` is the mean of actual minus prediction, so a positive figure is the
+    model under-predicting -- the same sign convention the stored residuals
+    carry.
+    """
+    entry = results.get((split.name, key, "valid"))
+    below = results.get((split.name, base, "valid"))
+    if entry is None or below is None or "occ_gap1_s" not in features.columns:
+        return None
+    rows = split.valid & ~flagged
+    idx = y.index[rows]
+    if icaos is not None:
+        idx = idx[features.loc[idx, "icao"].isin(icaos)]
+    if not len(idx):
+        return None
+    actual = y.loc[idx].to_numpy(dtype=float)
+    r_before = actual - below["pred"].loc[idx].to_numpy(dtype=float)
+    r_after = actual - entry["pred"].loc[idx].to_numpy(dtype=float)
+    gap_min = pd.to_numeric(features.loc[idx, "occ_gap1_s"], errors="coerce") / 60.0
+    band = _gain_bands(gap_min)
+    total = float((r_before**2).sum() - (r_after**2).sum())
+    if not np.isfinite(total) or total == 0:
+        return None
+    out, shares = [], {}
+    for label in list(band.cat.categories) + ["no arrival"]:
+        take = (
+            gap_min.isna().to_numpy()
+            if label == "no arrival"
+            else (band == label).to_numpy()
+        )
+        if not take.any():
+            continue
+        cut = float((r_before[take] ** 2).sum() - (r_after[take] ** 2).sum())
+        shares[label] = (float(take.mean()), cut / total)
+        out.append(
+            [
+                label,
+                f"{int(take.sum()):,}",
+                pct(float(take.mean()), 1),
+                f"{100.0 * cut / total:,.1f}%",
+                f"{float(r_before[take].mean()):+,.0f}",
+                f"{float(r_after[take].mean()):+,.0f}",
+            ]
+        )
+    n = len(idx)
+    return (
+        out,
+        shares,
+        float(np.sqrt(float((r_before**2).sum()) / n)),
+        float(np.sqrt(float((r_after**2).sum()) / n)),
+    )
+
+
+# Below this a per-airport step is printed but not bracketed: a thousand draws
+# on a difference of a second or two is a thousand draws spent on noise, and the
+# table is already long.
+PER_AIRPORT_INTERVAL_S = 2.0
+
+
+def _per_airport_steps(results, raw, features, y, split, key, base, flagged):
+    """One rung's ex-flagged step against the rung below it, per airport.
+
+    The pooled figure the rule reads is one number over ten airports, and a rung
+    that is flat pooled can be a large gain at one airport and a large loss at
+    another. Computed from the stored validation predictions with no model
+    refitted; the interval is the same day-clustered bootstrap the pooled step
+    uses, restricted to the airport's own rows.
+    """
+    entry = results.get((split.name, key, "valid"))
+    below = results.get((split.name, base, "valid"))
+    if entry is None or below is None:
+        return []
+    idx = y.index[split.valid & ~flagged]
+    icao = features.loc[idx, "icao"].astype(str)
+    actual = y.loc[idx].to_numpy(dtype=float)
+    r_base = actual - below["pred"].loc[idx].to_numpy(dtype=float)
+    r_with = actual - entry["pred"].loc[idx].to_numpy(dtype=float)
     days = (
         pd.to_datetime(raw.loc[idx, "MVT_TIME_UTC_mvt"], utc=True)
         .dt.strftime("%Y-%m-%d")
         .to_numpy()
     )
-    fold = {"valid": cluster_sums(resid, days)}
+    out = []
+    for airport in sorted(icao.unique()):
+        take = (icao == airport).to_numpy()
+        n = int(take.sum())
+        if not n:
+            continue
+        before = float(np.sqrt(float((r_base[take] ** 2).sum()) / n))
+        after = float(np.sqrt(float((r_with[take] ** 2).sum()) / n))
+        step = after - before
+        interval = None
+        if abs(step) > PER_AIRPORT_INTERVAL_S:
+            fold = {
+                "valid": cluster_sums(
+                    {"below": r_base[take], "rung": r_with[take]}, days[take]
+                )
+            }
+            interval = cluster_bootstrap(
+                [fold],
+                lambda r: r["valid"]["rung"] - r["valid"]["below"],
+                draws=BOOTSTRAP_DRAWS,
+            )
+        out.append((airport, n, before, after, step, interval))
+    return out
 
-    def step(r):
-        return r["valid"][key] - r["valid"][base]
 
-    return cluster_bootstrap([fold], step, draws=BOOTSTRAP_DRAWS)
+def _per_airport_section(results, raw, features, y, forward, chain) -> list[str]:
+    """Every Gate 2c step, per airport, on both forward splits."""
+    lines = [
+        "### Every step, per airport",
+        "",
+        "The rule above reads one pooled number per split, and a pooled number can"
+        " hide a rung that helps at one airport and hurts at another by more than it"
+        " helps anywhere. Each rung's ex-flagged RMSE step against the rung below it,"
+        " per airport, computed from the stored validation predictions with no model"
+        f" refitted. A step larger than {PER_AIRPORT_INTERVAL_S:.0f} s carries the same"
+        " day-clustered bootstrap the pooled steps use, restricted to that airport's"
+        " own rows; the rest are printed without one. Negative is better.",
+    ]
+    for split in forward:
+        meta = results.get(("meta", split.name, "tail"))
+        flagged = (
+            meta["mask"] if meta is not None else pd.Series(False, index=y.index)
+        ).astype(bool)
+        per_rung, bracketed = {}, []
+        for key in chain:
+            steps = _per_airport_steps(
+                results,
+                raw,
+                features,
+                y,
+                split,
+                key,
+                base_of(LADDER_BY_KEY[key]).key,
+                flagged,
+            )
+            per_rung[key] = {a: (n, b, w, s, i) for a, n, b, w, s, i in steps}
+            for airport, _n, _b, _w, step, interval in steps:
+                if interval is not None:
+                    bracketed.append((key, airport, step, interval))
+        airports = sorted({a for got in per_rung.values() for a in got})
+        if not airports:
+            continue
+        rows = []
+        for airport in airports:
+            cells = [airport]
+            for key in chain:
+                got = per_rung.get(key, {}).get(airport)
+                cells.append("n/a" if got is None else f"{got[3]:+,.2f}")
+            rows.append(cells)
+        lines += [
+            "",
+            f"**{split.name.title()} split.** Step in seconds against the rung below.",
+            "",
+            *table(
+                ["ICAO"] + [LADDER_BY_KEY[k].label for k in chain],
+                rows,
+                "-" + "r" * len(chain),
+            ),
+        ]
+        if bracketed:
+            lines += [
+                "",
+                "Where the step clears "
+                f"{PER_AIRPORT_INTERVAL_S:.0f} s: "
+                + "; ".join(
+                    f"`{LADDER_BY_KEY[k].label}` at {a} {interval}"
+                    for k, a, _s, interval in bracketed
+                )
+                + ".",
+            ]
+    return lines
+
+
+# The diagnostic twin of the stand-occupancy block, and the block it is read
+# beside. Both are read against the same rung, so the two gains are comparable.
+TFREE_KEY = "occupancy-tfree"
+TFREE_AGAINST = "occupancy"
+
+
+def _tfree_section(results, forward, arm) -> list[str]:
+    """What the stand-occupancy block is worth without the subject's take-off.
+
+    Not a rung of the chain and not in the submission: one diagnostic, read
+    against the same rung the full block is read against, so the difference
+    between the two gains is what the take-off anchor buys.
+    """
+    if not any((s.name, TFREE_KEY, "valid") in results for s in forward):
+        return []
+    rows = []
+    ratios = []
+    for split, figure, leg in (
+        (forward[0], _ex_flagged, f"{forward[0].name.title()}, all ten"),
+        (forward[1], _ex_flagged, f"{forward[1].name.title()}, all ten"),
+        (forward[1], _three_ex_flagged, f"{forward[1].name.title()}, the three"),
+    ):
+        below = results.get((split.name, arm, "valid"))
+        full = results.get((split.name, TFREE_AGAINST, "valid"))
+        free = results.get((split.name, TFREE_KEY, "valid"))
+        if below is None or full is None or free is None:
+            continue
+        base, full_v, free_v = figure(below), figure(full), figure(free)
+        if not all(np.isfinite(v) for v in (base, full_v, free_v)):
+            continue
+        full_gain, free_gain = base - full_v, base - free_v
+        share = free_gain / full_gain if full_gain else float("nan")
+        if np.isfinite(share):
+            ratios.append(share)
+        rows.append(
+            [
+                leg,
+                num(base, 1),
+                num(free_v, 1),
+                f"{free_gain:+,.2f}",
+                num(full_v, 1),
+                f"{full_gain:+,.2f}",
+                pct(share, 0) if np.isfinite(share) else "n/a",
+            ]
+        )
+    if not rows:
+        return []
+    return [
+        "### The same block without the subject's take-off",
+        "",
+        "A diagnostic beside the chain, on no rung of it and in no submission."
+        " The stand-occupancy block reads an arrival that on-blocked *after* the"
+        " subject's own off-block, which is admissible under the challenge's"
+        " post-hoc framing and not under an operational one. This asks what the"
+        " block is worth if it is denied the subject's take-off entirely.",
+        "",
+        "**It is not the same as dropping the columns whose arithmetic names the"
+        " take-off.** `occ_gap1_sched_s` already cancels it -- it is `SCHED` minus"
+        " the on-block -- but the take-off also decides *which* arrival the"
+        " subtraction is about, because the stand's last arrival is the last one"
+        " on-blocking at or before it. Moving the take-off ten minutes with the"
+        " schedule and the on-blocks held fixed moves that column by eighty and"
+        " flips both match flags. So the anchor moves instead"
+        " (`taxiout.occupancy.occupancy_tfree_features`): the arrival is the last"
+        " to on-block at or before the subject's **scheduled** time, and every"
+        " column is read from that choice. Everything in it is known at the moment"
+        " the subject is due off the stand.",
+        "",
+        *table(
+            [
+                "leg",
+                f"`{LADDER_BY_KEY[arm].label}` (s)",
+                "schedule-anchored (s)",
+                "gain",
+                "take-off-anchored (s)",
+                "gain",
+                "share kept",
+            ],
+            rows,
+            "-rrrrrr",
+        ),
+        "",
+        (
+            "**" + f"Between {pct(min(ratios), 0)} and {pct(max(ratios), 0)} of what the"
+            " block buys survives the operational framing.**"
+            if len(ratios) > 1
+            else f"**{pct(ratios[0], 0)} of what the block buys survives the"
+            " operational framing.**"
+        )
+        + " The remainder is what the take-off anchor is worth, and it is the part"
+        " of the block that rests on the post-hoc reading. Neither figure changes"
+        " what the submission is fitted from -- the chain above is unchanged and"
+        " this rung is not on it -- and neither is offered as a reason to keep or"
+        " drop anything. It is here because a reviewer is entitled to ask how much"
+        " of the block would survive a rule the challenge does not impose, and the"
+        " honest answer is a number rather than a paragraph.",
+    ]
+
+
+def _absent_layers(results) -> list[str]:
+    """Which named layers of the decomposition still have no rung in this report.
+
+    Written as a question about the rungs actually scored rather than as a fixed
+    list, because a fixed list is a claim that goes stale the moment a gate
+    closes -- and this one did: it went on saying congestion and weather were
+    absent for two gates after they were built.
+    """
+    scored = {key for (_split, key, kind) in results if kind == "valid"}
+    carried: set[str] = set()
+    for key in scored:
+        rung = LADDER_BY_KEY.get(key)
+        if rung is not None:
+            carried |= set(rung.features)
+    missing = [
+        name
+        for name, block in (
+            ("congestion (Gate 2)", CONGESTION_FEATURES),
+            ("weather as a regime indicator (Gate 2b)", WEATHER_FEATURES),
+        )
+        if not carried & set(block)
+    ]
+    # The queueing layer has no rung to look for: it is absent by construction
+    # until one exists, so it is named unconditionally.
+    missing.append("the queueing layer (Gate 3)")
+    if len(missing) == 1:
+        return [
+            "The queueing layer (Gate 3) is absent. Every other layer of the",
+            "decomposition now has a rung above, so the forward splits are no longer",
+            "a model of the unimpeded term alone; they should still be read as a",
+            "floor rather than as an estimate of what the entry can do, because the",
+            "queueing layer is where the remaining excess sits.",
+        ]
+    joined = ", ".join(missing[:-1]) + " and " + missing[-1]
+    return [
+        f"{joined[0].upper() + joined[1:]} are absent, so the excess term of the",
+        "decomposition is unmodelled: every figure above comes from an",
+        "unimpeded-and-identifiers model being asked to predict a quantity",
+        "that is mostly excess. The forward splits should be read as a floor,",
+        "not as an estimate of what the entry can do.",
+    ]
 
 
 def _tolerance_audit(results, forward, keys) -> list[tuple[str, float]]:
@@ -2693,17 +3098,39 @@ def section_gate2c(
             ]
         )
 
-    # The leakage-audit trigger, applied rather than described.
-    overshoot = []
+    # The leakage-audit trigger, applied rather than described, on BOTH columns
+    # of the headroom estimate rather than on the first alone. The December
+    # estimate was made over all ten airports and the July estimate over the
+    # three July 2026 contains, so each leg has to be read against the figure it
+    # was estimated against: the pooled July RMSE is over ten airports and is
+    # not the quantity ``expected[1]`` bounds. Testing one leg and calling the
+    # audit passed is how an overshoot on the other goes unseen.
+    overshoot, margins = [], []
+    legs = (
+        (forward[0], 0, _ex_flagged, f"{forward[0].name.title()}, all ten"),
+        (forward[1], 1, _three_ex_flagged, f"{forward[1].name.title()}, the three"),
+    )
     for key in chain:
         expected = EXPECTED_HEADROOM_S.get(key)
-        entry = results.get((forward[0].name, key, "valid"))
-        below = results.get((forward[0].name, base_of(LADDER_BY_KEY[key]).key, "valid"))
-        if expected is None or entry is None or below is None:
+        if expected is None:
             continue
-        gain = _ex_flagged(below) - _ex_flagged(entry)
-        if gain - expected[0] > HEADROOM_TRIGGER_S:
-            overshoot.append((key, gain, expected[0]))
+        for split, which, figure, leg in legs:
+            entry = results.get((split.name, key, "valid"))
+            below = results.get((split.name, base_of(LADDER_BY_KEY[key]).key, "valid"))
+            if entry is None or below is None:
+                continue
+            gain = figure(below) - figure(entry)
+            # ``_three_ex_flagged`` is NaN where the eval frame is missing one of
+            # the three airports, and ``nan > x`` is False -- so an unguarded
+            # comparison would read a figure that could not be computed as a
+            # trigger that did not fire, which is the exact failure this loop is
+            # being widened to remove.
+            if not np.isfinite(gain):
+                continue
+            over = gain - expected[which]
+            margins.append((key, gain, expected[which], leg, over))
+            if over > HEADROOM_TRIGGER_S:
+                overshoot.append((key, gain, expected[which], leg))
 
     # Where the chain stopped on a difference too small to be a difference, the
     # report has to say so and say what the literal reading cost. Relaxing the
@@ -2714,11 +3141,13 @@ def section_gate2c(
     # The two measurements the disclosure below rests on, computed here so the
     # prose cannot claim anything the numbers do not.
     #
-    # ``step_intervals`` is a day-clustered bootstrap on each step the printed
-    # precision admits: is the difference it waves through distinguishable from
-    # the sampling variation of the split at all? ``audit`` is every other
-    # comparison this report decides, by the margin that decides it, so the
-    # claim that this reading moves one step and no other is checkable.
+    # ``step_intervals`` is a cluster bootstrap on each step the tolerance
+    # admits: is the difference it waves through distinguishable from the
+    # sampling variation of the split at all? It is computed under all three
+    # clustering units rather than only the day, so that the reading cannot be
+    # said to rest on the choice of unit. ``audit`` is every other comparison
+    # this report decides, by the margin that decides it, so the claim that this
+    # reading moves one step and no other is checkable.
     step_intervals = {}
     by_name = {s.name.title(): s for s in forward}
     for key, (name, _delta) in admitted.items():
@@ -2729,11 +3158,18 @@ def section_gate2c(
         flagged = (
             meta["mask"] if meta is not None else pd.Series(False, index=y.index)
         ).astype(bool)
-        interval = _day_bootstrap(
-            results, raw, y, split, key, base_of(LADDER_BY_KEY[key]).key, flagged
+        intervals = _step_intervals_by_unit(
+            results,
+            raw,
+            features,
+            y,
+            split,
+            key,
+            base_of(LADDER_BY_KEY[key]).key,
+            flagged,
         )
-        if interval is not None:
-            step_intervals[(key, name)] = interval
+        if intervals:
+            step_intervals[(key, name)] = intervals
     audit = _tolerance_audit(
         results, forward, list(ENCODING_ARMS) + ["saturation"] + list(chain)
     )
@@ -2781,10 +3217,16 @@ def section_gate2c(
         "each block was estimated to have before any of them was built, by fitting a",
         "small booster on the submission rung's stored residuals",
         "(`docs/review_headroom.md`), and it is quoted from there rather than",
-        "recomputed here. A block that finds *materially more* than its headroom is",
-        "the leakage-audit trigger of `docs/prior_art.md` and not a success: a block",
+        "recomputed here. A block that finds *materially more* than its headroom trips",
+        f"this gate's leakage audit and is not a success: the {HEADROOM_TRIGGER_S:.0f} s",
+        "is a constant fixed here, and *not* the trigger in `docs/prior_art.md`, which",
+        "is a ratio -- a cut of more than roughly 64% of the ex-tail airport-mean",
+        "baseline, or a validation-to-leaderboard gap -- because that file records that",
+        "an absolute threshold does not transfer between targets. A block",
         "cannot buy more than the information it carries, so an overshoot means it is",
-        "carrying something else. The plan-difference row is the one exception to how",
+        "carrying something else. Each leg is read against the column its headroom was",
+        "estimated on: December over all ten airports, July over the three July 2026",
+        "contains. The plan-difference row is the one exception to how",
         "that column reads: the review gave those two columns as `+/- 1 s` rather than",
         "as a signed estimate, so its figure is a magnitude and not a direction.",
         "",
@@ -2816,10 +3258,27 @@ def section_gate2c(
                 f" {str(dids[k]).split(' s ')[1]}"
                 for k in outside
             )
-            + " -- outside it, and small. The direction says the block buys"
-            " slightly *more* where the pair was seen, which is what a plan"
-            " quantity interacting with a pair-level encoding would look like."
-            " It changes nothing here, because the rule does not read this"
+            + " -- outside it, and small. The sign is read from"
+            " `taxiout.validation.difference_in_differences`, where a **positive**"
+            " figure means the block buys more where the pair is *new* and a"
+            " negative one means it buys more where the pair was *seen*."
+            + "".join(
+                (
+                    f" `{LADDER_BY_KEY[k].label}` is positive, which is the"
+                    " direction a stand-level quantity predicts: where the pair"
+                    " has never been seen the encoding has nothing to say about"
+                    " that stand, and the block supplies what the encoding would"
+                    " otherwise have carried -- the stand's recent turnaround"
+                    " pattern, which at the long gaps holding most of its rows is"
+                    " what it is actually reading."
+                    if dids[k].point > 0
+                    else f" `{LADDER_BY_KEY[k].label}` is negative, which is what a"
+                    " plan quantity interacting with a pair-level encoding would"
+                    " look like."
+                )
+                for k in outside
+            )
+            + " It changes nothing here, because the rule does not read this"
             " column and says so above; it is recorded because an expectation"
             " that is only mentioned when it is met is not an expectation. "
         )
@@ -2829,6 +3288,19 @@ def section_gate2c(
         "Where the chain stops: "
         + "; ".join(f"`{LADDER_BY_KEY[k].label}` {verdicts[k]}" for k in chain)
         + ".",
+        "",
+        (
+            "Every rung clears the rule on the literal reading of `no worse`, so the"
+            f" {PRINTED_PRECISION_S:.1f} s tolerance decides nothing here and the"
+            " subsection this report used to carry about it is not printed. It was"
+            " load-bearing before the recorded-taxi tail came out of the fit, when"
+            " `+ destination and holidays` came out nine thousandths of a second"
+            " worse on July; that it is not load-bearing now is a fact about the"
+            " refit and not a change to the rule, which is unchanged and still"
+            " read at that tolerance."
+            if not admitted
+            else ""
+        ),
         "",
         *(
             []
@@ -2850,14 +3322,17 @@ def section_gate2c(
                 )
                 + ", and the chain stops below it.",
                 "",
-                "**The reading adopted.** `no worse` **at the precision this report"
-                f" prints**, which is one decimal place -- {PRINTED_PRECISION_S:.1f} s."
-                " Two rungs that print the same number are a tie, and a rule that"
-                " ranks them ranks the random-number generator rather than the"
-                " models. This is not a new convention here: the encoding section"
-                " above already resolved two arms that sat *inside the tenth of a"
-                " second this table prints* and said so in those words. What is new"
-                " is applying it to this rule.",
+                "**The reading adopted.** `no worse` **within a tolerance of"
+                f" {PRINTED_PRECISION_S:.1f} s on the ex-flagged RMSE**. Stated as a"
+                " tolerance on a named quantity rather than as *the precision this"
+                " report prints*, because this table prints two precisions -- the RMSE"
+                " columns to one decimal and the `vs below` deltas, which are the"
+                " quantity the rule actually compares, to two -- so `the precision this"
+                " report prints` names no single number and cannot fix a rule. The"
+                " tolerance is the one-decimal figure, and it is the same one the"
+                " encoding section above used when it resolved two arms that sat"
+                " *inside the tenth of a second this table prints*. What is new is"
+                " applying it to this rule.",
                 "",
                 "**It was adopted after the number was seen**, and that is the whole"
                 " of the objection to it. The number in question is "
@@ -2890,28 +3365,41 @@ def section_gate2c(
                     []
                     if not step_intervals
                     else [
-                        "**And it is not a measurement.** The same cluster bootstrap"
-                        " the held-out-pair section uses, run over the *stored*"
-                        " predictions of the two rungs with no model refitted and"
-                        " resampling **days** rather than pairs -- days because"
-                        " congestion is autocorrelated over hours, so a day is the"
-                        " unit within which two departures are not independent draws,"
-                        " and it is the same reasoning that ruled out a random K-fold"
-                        f" before anything was fitted. {BOOTSTRAP_DRAWS:,} draws: "
+                        "**And the tolerance rests on a measurement, not on the format"
+                        " string.** The same cluster bootstrap the held-out-pair"
+                        " section uses, run over the *stored* predictions of the two"
+                        " rungs with no model refitted."
+                        " The unit resampled is the **day** -- congestion is"
+                        " autocorrelated over hours, so a day is the unit within which"
+                        " two departures are not independent draws, and it is the same"
+                        " reasoning that ruled out a random K-fold before anything was"
+                        " fitted -- and the airport-day and the row are printed beside"
+                        " it so that the choice of unit can be seen not to carry the"
+                        f" conclusion. {BOOTSTRAP_DRAWS:,} draws: "
                         + "; ".join(
-                            f"`{LADDER_BY_KEY[k].label}` on {name} is {interval}"
-                            for (k, name), interval in step_intervals.items()
+                            f"`{LADDER_BY_KEY[k].label}` on {name} is "
+                            + ", ".join(
+                                f"{unit} {units[unit]}"
+                                for unit in CLUSTER_UNITS
+                                if unit in units
+                            )
+                            for (k, name), units in step_intervals.items()
                         )
                         + ". "
                         + (
-                            "Every one of those intervals contains zero, and each is"
-                            f" some {min(int(round((i.high - i.low) / max(abs(i.point), 1e-9))) for i in step_intervals.values()):,}"
-                            " times as wide as the point estimate it brackets. That is"
-                            " the justification for the reading, and it is a"
-                            " measurement rather than a convention: the difference the"
-                            " literal rule turned on cannot be told from the sampling"
-                            " variation of the split it was measured on."
-                            if all(i.low <= 0 <= i.high for i in step_intervals.values())
+                            "Every one of those intervals contains zero, under every"
+                            " unit, and each is wider than the difference it brackets by"
+                            " more than two orders of magnitude. That is the"
+                            " justification for the tolerance, and it is a measurement"
+                            " rather than a convention: the difference the literal rule"
+                            " turned on cannot be told from the sampling variation of"
+                            " the split it was measured on, however that variation is"
+                            " clustered."
+                            if all(
+                                i.low <= 0 <= i.high
+                                for units in step_intervals.values()
+                                for i in units.values()
+                            )
                             else "At least one of those intervals excludes zero, which"
                             " would make the difference a measurement after all and"
                             " this reading indefensible for that step. It should be"
@@ -2930,7 +3418,7 @@ def section_gate2c(
                 )
                 + ". "
                 + (
-                    "None of them is inside the printed precision, so reading the rule"
+                    "None of them is inside the tolerance, so reading the rule"
                     " this way changes nothing else in this report -- not which arm the"
                     " encoding section chose, and not the saturation rung's exclusion."
                     if all(
@@ -2938,17 +3426,25 @@ def section_gate2c(
                         for k, m in audit
                         if k not in admitted
                     )
-                    else "At least one other comparison is inside the printed precision,"
+                    else "At least one other comparison is inside the tolerance,"
                     " so this reading is not confined to one step and the section above"
                     " overstates it. That is worse than the knife-edge it was adopted"
                     " for and should be resolved before the freeze."
                 ),
                 "",
-                "**What was not done.** The chain was not reordered and no rung was"
-                " re-based on another: re-basing a rung after seeing its numbers is"
-                " the thing the pre-registration exists to prevent. The tolerance was"
-                " not sized to admit anything either -- it is the precision the tables"
-                " print, fixed by the format string and not by the result.",
+                "**What was not done, and what cannot be checked.** The chain was not"
+                " reordered and no rung was re-based on another: re-basing a rung after"
+                " seeing its numbers is the thing the pre-registration exists to"
+                " prevent. The tolerance was not sized to admit anything either -- it"
+                f" is {PRINTED_PRECISION_S:.1f} s, the precision the RMSE columns are"
+                " given to, and it was the reading the encoding section had already"
+                " used. What a reader cannot check from the history is *when* it was"
+                " adopted relative to the run: the five commits that built these four"
+                " blocks were written by one script and carry one timestamp, so the"
+                " state of this generator before the tolerance was adopted is not in"
+                " the repository. The claim that it was adopted after the number was"
+                " seen rests on this section saying so, and on nothing a reader can"
+                " verify independently.",
                 "",
             ]
         ),
@@ -2985,21 +3481,45 @@ def section_gate2c(
                 "-rr",
             ),
         ]
+    lines += ["", *_per_airport_section(results, raw, features, y, forward, chain)]
+    lines += ["", *_band_section(results, features, y, forward, arm)]
+    lines += ["", *_tfree_section(results, forward, arm)]
     lines += [
         "",
         "**The leakage audit, applied.** "
         + (
             "No block beats its estimated headroom by more than "
-            f"{HEADROOM_TRIGGER_S:.0f} s, so the trigger does not fire and the refit"
-            " is consistent with what the residual fits predicted before any of these"
-            " blocks existed. That agreement is worth as much as the gain: two"
-            " independent estimates of the same quantity landing in the same place is"
-            " evidence the blocks read what they claim to read."
+            f"{HEADROOM_TRIGGER_S:.0f} s, so the trigger does not fire."
+            + (
+                ""
+                if not margins
+                else (
+                    " The closest is `"
+                    + LADDER_BY_KEY[_closest(margins)[0]].label
+                    + "` on "
+                    + _closest(margins)[3]
+                    + f", which takes {_closest(margins)[1]:+,.2f} s against an"
+                    f" estimated {_closest(margins)[2]:+,.1f} s -- an overshoot of"
+                    f" **{_closest(margins)[4]:.3f} s** against the"
+                    f" {HEADROOM_TRIGGER_S:.3f} s the trigger allows."
+                    + (
+                        " That is a margin of"
+                        f" {HEADROOM_TRIGGER_S - _closest(margins)[4]:.3f} s, and a"
+                        " test passed by that much is not evidence of anything. It is"
+                        " reported as a near miss rather than as a pass, because the"
+                        " whole reason this audit reads both of its columns is that a"
+                        " trigger which did not fire was once taken for a result."
+                        if HEADROOM_TRIGGER_S - _closest(margins)[4]
+                        < HEADROOM_NEAR_MISS_S
+                        else " The remaining blocks are further inside it."
+                    )
+                )
+            )
             if not overshoot
             else ", ".join(
-                f"`{LADDER_BY_KEY[k].label}` takes {g:+,.1f} s against an estimated"
-                f" {e:+,.1f} s"
-                for k, g, e in overshoot
+                f"`{LADDER_BY_KEY[k].label}` takes {g:+,.1f} s on {leg} against an"
+                f" estimated {e:+,.1f} s"
+                for k, g, e, leg in overshoot
             )
             + f", which is more than the {HEADROOM_TRIGGER_S:.0f} s the trigger allows."
             " There are two readings of an overshoot and the difference between them"
@@ -3010,43 +3530,184 @@ def section_gate2c(
             if not overshoot
             else [
                 "",
-                "**The benign one, and it is the more likely.** The headroom was"
-                " estimated by fitting a small booster on the *stored residuals* of a"
-                " frozen model. That estimator can only add a correction on top of a"
-                " prediction it cannot change; a refit restructures every split in the"
-                " model around the new column, and can use it to condition the blocks"
-                " already there. A residual fit is therefore a **lower bound** on what"
-                " a refit finds, not an estimate of it, and this was true of the"
-                " estimate before any of these numbers existed rather than being"
-                " noticed afterwards. The direction of the discrepancy is the"
-                " direction that reading predicts.",
+                "**The two instruments disagree by about a factor of two, and that is"
+                " the finding.** The headroom was estimated by fitting a small booster"
+                " on the *stored residuals* of a frozen model, cross-validated within"
+                " the validation month itself"
+                + (
+                    f" -- {int(_headroom_rows(splits)):,} rows"
+                    if _headroom_rows(splits)
+                    else ""
+                )
+                + " -- while the figure it is being compared against comes from"
+                " refitting the whole model on the training year"
+                + (f", {int(_refit_rows(splits)):,} rows" if _refit_rows(splits) else "")
+                + ". Those are not two measurements of one quantity. A residual fit can"
+                " only add a correction on top of a prediction it cannot change; a"
+                " refit restructures every split in the model around the new column and"
+                " can use it to condition the blocks already there. So a residual fit"
+                " is expected to come in *under* a refit. What is not established is"
+                " the size of that gap: nothing here predicted a factor of two, no"
+                " theorem bounds it, and reading the direction as confirmation would be"
+                " reading a prediction out of a result. The honest statement is that"
+                " the trigger fired, the mechanism below is what the block is checked"
+                " against instead, and the estimate is now known to be the weaker of"
+                " the two instruments.",
                 "",
-                "**The other one is leakage**, and it is the one the trigger exists"
+                "**The other reading is leakage**, and it is the one the trigger exists"
                 " for: a block cannot buy more than the information it carries, so an"
                 " overshoot is consistent with its carrying something it should not."
-                " Three things separate the two, and all three are in place rather"
-                " than promised. The registry names every raw column each of these"
-                " features reads and `tests/test_features.py` holds departures'"
-                " sources to `FORBIDDEN_FEATURE_INPUTS` and arrivals' to"
-                " `AVAILABLE_FOR_ARRIVALS`. The poison tests assert the code and not"
-                " the registry: poisoning every departure's hidden fields leaves the"
-                " frame unmoved, and poisoning the arrivals' on-block times moves the"
-                " `occ_` columns and the arrival counts and nothing else. And"
-                " [`occupancy.md`](occupancy.md) shows the gain landing where the"
-                " mechanism says it should -- in the band where the bound is sound and"
-                " the model was under-predicting -- rather than spread evenly, which"
-                " is what a column carrying the answer by another route would look"
-                " like.",
-                "",
-                "So the trigger is recorded as fired and the audit is recorded as"
-                " passed, which is not the same as the trigger having been"
-                " uninteresting. What it changes is the estimate: the residual-fit"
-                " headroom should be read as a floor in any future gate, and"
-                " `docs/review_headroom.md` says so.",
+                " The registry names every raw column each of these features reads and"
+                " `tests/test_features.py` holds departures' sources to"
+                " `FORBIDDEN_FEATURE_INPUTS` and arrivals' to `AVAILABLE_FOR_ARRIVALS`."
+                " The poison tests assert the code and not the registry: poisoning"
+                " every departure's hidden fields leaves the frame unmoved, and"
+                " poisoning the arrivals' on-block times moves the `occ_` columns and"
+                " the arrival counts and nothing else. Those two bound what the block"
+                " *can* read. What follows bounds where what it read actually landed.",
+                " The decomposition above -- *Where the stand-occupancy gain lands* -- is what the block is checked against instead, and it is a measurement rather than the agreement of two estimates, which is the thing that failed.",
             ]
         ),
     ]
     return lines
+
+
+def _headroom_rows(splits) -> float:
+    """Rows the residual-fit headroom estimate was cross-validated within.
+
+    The estimate in ``docs/review_headroom.md`` §2 was made on one forward
+    split's stored validation residuals, so its sample is that split's
+    validation set rather than the training year.
+    """
+    forward = [s for s in splits if not s.name.startswith("pairs-")]
+    return float(forward[0].valid.sum()) if forward else 0.0
+
+
+def _refit_rows(splits) -> float:
+    """Rows the refit that is being compared against was fitted on."""
+    forward = [s for s in splits if not s.name.startswith("pairs-")]
+    return float(forward[0].train.sum()) if forward else 0.0
+
+
+def _band_section(results, features, y, forward, arm) -> list[str]:
+    """Where the stand-occupancy gain lands, by band of the gap, on both legs.
+
+    This is what stands in for the claim that the block's gain lands where its
+    mechanism says it should. That claim used to point at ``occupancy.md``,
+    whose band table is built on the rung that never read the gap and reports
+    *bias*, not gain -- so it could not support the claim it was cited for. The
+    quantity that can is the SSE cut, attributed to disjoint bands of the gap,
+    and it is computed here.
+    """
+    legs = []
+    for split, icaos, label in (
+        (forward[0], None, f"{forward[0].name.title()}, all ten airports"),
+        (forward[1], JULY_AIRPORTS, f"{forward[1].name.title()}, the three"),
+    ):
+        meta = results.get(("meta", split.name, "tail"))
+        flagged = (
+            meta["mask"] if meta is not None else pd.Series(False, index=y.index)
+        ).astype(bool)
+        got = _gain_by_band(results, features, y, split, "occupancy", arm, flagged, icaos)
+        if got is not None:
+            legs.append((label, got))
+    if not legs:
+        return []
+    out = [
+        "### Where the stand-occupancy gain lands",
+        "",
+        "The block buys a reduction in the sum of squared"
+        " error, and an SSE adds over rows in a way an RMSE does not -- so the cut can"
+        " be attributed to disjoint bands of the gap and the shares add to the whole."
+        f" Each band's share of the whole cut between `{LADDER_BY_KEY[arm].label}` and"
+        " `+ stand occupancy`, with the mean residual before and after, from the"
+        " stored validation predictions of the two rungs and no model refitted.",
+    ]
+    for label, (rows, _shares, before, after) in legs:
+        out += [
+            "",
+            f"*{label}: {before:,.1f} -> {after:,.1f} s.*",
+            "",
+            *table(
+                [
+                    "gap (min)",
+                    "rows",
+                    "of rows",
+                    "of the cut",
+                    "bias before (s)",
+                    "bias after",
+                ],
+                rows,
+                "-rrrrr",
+            ),
+        ]
+    concentrated = []
+    for label, (_rows, shares, _b, _a) in legs:
+        got = [shares[b] for b in BOUND_BANDS if b in shares]
+        if len(got) != len(BOUND_BANDS):
+            continue
+        concentrated.append((label, sum(s[0] for s in got), sum(s[1] for s in got)))
+    # Whether the cut really does concentrate in the band the mechanism names is
+    # the whole of the evidence this section offers, so it is decided by the
+    # measurement rather than asserted around it.
+    every = concentrated and all(cut > share for _l, share, cut in concentrated)
+    some = any(cut > share for _l, share, cut in concentrated)
+    out += [
+        "",
+        (
+            (
+                "**The band the mechanism names carries more of the cut than of the"
+                " rows"
+                + ("" if every else ", on one leg but not both")
+                + ".** "
+                + "; ".join(
+                    f"{'On' if i == 0 else 'on'} {label} the `{BOUND_BAND_LABEL}` band"
+                    f" is {pct(share, 1)} of the rows and {pct(cut, 1)} of the cut"
+                    for i, (label, share, cut) in enumerate(concentrated)
+                )
+                + ". That band is where the block's own docstring puts the mechanism"
+                " -- the subject has certainly left the stand, and the arrival that"
+                " took it is close enough to bound the taxi-out. A column carrying the"
+                " answer by another route would not concentrate on one narrow band of"
+                " a quantity it is not the answer to; it would help wherever the answer"
+                " is hard. That concentration is what stands behind the block in place"
+                " of the agreement of two estimates, and unlike the sentence it"
+                " replaces it is measured here rather than asserted."
+                if some
+                else "**The cut does not concentrate in the band the mechanism"
+                " names.** "
+                + "; ".join(
+                    f"{'On' if i == 0 else 'on'} {label} the `{BOUND_BAND_LABEL}` band"
+                    f" is {pct(share, 1)} of the rows and {pct(cut, 1)} of the cut"
+                    for i, (label, share, cut) in enumerate(concentrated)
+                )
+                + ". That is the opposite of what the mechanism predicts, and with the"
+                " trigger fired it leaves the block resting on the registry and the"
+                " poison tests alone. It should be resolved before the freeze rather"
+                " than left standing."
+            )
+            if concentrated
+            else "The band the mechanism names could not be resolved from these"
+            " bands, so the concentration is not reported."
+        ),
+        "",
+        "**What the rest of the cut is, and it is not the bound.** Past an hour the"
+        " gap is not a bound on anything: the stand may have been re-occupied and"
+        " released, or the aircraft towed. The block still earns there, and what it"
+        " earns is the stand's recent history -- the previous arrival's lateness, its"
+        " taxi-in, whether it flew the subject's own type and operator. That is a"
+        " turnaround-pattern signal rather than a physical bound, it is admissible on"
+        " exactly the same footing, and calling the whole block a bound overstates"
+        " what most of it does. The share is in the table above rather than in this"
+        " sentence.",
+        "",
+        "What stands behind this block is the source registry, the poison tests and"
+        " the concentration above. The agreement of the residual-fit headroom with"
+        " the refit is deliberately not on that list: the two are measured on"
+        " different objects and the leakage audit below reports how far apart they"
+        " came, but a block is not vouched for by an estimate agreeing with it.",
+    ]
+    return out
 
 
 # --------------------------------------------------------------------------
@@ -3061,6 +3722,16 @@ def section_gate2c(
 # the size of the run-to-run variation the ladder already shows, and adopting
 # something smaller would be adopting noise.
 BAGGING_GAIN_S = 1.0
+
+# The same measurement on the rung below, which did not clear the threshold and
+# was not adopted. Quoted and not computed, on the same footing as
+# ``EXPECTED_HEADROOM_S``: it was made on ``destination`` during the run that
+# built these blocks, and the figures are recorded in ``docs/plan.md`` and in
+# ``taxiout.models``. Recomputing it here would cost ten more fits to reproduce
+# a number that is already on the record, and a report that only ever mentions
+# the occasion the threshold was cleared is reporting a decision rather than a
+# rule. (December, July), in seconds of ex-flagged RMSE.
+BAGGING_EARLIER_GAINS_S: tuple[float, float] = (0.78, 0.98)
 
 
 def seed_average(features, y, splits, results, tails: Tails, key: str) -> dict:
@@ -3089,7 +3760,7 @@ def seed_average(features, y, splits, results, tails: Tails, key: str) -> dict:
         flagged = (
             tail["mask"] if tail is not None else pd.Series(False, index=y.index)
         ).astype(bool)
-        fit_rows = split.train & ~flagged
+        fit_rows = fitting_rows(split.train, flagged, y)
         preds = []
         for i in range(BAGGING_SEEDS):
             t0 = time.time()
@@ -3115,6 +3786,293 @@ def seed_average(features, y, splits, results, tails: Tails, key: str) -> dict:
             "reproduced": float(np.max(np.abs(preds[0] - base["pred"]))),
         }
     return out
+
+
+# --------------------------------------------------------------------------
+# the recorded-taxi tail, a fit-side exclusion measured before it is adopted
+
+# The thresholds tried, in hours of recorded taxi time. BOTH are fixed here
+# before the run and BOTH are reported, so that reporting the one that came out
+# better is not available as a move. Four hours is the mechanism: no aircraft
+# taxis for four hours, so a row that records one is a record and not a taxi.
+# Two hours is the wider reading, and it is here because the boundary between
+# "impossible" and "a very bad day" is not obvious and the report should not
+# pretend it chose the obvious one.
+TAIL_EXCLUSION_H: tuple[float, ...] = (4.0, 2.0)
+
+# The rule that decides adoption, fixed before the numbers exist: an arm is
+# adopted only if it is no worse than the ladder pooled on BOTH forward splits,
+# at the same tolerance the Gate 2c chain uses, AND no airport regresses by more
+# than its own day-clustered interval allows. The second half is there because
+# the whole reason for looking at the tail is that a pooled figure hid what one
+# airport was doing.
+TAIL_ADOPT_TOLERANCE_S = PRINTED_PRECISION_S
+
+# The arms actually fitted. ``None`` is the un-excluded fit, and it is the
+# reference every other arm is read against. It has to be refitted here rather
+# than read from the ladder, because once a threshold is adopted the ladder
+# carries the exclusion and comparing an arm against it would be comparing it
+# against itself.
+TAIL_EXCLUSION_ARMS: tuple[float | None, ...] = (None,) + TAIL_EXCLUSION_H
+
+
+def tail_exclusion(features, y, raw, splits, results, key: str) -> dict:
+    """Refit the submission rung with long recorded taxi times out of the fit.
+
+    The record-quality term already removes the cells where a missing Network
+    Manager record and a long lag say the row is a record artefact rather than a
+    taxi. It removes them by *cell*, so it is blind to a row whose cell is not
+    covered: a departure recording a taxi of twenty-four hours at an airport
+    whose cells are all uncovered stays in the fit with its recorded value.
+
+    This measures what taking those rows out of the fit is worth. Only the fit
+    changes -- the target is not clipped, the scoring set is untouched, and
+    every reported figure is still over the same validation rows -- so the
+    numbers here are comparable with the ladder's own line for line.
+
+    ``TAXITIME_SEC_mvt`` is the target, which is a fit-time quantity and is
+    hidden for departures in the ranking set. That is why this can only ever be
+    a fit-side exclusion and not a widening of ``taxiout.tails.flag``, whose
+    inputs are contractually restricted to fields the ranking set exposes.
+    """
+    rung = LADDER_BY_KEY.get(key)
+    if rung is None or rung.kind != "booster":
+        return {}
+    out: dict = {}
+    for split in splits:
+        if split.name.startswith("pairs-"):
+            continue
+        base = results.get((split.name, key, "valid"))
+        if base is None:
+            continue
+        meta = results.get(("meta", split.name, "encoding"))
+        frame = with_encoding(features, meta)
+        tail = results.get(("meta", split.name, "tail"))
+        flagged = (
+            tail["mask"] if tail is not None else pd.Series(False, index=y.index)
+        ).astype(bool)
+        for hours in TAIL_EXCLUSION_ARMS:
+            t0 = time.time()
+            long_taxi = (
+                pd.Series(False, index=y.index) if hours is None else y > hours * 3600.0
+            )
+            fit_rows = split.train & ~flagged & ~long_taxi
+            dropped = int((split.train & ~flagged & long_taxi).sum())
+            model = Booster(rung.features, dict(BOOSTER_PARAMS)).fit(
+                frame.loc[fit_rows], y[fit_rows]
+            )
+            pred = model.predict(frame.loc[split.valid])
+            ev = evaluate(
+                y[split.valid],
+                pred,
+                icao=features.loc[split.valid, "icao"],
+                flagged=flagged[split.valid],
+            )
+            out[(split.name, hours)] = {
+                "eval": ev,
+                "pred": pd.Series(np.asarray(pred), index=y.index[split.valid]),
+                "rmse_ex_flagged": float(
+                    ev.loc[ev["icao"] == "all", "rmse_ex_flagged_s"].iloc[0]
+                ),
+                "three": _three_ex_flagged({"eval": ev}),
+                "dropped": dropped,
+            }
+            label = "no exclusion" if hours is None else f"taxi > {hours} h"
+            print(
+                f"  {split.name:>10s} {label:<22s} "
+                f"({dropped:,} rows out, {time.time() - t0:.0f} s)"
+            )
+    return out
+
+
+def section_tail_exclusion(
+    arms: dict, results, raw, features, y, splits, tails: Tails, key: str
+) -> list[str]:
+    """What excluding the long recorded taxi times from the fit is worth."""
+    forward = [s for s in splits if not s.name.startswith("pairs-")]
+    if not arms or len(forward) < 2:
+        return []
+    if any((s.name, None) not in arms for s in forward):
+        return []
+
+    def figure(split, hours, three=False):
+        got = arms.get((split.name, hours))
+        if got is None:
+            return float("nan")
+        return got["three"] if three else got["rmse_ex_flagged"]
+
+    rows, verdicts = [], {}
+    for hours in TAIL_EXCLUSION_ARMS:
+        label = "none" if hours is None else f"taxi > {hours:.0f} h"
+        cells = [label]
+        deltas, regressions, dropped_total = [], [], 0
+        for split in forward:
+            got = arms.get((split.name, hours))
+            ref = arms.get((split.name, None))
+            if got is None or ref is None:
+                cells += ["n/a", "n/a"]
+                continue
+            dropped_total += got["dropped"]
+            delta = got["rmse_ex_flagged"] - ref["rmse_ex_flagged"]
+            deltas.append(delta)
+            cells += [
+                num(got["rmse_ex_flagged"], 1),
+                "--" if hours is None else f"{delta:+,.2f}",
+            ]
+            if hours is None:
+                continue
+            meta = results.get(("meta", split.name, "tail"))
+            flagged = (
+                meta["mask"] if meta is not None else pd.Series(False, index=y.index)
+            ).astype(bool)
+            idx = y.index[split.valid & ~flagged]
+            icao = features.loc[idx, "icao"].astype(str)
+            actual = y.loc[idx].to_numpy(dtype=float)
+            r_ref = actual - ref["pred"].loc[idx].to_numpy(dtype=float)
+            r_arm = actual - got["pred"].loc[idx].to_numpy(dtype=float)
+            days = (
+                pd.to_datetime(raw.loc[idx, "MVT_TIME_UTC_mvt"], utc=True)
+                .dt.strftime("%Y-%m-%d")
+                .to_numpy()
+            )
+            for airport in sorted(icao.unique()):
+                take = (icao == airport).to_numpy()
+                n = int(take.sum())
+                if not n:
+                    continue
+                before = float(np.sqrt(float((r_ref[take] ** 2).sum()) / n))
+                after = float(np.sqrt(float((r_arm[take] ** 2).sum()) / n))
+                step = after - before
+                if step <= TAIL_ADOPT_TOLERANCE_S:
+                    continue
+                fold = {
+                    "valid": cluster_sums(
+                        {"ref": r_ref[take], "arm": r_arm[take]}, days[take]
+                    )
+                }
+                interval = cluster_bootstrap(
+                    [fold],
+                    lambda r: r["valid"]["arm"] - r["valid"]["ref"],
+                    draws=BOOTSTRAP_DRAWS,
+                )
+                if interval.low > 0:
+                    regressions.append((split.name, airport, step, interval))
+        three = [figure(s, hours, three=True) for s in forward]
+        three = [v for v in three if np.isfinite(v)]
+        cells.append(num(three[-1], 1) if three else "n/a")
+        cells.append(f"{dropped_total:,}")
+        if hours is None:
+            cells.append("the reference")
+            verdicts[hours] = (False, [], [])
+        else:
+            passes = (
+                len(deltas) == len(forward)
+                and all(d <= TAIL_ADOPT_TOLERANCE_S for d in deltas)
+                and not regressions
+            )
+            verdicts[hours] = (passes, regressions, deltas)
+            cells.append("passes" if passes else "no")
+        rows.append(cells)
+
+    passing = [h for h in TAIL_EXCLUSION_H if verdicts.get(h, (False,))[0]]
+    adopted = TAIL_EXCLUSION_ADOPTED_H
+    agrees = (adopted in passing) if adopted is not None else not passing
+    return [
+        "## The recorded-taxi tail, out of the fit",
+        "",
+        "The record-quality term removes rows by *cell* -- an airport crossed with"
+        " whether a Network Manager record exists and how long the take-off lag is"
+        " -- and a cell is only covered where enough of its rows are defaulted. A"
+        " row whose cell is uncovered stays in the fit with whatever taxi time it"
+        " records, and some of those records are day-shifts: the largest in the"
+        " training year is over thirty-six hours. This is what taking them out of"
+        " the **fit** is worth. The target is not clipped and the validation rows"
+        " are untouched, so every figure here is over the same rows as the ladder's.",
+        "",
+        "**Why an exclusion and not a wider flag.** `taxiout.tails.flag` and"
+        " `predict` are restricted by construction to fields the ranking set"
+        " exposes, because they have to run there unchanged. Recorded taxi time is"
+        " the target and is hidden for departures in the ranking set, so a rule"
+        " that reads it can only ever apply to the training side. That is what this"
+        " is, and it is why widening the flag was not available.",
+        "",
+        "**Both thresholds were fixed before the run and both are reported.**"
+        f" {' and '.join(f'{h:.0f} h' for h in TAIL_EXCLUSION_H)}, in"
+        " `TAIL_EXCLUSION_H`. Four hours is the mechanism -- no aircraft taxis for"
+        " four hours -- and two hours is the wider reading, kept because the"
+        " boundary between an impossible row and a very bad day is not obvious."
+        " Reporting only the one that came out better was not available as a move,"
+        " and neither threshold was chosen by the figure it produced.",
+        "",
+        "**The rule, fixed before the numbers.** An arm is adopted only if it is no"
+        f" worse than the un-excluded fit on **both** forward splits within"
+        f" {TAIL_ADOPT_TOLERANCE_S:.1f} s, **and** no airport regresses by an amount"
+        " whose own day-clustered interval clears zero. The second half is there"
+        " because the reason for looking at the tail at all is that a pooled figure"
+        " hid what one airport was doing.",
+        "",
+        "The reference row is the same rung fitted with nothing excluded. It is"
+        " refitted here rather than read off the ladder, because the ladder now"
+        " carries the adopted exclusion and reading an arm against it would be"
+        " reading it against itself.",
+        "",
+        *table(
+            [
+                "excluded from the fit",
+                f"{forward[0].name.title()} (s)",
+                "vs no exclusion",
+                f"{forward[1].name.title()} (s)",
+                "vs no exclusion",
+                f"{forward[1].name.title()}, the three (s)",
+                "rows out",
+                "verdict",
+            ],
+            rows,
+            "-rrrrrrr",
+        ),
+        "",
+        (
+            f"**Adopted: `taxi > {adopted:.0f} h`,** and"
+            " `TAIL_EXCLUSION_ADOPTED_H` is that threshold, so every fit in this"
+            " report -- the ladder, the k-sensitivity diagnostic and the seed"
+            " average -- carries it. No figure here comes from a mixture of the two."
+            if adopted is not None
+            else "**No threshold is adopted**, and `TAIL_EXCLUSION_ADOPTED_H` is"
+            " `None`, so every fit in this report keeps the whole tail."
+        )
+        + (
+            ""
+            if agrees
+            else " **That does not match the rule's own verdict above**, which is"
+            " either a constant that has not been moved since the run or something"
+            " that says why it should not be; if nothing does, one of the two is out"
+            " of date."
+        )
+        + (
+            f" The wider arm is not adopted: `taxi > {TAIL_EXCLUSION_H[-1]:.0f} h`"
+            + (
+                " regresses at "
+                + ", ".join(
+                    f"{a} on {sp} by {interval}"
+                    for sp, a, step, interval in verdicts[TAIL_EXCLUSION_H[-1]][1]
+                )
+                if verdicts.get(TAIL_EXCLUSION_H[-1], (False, [], []))[1]
+                else " is worse by "
+                + ", ".join(
+                    f"{d:+,.2f} s"
+                    for d in verdicts.get(TAIL_EXCLUSION_H[-1], (False, [], []))[2]
+                )
+            )
+            + ". The rows between the two thresholds are not all artefacts -- at"
+            " Paris and Heathrow most of them carry a Network Manager record and an"
+            " ordinary schedule lag, so some are real long holds, and excluding them"
+            " trades genuine tail signal for variance. That is the whole reason both"
+            " thresholds were run rather than one."
+            if len(TAIL_EXCLUSION_H) > 1
+            and not verdicts.get(TAIL_EXCLUSION_H[-1], (False,))[0]
+            else ""
+        ),
+    ]
 
 
 def section_bagging(bagging: dict, splits, key: str) -> list[str]:
@@ -3147,8 +4105,23 @@ def section_bagging(bagging: dict, splits, key: str) -> list[str]:
         " consecutive random",
         "seeds on each forward split -- the same rows, the same encoding, the same",
         "parameters, only the seed moving -- and the predictions averaged. It is run",
-        "**once**, after the feature decisions were taken, so that the ladder is not",
-        "refitted for it.",
+        "on **one rung** rather than on every rung, after the feature decisions were",
+        "taken, so that the ladder is not refitted for it.",
+        "",
+        "**It has been measured three times, against a rule fixed before the first"
+        " of them.** The same measurement was"
+        f" made first on the rung below this one, where it gained"
+        f" {BAGGING_EARLIER_GAINS_S[0]:.2f} and {BAGGING_EARLIER_GAINS_S[1]:.2f} s and"
+        " did not clear the threshold, and was not adopted. Those two figures are"
+        " quoted from `docs/plan.md` and `taxiout.models` rather than recomputed here,"
+        " on the same footing as the expected headroom above: the run that produced"
+        " them fitted a rung this report no longer fits, and a figure recomputed from"
+        " a different rung would be a different measurement wearing the same name."
+        " They are recorded because a threshold that is only reported on the occasion"
+        " it was cleared is not a threshold. It was measured a second time on this"
+        f" rung, before the recorded-taxi tail came out of the fit, and cleared the"
+        " threshold at 1.10 and 1.37 s; the figures below are the third measurement,"
+        " on the same rung with that tail excluded.",
         "",
         "The rule, fixed before the run: adopt only if the average gains at least",
         f"{BAGGING_GAIN_S:.0f} s on **both** forward splits' ex-flagged RMSE. One second on a",
@@ -3187,6 +4160,30 @@ def section_bagging(bagging: dict, splits, key: str) -> list[str]:
             " saturation rung, and for the same reason: something that was tried and"
             " bought nothing is a result and belongs in the report."
         ),
+        "",
+        (
+            ""
+            if adopt == SEED_AVERAGE_ADOPTED
+            else "**`taxiout.models.SEED_AVERAGE_ADOPTED` disagrees with the rule"
+            f" above**, being `{SEED_AVERAGE_ADOPTED}` where the measurement says"
+            f" `{adopt}`. `scripts/make_submission.py` reads that constant, so the"
+            " model that would ship is not the one this section describes. Either the"
+            " constant has not been moved since this run, or something says why it"
+            " should not be; if nothing does, one of the two is out of date."
+        ),
+        "",
+        (
+            "**What the earlier adoption was measuring.** It cleared the threshold at"
+            " 1.10 and 1.37 s before the recorded-taxi tail came out of the fit and"
+            " does not clear it now, which says what the averaging was doing: most of"
+            " the run-to-run variation five seeds were smoothing over came from a"
+            " handful of day-shift rows in the fitting sample. Excluding twelve"
+            " impossible rows did the same work for none of the compute. That is"
+            " worth more than the seconds either change bought, because it says the"
+            " variance had a cause rather than being the price of using a booster."
+            if not adopt
+            else ""
+        ),
     ]
 
 
@@ -3209,6 +4206,8 @@ def section_frequency(results, features, y, splits, references) -> list[str]:
 
     rows = []
     for rung in LADDER:
+        if rung.diagnostic:
+            continue
         entry = results.get((split.name, rung.key, "valid"))
         if entry is None:
             continue
@@ -3496,11 +4495,17 @@ def main() -> int:
     arms = [k for k in ENCODING_ARMS if (splits[0].name, k, "valid") in results]
     sensitivity = k_sensitivity(features, y, splits[0], results, arms) if arms else {}
 
-    # Seed averaging, once, on the rung the submission is fitted from. An
+    # Seed averaging, on the one rung the submission is fitted from. An
     # estimator choice rather than a rung, so it is measured after the ladder
     # and never inside it.
     print("averaging seeds on the submission rung ...")
     bagging = seed_average(features, y, splits, results, tails, SUBMISSION_KEY)
+
+    # The recorded-taxi tail, as a fit-side exclusion, on the submission rung
+    # only: two thresholds fixed before the run, both reported, adopted by the
+    # rule in ``section_tail_exclusion``.
+    print("the recorded-taxi tail, out of the fit")
+    tail_arms = tail_exclusion(features, y, dep, splits, results, SUBMISSION_KEY)
 
     references = {
         name: entry["info"]["reference"]
@@ -3540,6 +4545,10 @@ def main() -> int:
         + [""]
         + section_bagging(bagging, splits, SUBMISSION_KEY)
         + [""]
+        + section_tail_exclusion(
+            tail_arms, results, dep, features, y, splits, tails, SUBMISSION_KEY
+        )
+        + [""]
         + section_per_airport(results, splits, tails)
         + [""]
         + section_importances(results, splits)
@@ -3559,12 +4568,7 @@ def main() -> int:
             "",
             "## What is not here yet",
             "",
-            "Congestion (Gate 2), weather as a regime indicator (Gate 2b) and the",
-            "queueing layer (Gate 3) are absent, so the excess term of the",
-            "decomposition is unmodelled: every figure above comes from an",
-            "unimpeded-and-identifiers model being asked to predict a quantity",
-            "that is mostly excess. The forward splits should be read as a floor,",
-            "not as an estimate of what the entry can do.",
+            *_absent_layers(results),
             "",
             *(
                 []

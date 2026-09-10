@@ -70,6 +70,7 @@ from taxiout.models import (  # noqa: E402
     TRANSFER_FEATURES,
     Booster,
     booster_backend,
+    fit_rows as fitting_rows,
 )
 from taxiout.unimpeded import (  # noqa: E402
     fit_geometric,
@@ -106,7 +107,9 @@ def leave_one_out(features, y, unflagged, icao, airport) -> dict:
     an annotation on the data and not an input to any fit: the fits exclude the
     flagged rows, and the evaluation reports the RMSE with and without them.
     """
-    train = unflagged & (icao != airport)
+    # The same fit-row rule the ladder and the submission use, so this report
+    # and reports/baseline.md are describing one model and not two.
+    train = fitting_rows(icao != airport, ~unflagged, y)
     test = icao == airport
     out: dict = {"airport": airport, "train_rows": int(train.sum())}
 

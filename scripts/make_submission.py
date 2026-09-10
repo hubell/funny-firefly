@@ -80,8 +80,11 @@ from taxiout.features import (  # noqa: E402
 from taxiout.models import (  # noqa: E402
     BAGGING_SEEDS,
     TOP_RUNG,
+    Booster,
+    SEED_AVERAGE_ADOPTED,
     SeedAverage,
     booster_backend,
+    fit_rows as fitting_rows,
 )
 
 DATA = REPO / "data" / "challenge"
@@ -280,7 +283,10 @@ def main() -> int:
     # encoding reads, for the same reason they are out of the physical fit: a
     # defaulted block time is not a taxi time, and one of them inside a thin
     # pair would otherwise *be* that pair's encoding in the shipped model.
-    fit_rows = (~covered) & y.notna()
+    # ...and the recorded-taxi tail, by the same rule and the same constant the
+    # ladder fits under (``taxiout.models.fit_rows``). If these two came apart,
+    # the model that ships would not be the model reports/baseline.md measures.
+    fit_rows = fitting_rows(y.notna(), covered, y)
 
     # The encoding, if the rung reads it. Computed once over the whole training
     # year and in two forms, because the two sides of this script are asking
@@ -325,15 +331,22 @@ def main() -> int:
             file=sys.stderr,
         )
         return 1
-    # Seed averaging, adopted on the measurement in ``reports/baseline.md``:
-    # the same rung fitted under BAGGING_SEEDS consecutive seeds and the
-    # predictions averaged. An estimator choice and not a rung, so the ladder
-    # stays single-seed and this is the one place it applies.
-    model = SeedAverage(RUNG.features).fit(X.loc[fit_rows], y[fit_rows])
-    print(
-        f"  fitted on {int(fit_rows.sum()):,} rows under {BAGGING_SEEDS} seeds "
-        f"in {time.time() - t0:.0f} s"
-    )
+    # Seed averaging, if the rule in ``reports/baseline.md``'s *Seed averaging*
+    # adopted it. It is an estimator choice and not a rung, so the ladder stays
+    # single-seed and this is the one place it would apply -- and whether it
+    # applies is ``taxiout.models.SEED_AVERAGE_ADOPTED`` rather than a decision
+    # taken here, so that this script cannot ship a model the report says was
+    # measured and not adopted. It is currently False: once the recorded-taxi
+    # tail came out of every fit, averaging five seeds gained 0.81 s and 0.56 s
+    # on the two forward splits against a one-second threshold fixed before any
+    # of it ran.
+    if SEED_AVERAGE_ADOPTED:
+        model = SeedAverage(RUNG.features).fit(X.loc[fit_rows], y[fit_rows])
+        how = f"under {BAGGING_SEEDS} seeds"
+    else:
+        model = Booster(RUNG.features).fit(X.loc[fit_rows], y[fit_rows])
+        how = "under a single seed (seed averaging measured, not adopted)"
+    print(f"  fitted on {int(fit_rows.sum()):,} rows {how} in {time.time() - t0:.0f} s")
 
     print("predicting ...")
     Xr = build_features(

@@ -82,7 +82,7 @@ from taxiout.occupancy import (  # noqa: E402
     MOVEMENT_COLUMNS,
     occupancy_features,
 )
-from taxiout.validation import month_of, rmse  # noqa: E402
+from taxiout.validation import JULY_AIRPORTS, month_of, rmse  # noqa: E402
 
 DATA = REPO / "data" / "challenge"
 RESIDUALS = REPO / "data" / "processed" / "residuals"
@@ -93,6 +93,32 @@ OUT = REPO / "reports" / "occupancy.md"
 # ``taxiout.models.TOP_RUNG``: a model that already reads the gap will respect
 # the gap, and a table showing that would be measuring its own feature.
 BOUND_RUNG = "encoding-for-stand"
+
+# The rung that carries the block. ``BOUND_RUNG`` above is the model that has
+# never read the gap; the difference between the two is what the block bought,
+# and *Where the gain lands* below is the only table here that reads both.
+GAIN_RUNG = "occupancy"
+
+# Bands for the gain decomposition, in minutes. Coarser than BAND_EDGES_MIN
+# because a sum of squares over a five-minute band of a 1% population is noise.
+GAIN_BAND_EDGES_MIN: tuple[float, ...] = (0, 20, 30, 45, 60, 120, np.inf)
+
+# The band where the bound is the mechanism, as two of the bands above.
+BOUND_BANDS: tuple[str, ...] = ("20-30", "30-45")
+BOUND_BAND_LABEL = "20-45"
+
+# Past this the gap bounds nothing: the stand may have been re-occupied and
+# released, or the aircraft towed.
+LONG_GAP_MIN = 60.0
+
+# Which legs the gain is decomposed on. The July split is over all ten airports
+# and July 2026 contains three, so the three are reported separately for the
+# same reason ``baseline.md`` reports them separately.
+GAIN_LEGS: tuple[tuple[str, str, str, tuple[str, ...] | None, str], ...] = (
+    ("december", "2025-12", "2026-01", None, "December, all ten airports"),
+    ("july", "2025-07", "2026-07", None, "July, all ten airports"),
+    ("july", "2025-07", "2026-07", JULY_AIRPORTS, "July, the three"),
+)
 
 # Which forward split's residuals answer for which month, and which month of the
 # ranking set each stands in for. December is the winter proxy for January --
@@ -194,9 +220,51 @@ def load_side(ranking: bool) -> pd.DataFrame:
     return side(frame)
 
 
-def load_residuals(split: str) -> pd.DataFrame | None:
-    """One forward split's stored validation residuals for ``BOUND_RUNG``."""
-    path = RESIDUALS / f"{split}_{BOUND_RUNG}.parquet"
+def gain_bands(gap_s: pd.Series) -> pd.Series:
+    """Each gap's band for the gain decomposition; NaN where there is no gap."""
+    minutes = pd.to_numeric(gap_s, errors="coerce") / 60.0
+    labels = [
+        band_label(GAIN_BAND_EDGES_MIN[i], GAIN_BAND_EDGES_MIN[i + 1])
+        for i in range(len(GAIN_BAND_EDGES_MIN) - 1)
+    ]
+    return pd.cut(
+        minutes,
+        bins=list(GAIN_BAND_EDGES_MIN),
+        labels=labels,
+        right=False,
+        ordered=True,
+    )
+
+
+def load_pair(split: str, occ: pd.DataFrame) -> pd.DataFrame | None:
+    """Both rungs' ex-flagged residuals on the rows they share, with the gap.
+
+    The two rungs are scored on the same validation rows, so the join is exact;
+    it is done on the movement identifier rather than on (airport, runway,
+    take-off), which is not a key.
+    """
+    frames = {}
+    for name, rung in (("before", BOUND_RUNG), ("after", GAIN_RUNG)):
+        got = load_residuals(split, rung)
+        if got is None:
+            return None
+        frames[name] = got[["mvt_id", "icao", "flagged", "residual"]].rename(
+            columns={"residual": f"resid_{name}", "flagged": f"flagged_{name}"}
+        )
+    both = frames["before"].merge(
+        frames["after"].drop(columns=["icao"]), on="mvt_id", how="inner"
+    )
+    both = both[
+        ~both["flagged_before"].astype(bool) & ~both["flagged_after"].astype(bool)
+    ]
+    return both.merge(
+        occ[["mvt_id", "occ_gap1_s", "occ_prev_same_type"]], on="mvt_id", how="inner"
+    )
+
+
+def load_residuals(split: str, rung: str = BOUND_RUNG) -> pd.DataFrame | None:
+    """One forward split's stored validation residuals for ``rung``."""
+    path = RESIDUALS / f"{split}_{rung}.parquet"
     if not path.exists():
         return None
     got = pd.read_parquet(path)
@@ -310,7 +378,7 @@ def section_bound(occ: pd.DataFrame, residuals: dict) -> list[str]:
         "the block was added to, and therefore a model that has never read the gap.",
         "Over the rows the record-quality term leaves to the physical model. `actual",
         "at least gap` is how often the bound is true; `model below gap` is how often",
-        "the model violates it; `bias` is the mean of prediction minus actual, so a",
+        "the model violates it; `bias` is the mean of actual minus prediction, so a",
         "positive figure is the model under-predicting.",
         "",
         "The last four columns split the same rows by whether the arrival that took",
@@ -452,6 +520,190 @@ def section_floor(occ: pd.DataFrame, residuals: dict) -> list[str]:
 # main
 
 
+def section_gain(occ: pd.DataFrame, pairs: dict) -> list[str]:
+    """Where the block's gain lands, by band of the gap and by the type flag.
+
+    The two tables above ask where the *bound* holds, and both are scored by a
+    rung that never read the gap. This one asks where the block's *gain* lands,
+    which needs both rungs: the one the block was added to and the one that
+    carries it. The quantity is the cut in the sum of squared error, because an
+    SSE adds over rows in a way an RMSE does not -- so the cut can be attributed
+    to disjoint bands and the shares add to the whole.
+    """
+    lines = [
+        "## Where the gain lands",
+        "",
+        f"The SSE cut between `{BOUND_RUNG}` -- the rung the block was added to -- and",
+        f"`{GAIN_RUNG}`, the rung that carries it, attributed to disjoint bands of the",
+        "gap. Both rungs' stored validation predictions, joined on the movement",
+        "identifier, over the rows the record-quality term leaves to the physical",
+        "model. No model is refitted here.",
+        "",
+        "`bias` is the mean of actual minus prediction, so a positive figure is the",
+        "model under-predicting. This is the quantity",
+        "[`baseline.md`](baseline.md) reads when it says where the block's gain",
+        "concentrates; the band tables above cannot answer that question, because",
+        "neither of them is a difference between two rungs.",
+    ]
+    summary = []
+    for split, train_month, rank_month, icaos, label in GAIN_LEGS:
+        got = pairs.get(split)
+        if got is None:
+            continue
+        frame = got if icaos is None else got[got["icao"].isin(icaos)]
+        if not len(frame):
+            continue
+        before = frame["resid_before"].to_numpy(dtype=float)
+        after = frame["resid_after"].to_numpy(dtype=float)
+        total = float((before**2).sum() - (after**2).sum())
+        if not np.isfinite(total) or total == 0:
+            continue
+        band = gain_bands(frame["occ_gap1_s"])
+        rows = []
+        shares = {}
+        for name in list(band.cat.categories) + ["no arrival"]:
+            take = (
+                frame["occ_gap1_s"].isna().to_numpy()
+                if name == "no arrival"
+                else (band == name).to_numpy()
+            )
+            if not take.any():
+                continue
+            cut = float((before[take] ** 2).sum() - (after[take] ** 2).sum())
+            shares[name] = (float(take.mean()), cut / total)
+            rows.append(
+                [
+                    name,
+                    f"{int(take.sum()):,}",
+                    pct(float(take.mean()), 1),
+                    pct(cut / total, 1),
+                    f"{float(before[take].mean()):+,.0f}",
+                    f"{float(after[take].mean()):+,.0f}",
+                ]
+            )
+        n = len(frame)
+        rmse_before = float(np.sqrt(float((before**2).sum()) / n))
+        rmse_after = float(np.sqrt(float((after**2).sum()) / n))
+        lines += [
+            "",
+            f"### {label} ({train_month}, standing in for {rank_month})",
+            "",
+            f"{rmse_before:,.1f} -> {rmse_after:,.1f} s over {n:,} rows.",
+            "",
+            *table(
+                [
+                    "gap (min)",
+                    "rows",
+                    "of rows",
+                    "of the cut",
+                    "bias before (s)",
+                    "bias after",
+                ],
+                rows,
+                "-rrrrr",
+            ),
+        ]
+        # The type flag inside the two bands that matter: the band where the
+        # bound is the mechanism, and the long gaps where it is not a bound at
+        # all and the block is reading the stand's recent history instead.
+        flag_rows = []
+        for name, take in (
+            (
+                BOUND_BAND_LABEL,
+                band.isin(BOUND_BANDS).to_numpy(),
+            ),
+            (
+                f"over {LONG_GAP_MIN:.0f}",
+                (frame["occ_gap1_s"] > 60 * LONG_GAP_MIN).to_numpy(),
+            ),
+        ):
+            for same, what in ((1.0, "same type"), (0.0, "type differs")):
+                part = take & (frame["occ_prev_same_type"] == same).to_numpy()
+                if not part.any():
+                    continue
+                cut = float((before[part] ** 2).sum() - (after[part] ** 2).sum())
+                flag_rows.append(
+                    [
+                        name,
+                        what,
+                        f"{int(part.sum()):,}",
+                        pct(cut / total, 1),
+                        f"{float(before[part].mean()):+,.0f}",
+                        f"{float(after[part].mean()):+,.0f}",
+                    ]
+                )
+        if flag_rows:
+            lines += [
+                "",
+                "The same rows split by whether the arrival that took the stand flew",
+                "the subject's own aircraft type. Same type at a long gap is the",
+                "subject's own inbound after a turnaround, which is a fact about the",
+                "stand's day and not a bound on anything.",
+                "",
+                *table(
+                    [
+                        "gap (min)",
+                        "previous arrival",
+                        "rows",
+                        "of the cut",
+                        "bias before (s)",
+                        "bias after",
+                    ],
+                    flag_rows,
+                    "--rrrr",
+                ),
+            ]
+        bound_share = sum(shares[b][1] for b in BOUND_BANDS if b in shares)
+        long_same = frame[
+            (frame["occ_gap1_s"] > 60 * LONG_GAP_MIN)
+            & (frame["occ_prev_same_type"] == 1.0)
+        ]
+        long_cut = (
+            float(
+                (long_same["resid_before"].to_numpy(dtype=float) ** 2).sum()
+                - (long_same["resid_after"].to_numpy(dtype=float) ** 2).sum()
+            )
+            / total
+        )
+        summary.append((label, bound_share, long_cut))
+    if summary:
+        lines += [
+            "",
+            f"**What fraction of the block is the bound.** The `{BOUND_BAND_LABEL}`"
+            " band is where the bound is the mechanism; past an hour with the"
+            " previous arrival of the subject's own type is the subject's own inbound"
+            " after a turnaround, which bounds nothing. Their shares of the cut: "
+            + "; ".join(
+                f"{label} {pct(bound, 1)} and {pct(long_cut, 1)}"
+                for label, bound, long_cut in summary
+            )
+            + ". "
+            + (
+                "The bound is a minority of what the block buys on every leg"
+                if all(bound < 0.5 for _l, bound, _c in summary)
+                else "The bound is a minority of what the block buys on some legs and"
+                " not on others"
+            )
+            + ", and the share that is the subject's own inbound"
+            + (
+                " varies by a factor of several between them"
+                if summary
+                and max(c for _l, _b, c in summary) > 2 * min(c for _l, _b, c in summary)
+                else " is of the same order on each"
+            )
+            + " -- so neither half of the block generalises from one leg to the"
+            " other, and a sentence about what the block *is* has to name the leg."
+            " What is not a minority anywhere is the rest: the stand's recent"
+            " history, the previous arrival's lateness and taxi-in and whether it"
+            " was the subject's own aircraft. That is a turnaround-pattern signal"
+            " and not a physical lower bound. Both are admissible on the same"
+            " footing, and the module docstring and"
+            " [`../docs/plan.md`](../docs/plan.md) say so in those terms rather"
+            " than calling the whole block a bound.",
+        ]
+    return lines
+
+
 def main() -> int:
     if not (DATA / "ranking.parquet").exists():
         print(f"no challenge data under {DATA}; nothing to run", file=sys.stderr)
@@ -465,6 +717,7 @@ def main() -> int:
     print(f"  {len(rank):,} departures")
 
     residuals = {split: load_residuals(split) for split, _, _ in SPLITS}
+    pairs = {split: load_pair(split, train) for split, _, _ in SPLITS}
     absent = [s for s, got in residuals.items() if got is None]
     if absent:
         print(
@@ -503,6 +756,8 @@ def main() -> int:
         + section_bound(train, residuals)
         + [""]
         + section_floor(train, residuals)
+        + [""]
+        + section_gain(train, pairs)
         + [
             "",
             "## What this block does not settle",
