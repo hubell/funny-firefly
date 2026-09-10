@@ -118,7 +118,7 @@ from taxiout.corridor import CORRIDOR_FEATURES
 from taxiout.destination import DESTINATION_FEATURES
 from taxiout.encoding import ENCODING_FEATURES
 from taxiout.metar import WEATHER_FEATURES
-from taxiout.occupancy import OCCUPANCY_FEATURES
+from taxiout.occupancy import OCCUPANCY_FEATURES, OCCUPANCY_TFREE_FEATURES
 from taxiout.planlags import PLAN_DIFF_FEATURES, PLAN_LAG_FEATURES
 from taxiout.saturation import SATURATION_FEATURES
 from taxiout.features import (
@@ -184,20 +184,31 @@ BOOSTER_PARAMS: dict[str, object] = {
 # is about blocks, and averaging every rung would spend five times the compute
 # to move every number by the same amount.
 #
-# Measured once, after the feature decisions were taken, by the rule fixed
-# before it ran: adopt only if the average gains at least one second on BOTH
-# forward splits' ex-flagged RMSE. It gains 1.10 s in December and 1.37 s in
-# July, so it is adopted; on the rung below this one it gained 0.78 and 0.98
-# and would not have been. ``reports/baseline.md``'s *Seed averaging* section is
-# the measurement, and it carries a reproducibility check with it: the first of
-# the five seeds is the one the ladder itself fits with, so its predictions
-# reproduce the ladder's exactly, which they do to the last bit.
+# Measured three times now, against a rule fixed before the first of them:
+# adopt only if the average gains at least one second on BOTH forward splits'
+# ex-flagged RMSE. On the rung below the submission it gained 0.78 and 0.98 and
+# was not adopted. On the submission rung it gained 1.10 and 1.37 and was. And
+# once the recorded-taxi tail came out of every fit
+# (``TAIL_EXCLUSION_ADOPTED_H``) it gained 0.81 and 0.56, and by the same rule
+# it is **not** adopted.
 #
-# One second on a 220-second error is under half a percent. It is taken because
-# it is free and measured, and it is reported as what it is rather than as a
-# modelling result: averaging seeds is variance reduction, and nothing about the
-# aircraft or the airport is understood any better for it.
+# That is not a coincidence and it is the interesting part: most of what five
+# seeds were smoothing over was a handful of day-shift rows in the fitting
+# sample. Removing twelve impossible rows did what averaging five fits had been
+# doing, and did it for none of the compute. Averaging seeds is variance
+# reduction; the variance it was reducing had a cause, and the cause is gone.
+#
+# ``reports/baseline.md``'s *Seed averaging* section is the measurement and
+# carries a reproducibility check: the first of the seeds is the one the ladder
+# itself fits with, so its predictions reproduce the ladder's to the last bit.
 BAGGING_SEEDS = 5
+
+# Whether the submission actually averages those seeds. The rule above decides
+# it and this constant records the decision, so that
+# ``scripts/make_submission.py`` cannot ship a model the report says was not
+# adopted. It came apart once over the fit rows and the fix was the same: name
+# it once and import it.
+SEED_AVERAGE_ADOPTED: bool = False
 
 
 # The top rung's feature block, named once so the rungs that build on it say
@@ -255,6 +266,13 @@ class Rung:
     # The rung this one is read against. ``None`` is the rung before it on
     # the ladder; a key names another, for the rungs kept as a second chain.
     base: str | None = None
+    # A rung that is fitted and scored but is not a step of anything: it
+    # answers one question beside the ladder rather than standing on it. The
+    # report's ladder, held-out-pair and frequency tables skip these, because a
+    # diagnostic printed in a column headed "vs below" reads as a step, and the
+    # section that owns the question prints it instead. Never in
+    # ``GATE_2C_RUNGS`` and never ``SUBMISSION_KEY``.
+    diagnostic: bool = False
 
     @property
     def uses_geometry(self) -> bool:
@@ -517,6 +535,32 @@ LADDER: tuple[Rung, ...] = (
             "taxi-out from below"
         ),
     ),
+    # A diagnostic beside the block above, not a step of the chain. The
+    # question it answers is what the stand-occupancy block is worth if it is
+    # forbidden the subject's take-off time: the same arrival fields, but the
+    # arrival is chosen at or before the subject's SCHEDULED time and every
+    # column is read from that choice. Dropping the columns whose arithmetic
+    # names the take-off would not have answered it -- the take-off also picks
+    # which arrival the arithmetic is about -- so the anchor moves instead.
+    # Read against the same rung the full block is read against, so the two
+    # gains are comparable; the difference between them is what the take-off
+    # anchor buys, and it is the part of the block that is admissible only
+    # under the challenge's post-hoc framing.
+    Rung(
+        key="occupancy-tfree",
+        label="+ stand occupancy, schedule-anchored",
+        kind="booster",
+        features=ENCODING_STAND_BLOCK + OCCUPANCY_TFREE_FEATURES,
+        base="encoding-for-stand",
+        diagnostic=True,
+        note=(
+            "the stand's last arrival at or before the subject's scheduled "
+            "time, and that arrival's lateness, taxi-in, type and operator -- "
+            "the same block with the take-off taken out of both the arithmetic "
+            "and the selection, so it is admissible under an operational "
+            "framing as well as a post-hoc one"
+        ),
+    ),
     Rung(
         key="callsign",
         label="+ callsign prefix",
@@ -589,6 +633,50 @@ ENCODING_ARMS: tuple[str, ...] = (
     "encoding-for-stand",
     "encoding-for-identifiers",
 )
+
+# --------------------------------------------------------------------------
+# which rows a model is fitted on
+
+# Recorded taxi times above this many hours are out of every fit. ``None``
+# keeps the whole tail.
+#
+# The record-quality term (``taxiout.tails``) removes rows by covered CELL --
+# an airport crossed with whether a Network Manager record exists and how long
+# the take-off lag is -- and coverage needs enough of the cell's rows to be
+# defaulted. That is blind to a row whose cell is uncovered: the training year
+# holds a departure recording a taxi of over twenty-four hours at an airport
+# whose cells are all uncovered, with a take-off lag of fifteen minutes, so
+# nothing about the row except the recorded taxi says it is a day-shift.
+#
+# This cannot be a wider flag. ``tails.flag`` and ``tails.predict`` are
+# restricted by construction to fields the ranking set exposes, because they
+# run there unchanged; recorded taxi time is the target and is hidden for
+# departures. So it is a fit-side exclusion and nothing else -- the target is
+# never clipped, and every row is still scored.
+#
+# Fixed at four hours on the mechanism, not by a sweep: no aircraft taxis for
+# four hours. ``reports/baseline.md``'s *The recorded-taxi tail* reports it
+# against an un-excluded fit and against a two-hour arm, both fixed before the
+# run, and records that two hours is worse on July because the two-to-four hour
+# band holds real long holds.
+TAIL_EXCLUSION_ADOPTED_H: float | None = 4.0
+
+
+def fit_rows(train, flagged, y):
+    """The rows a model is fitted on: training, unflagged, not a day-shift.
+
+    Every fit in this repository reads this -- the ladder, the k-sensitivity
+    diagnostic, the seed average, the leave-one-airport-out transfer report and
+    the shipped submission -- so that the model the reports measure and the
+    model that is submitted are fitted on the same rows. They came apart once
+    before, over the seed count, and the fix was to name the constant in one
+    place and import it.
+    """
+    rows = train & ~flagged
+    if TAIL_EXCLUSION_ADOPTED_H is None:
+        return rows
+    return rows & ~(pd.to_numeric(y, errors="coerce") > TAIL_EXCLUSION_ADOPTED_H * 3600.0)
+
 
 # The Gate 2c chain, in the order it is climbed. Named here so the runner's
 # acceptance section reads the same order the ladder is built in rather than
@@ -936,6 +1024,9 @@ __all__ = [
     "ENCODING_ARMS",
     "ENCODING_STAND_BLOCK",
     "GATE_2C_RUNGS",
+    "SEED_AVERAGE_ADOPTED",
+    "TAIL_EXCLUSION_ADOPTED_H",
+    "fit_rows",
     "LADDER_PROPER",
     "ENCODING_CONTROL",
     "POOLED_CATEGORICALS",

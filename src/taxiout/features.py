@@ -60,12 +60,15 @@ One frame per movement, built from ``taxiout.challenge``'s loaders and
   and ``build_features`` leaves the two columns missing when it does not.
   Missing, not zero -- "not computed" is not "no history" -- exactly as the
   shared-corridor block behaves without its edge sets.
-- **Stand occupancy.** The gap from the last arrival's on-block at the
-  subject's own stand to the subject's take-off, and what that arrival was
-  (``taxiout.occupancy``). A stand holds one aircraft, so an arrival that
-  on-blocked there before the subject took off means the subject had already
-  pushed, and the gap is a lower bound on its taxi-out built from fields the
-  ranking set exposes for arrivals in full.
+- **Stand occupancy.** The stand's recent history: the gap from the last
+  arrival's on-block at the subject's own stand to the subject's take-off,
+  that arrival's lateness and taxi-in, and whether it was the subject's own
+  type and operator (``taxiout.occupancy``). Built from fields the ranking set
+  exposes for arrivals in full. Inside it there is a bound -- a stand holds one
+  aircraft, so an arrival that on-blocked there before the subject took off
+  means the subject had already pushed -- and the twenty-to-forty-five-minute
+  band is where that bound is the mechanism. It is a minority of what the block
+  buys; most of it is turnaround pattern at gaps too long to bound anything.
 - **The callsign prefix.** The leading three letters of ``FLIGHT_mvt``, which
   are the ICAO airline designator (``taxiout.callsign``). The operator, taken
   from the movement side rather than from ``AIRCRAFT_OPERATOR_flt``, because
@@ -170,8 +173,11 @@ from taxiout.metar import (
 )
 from taxiout.occupancy import (
     OCCUPANCY_FEATURES,
+    OCCUPANCY_TFREE_FEATURES,
     SOURCES as OCCUPANCY_SOURCES,
+    TFREE_SOURCES as OCCUPANCY_TFREE_SOURCES,
     occupancy_features,
+    occupancy_tfree_features,
 )
 from taxiout.planlags import (
     DIFF_SOURCES as PLAN_DIFF_SOURCES,
@@ -271,6 +277,11 @@ FEATURE_COLUMNS: tuple[str, ...] = (
     + DESTINATION_FEATURES
     + HOLIDAY_FEATURES
     + PLAN_DIFF_FEATURES
+    # The schedule-anchored twin of the stand-occupancy block. Present in the
+    # frame so one diagnostic rung can read it; on no rung of the chain and in
+    # no submission, and named apart from OCCUPANCY_FEATURES so that widening
+    # it cannot widen the shipped model's feature set by accident.
+    + OCCUPANCY_TFREE_FEATURES
 )
 
 # Every feature column against the raw columns it reads. Checked against
@@ -308,6 +319,9 @@ FEATURE_SOURCES: dict[str, tuple[str, ...]] = {
     # expose them in full; the registry says so under ``ARR.`` and the test
     # holds it to ``AVAILABLE_FOR_ARRIVALS``.
     **OCCUPANCY_SOURCES,
+    # The schedule-anchored twin: the same arrival fields, chosen at or before
+    # the subject's SCHEDULED time, so the subject's take-off is not a source.
+    **OCCUPANCY_TFREE_SOURCES,
     **CALLSIGN_SOURCES,
     # The destination block reads a second external dataset, under a prefix of
     # its own and held to that file's field list exactly as ``METAR.`` is.
@@ -615,6 +629,9 @@ def build_features(
         out[c] = values
 
     for c, values in occupancy_features(frame, movements).items():
+        out[c] = values
+
+    for c, values in occupancy_tfree_features(frame, movements).items():
         out[c] = values
 
     for c, values in callsign_features(frame).items():
