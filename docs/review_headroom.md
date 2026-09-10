@@ -218,24 +218,42 @@ The measurements are in [`../reports/baseline.md`](../reports/baseline.md) and
 how they stand against the estimates above.*
 
 All four blocks were built and all four earned their place. Over the
-ex-flagged rows, against the arm's 233.4 s in December and 343.7 s in July:
-stand occupancy −8.3 and −7.5, the callsign prefix −1.8 and −4.6, the
-destination and holidays −1.2 and +0.01, the plan differences −1.5 and −3.2.
-Together **233.4 → 220.6 s and 343.7 → 328.3 s**, and 257.2 → 239.4 s on the
+ex-flagged rows, against the arm's 231.8 s in December and 343.6 s in July:
+stand occupancy −8.4 and −7.8, the callsign prefix −3.1 and −5.5, the
+destination and holidays −0.6 and −0.8, the plan differences −1.9 and −4.0.
+Together **231.8 → 218.0 s and 343.6 → 325.6 s**, and 256.2 → 237.9 s on the
 three airports July 2026 contains.
+
+*These are the figures after the recorded-taxi tail was taken out of every fit
+on 9 September; the run of 8 September, on which the rest of this section was
+first written, had the arm at 233.4 and 343.7 and the chain closing at 220.6
+and 328.3.*
 
 **The estimates above are a floor and not an estimate, and that is the
 methodological finding.** §2 predicted about +6 s in December and +11 s on the
-July three; the refit found 12.8 and 17.8, roughly twice. The reason is in how
+July three; the refit found 13.8 and 18.3, roughly twice. The reason is in how
 the estimates were made. Fitting a small booster *on the stored residuals* of a
 frozen model measures what a correction bolted on top of that model would
 recover. A refit does something strictly larger: it restructures every split in
 the model around the new column and can use it to condition the blocks already
 there. So a residual fit bounds a refit from below, and the gap between them is
 the value of the interaction rather than evidence of anything wrong. Each
-block's own overshoot stays inside the five seconds the leakage-audit trigger
-allows, and the registry, the poison tests and the band table in
-`occupancy.md` are what stand behind that rather than the arithmetic.
+block's overshoot was first read against the December column alone, and on that
+column all four stay inside the five seconds the leakage-audit trigger allows.
+Read against the column each estimate was actually made on — December over all
+ten airports, July over the three — **stand occupancy came within twenty-nine
+milliseconds of tripping it**: +15.27 s against the +10.3 estimated on the July
+three, an overshoot of 4.971 s against the 5.000 s allowed. It does not fire,
+and `../reports/baseline.md` records it as a near miss rather than as a pass.
+
+On the 8 September fit, before the recorded-taxi tail was excluded, it did fire
+— +15.86 s, an overshoot of 5.56 s. Twelve rows moved it below the line, which
+is the measure of how little this test is carrying. What the block rests on is
+therefore not the agreement of the two estimates, which is the thing that
+failed, and not the band table in `occupancy.md`, which is built on the rung
+that never read the gap and reports bias rather than gain: it is the registry,
+the poison tests, and the measured concentration of the block's SSE cut in the
+twenty-to-forty-five-minute band that its mechanism names.
 
 The reading to carry forward: a headroom number produced this way is the answer
 to "what would a correction on top of this model recover", which is a smaller
@@ -244,9 +262,14 @@ deciding what to *build* — it is cheap, and it ranks candidates correctly, whi
 is all §2 was used for. It is the wrong instrument for deciding what a block
 *is worth*, and it should not be quoted as one.
 
-Two of §5's other lines were also settled. Seed bagging was measured once and
-**adopted**: five seeds averaged gain 1.10 s in December and 1.37 s in July,
-both clearing the one second fixed as the threshold beforehand. §5 put it at
-"typically 1–2% on a tabular RMSE"; half a percent is what it came to here. The
-two free difference columns came in at −1.5 and −3.2 against the "±1 s"
-predicted, which is the same lower-bound effect at a smaller scale.
+Two of §5's other lines were also settled. Seed bagging has been measured three
+times and is **not adopted**: 0.78 and 0.98 s on the rung below the submission,
+1.10 and 1.37 s on the submission rung, and **0.81 and 0.56 s** on that rung
+once the recorded-taxi tail came out of the fit — the last against the same one
+second fixed as the threshold beforehand. §5 put it at "typically 1–2% on a
+tabular RMSE"; it came to half a percent and then to less. The three readings
+say what it was buying: most of the run-to-run variation five fits were
+smoothing over came from a dozen day-shift rows in the fitting sample, and
+removing them did the same work for none of the compute. The two free
+difference columns came in at −1.9 and −4.0 against the "±1 s" predicted, which
+is the same lower-bound effect at a smaller scale.

@@ -327,7 +327,21 @@ a noisy copy of one it hides. Concretely:
   single predictor it is worth no more than the filed EOBT lag. Not an oracle,
   but a noisy copy of a hidden field, and an entry judged on originality has
   nothing to gain from it. The organisers say they monitor for attempts to
-  exploit the ranking process; this is the one place it could be alleged.
+  exploit the ranking process; this is one of the two places it could be
+  alleged, and it is the one settled by not reading the field at all.
+
+  The other is the stand-occupancy block, and it is not settled that way
+  because the block is used. It reads arrivals' on-block times, which the
+  ranking set exposes in full, to bound a field the ranking set hides for
+  departures. Every column it reads is exposed and the poison tests hold it to
+  that, so it is inside the rule as written — but the rule as written is a
+  post-hoc one, and under an operational reading the block is inadmissible for
+  the same reason a trailing window of other departures' pushbacks is: the
+  arrival it reads on-blocked after the subject's own off-block. That is
+  recorded in `taxiout.occupancy`'s docstring and in `reports/baseline.md`
+  rather than left for a reviewer to find, because a block that is defensible
+  only under the more permissive of two readings should say which reading it
+  needs.
 - *Available, and used:* every departure's take-off time, scheduled time and
   filed estimates; every arrival's landing time, on-block time and taxi-in
   time, which the ranking set gives in full; stand, runway, aircraft type,
@@ -405,9 +419,16 @@ hiding under a phase.
 
 **Stand occupancy bounds the hidden field from inside the challenge data, and
 that is said here rather than left to be noticed.** *Added 8 September, Gate
-2c.* A stand holds one aircraft, so an arrival that on-blocks at the subject's
-stand before the subject takes off means the subject had already left the
-stand: its taxi-out is at least the gap between that on-block and its take-off.
+2c.* The block is the stand's recent history — the gap to the last arrival at
+the subject's stand, that arrival's lateness and taxi-in, and whether it was
+the subject's own type and operator. Inside it there is a bound: a stand holds
+one aircraft, so an arrival that on-blocks at the subject's stand before the
+subject takes off means the subject had already left the stand, and its
+taxi-out is at least the gap between that on-block and its take-off. The
+twenty-to-forty-five-minute band is where that bound is the mechanism, and it
+is a minority of what the block buys — 22% of the reduction in squared error in
+December against 48% from gaps past an hour where the previous arrival was the
+subject's own aircraft, which bounds nothing at all.
 Every field the block reads is exposed — the ranking set gives an arrival's
 stand and on-block time in full, and it is `AVAILABLE_FOR_ARRIVALS` that says
 so — and the rule above therefore admits it: a feature may read what the
@@ -418,10 +439,12 @@ to work out. The arrival it reads on-blocked *after* the subject's own
 off-block, so the block is admissible under the challenge's post-hoc framing
 and not under an operational one — exactly the standing of every
 take-off-anchored window the model already carries, and no worse, but also no
-better. And what it constructs is a lower bound on `TAXITIME_SEC_mvt`, which is
+better. And what it constructs, in the band where the bound is the mechanism,
+is a lower bound on `TAXITIME_SEC_mvt`, which is
 the field the ranking set hides: not a copy of it, not a reconstruction of it
 from outside the data, but a bound on it built from rows the organisers chose
-to expose. Nothing in the rules forbids that, and `AOBT_3_flt` is excluded by
+to expose. Elsewhere it is not a bound on that field but a description of the
+stand's day, which is a weaker claim and a safer one. Nothing in the rules forbids that, and `AOBT_3_flt` is excluded by
 decision for being a *noisy copy* rather than for being informative; a physical
 constraint between two exposed rows is a different object. The block is
 therefore kept, and the bound is reported for what it is — including where it

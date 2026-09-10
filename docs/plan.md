@@ -477,29 +477,57 @@ on-block time in full, so the bound is built from exposed rows — and it bounds
 a field the same data hides for departures, which
 [`modelling_notes.md`](modelling_notes.md) records rather than leaves to be
 noticed. It enters as a feature and never as a floor: below twenty minutes the
-bound holds essentially always and the model already respects it, above thirty
-it collapses because a stand identifier can denote a position holding two
-aircraft and because aircraft are towed, and the twenty-to-forty-five-minute
-band is where the signal is. Applied as a hard floor it loses, at every cap
-tried. The construction, the bound by five-minute band and the negative result
-are in [`../reports/occupancy.md`](../reports/occupancy.md).
+bound holds essentially always and the model already respects it, above
+forty-five it collapses because a stand identifier can denote a position
+holding two aircraft and because aircraft are towed, and the
+twenty-to-forty-five-minute band is where the bound is the mechanism. Applied
+as a hard floor it loses, at every cap tried.
+
+**Most of the block is not the bound**, and it is described here as what it is:
+the stand's recent history — the gap, the previous arrival's lateness and
+taxi-in, and whether it was the subject's own aircraft returning. The band
+where the bound is the mechanism carries 22% of the block's reduction in
+squared error in December and 36% on the three airports July 2026 contains; in
+December, 48% comes from gaps past an hour where the previous arrival was the
+subject's own type, which bounds nothing and is turnaround pattern. Both halves
+are admissible on the same footing. The construction, the bound by five-minute
+band, the decomposition of the gain and the negative result are in
+[`../reports/occupancy.md`](../reports/occupancy.md).
 
 **What the four are worth.** Over the rows the record-quality term leaves to
-the physical model, against the arm's 233.4 s in December and 343.7 s in July:
-stand occupancy −8.3 and −7.5, the callsign prefix −1.8 and −4.6, the
-destination geometry with the holiday calendar −1.2 and +0.01, the two plan
-differences −1.5 and −3.2. Together **233.4 → 220.6 s in December and 343.7 →
-328.3 s in July**, and 257.2 → 239.4 s on the three airports July 2026
-contains. At the ranking set's own bucket mix, 234.4 → 221.6 s.
+the physical model, against the arm's 231.8 s in December and 343.6 s in July:
+stand occupancy −8.4 and −7.8, the callsign prefix −3.1 and −5.5, the
+destination geometry with the holiday calendar −0.6 and −0.8, the two plan
+differences −1.9 and −4.0. Together **231.8 → 218.0 s in December and 343.6 →
+325.6 s in July**, and 256.2 → 237.9 s on the three airports July 2026
+contains. At the ranking set's own bucket mix, 232.9 → 219.1 s.
 
-That is roughly twice what the review estimated, and the reason is that the
-review estimated it by fitting on *stored residuals*: an estimator that can
-only add a correction on top of a frozen prediction, where a refit restructures
-every split in the model around the new column. A residual fit is a lower bound
-on a refit and not an estimate of it. No block beats its own estimate by more
-than the five seconds the leakage-audit trigger allows, and the registry, the
-poison tests and the band table in `occupancy.md` are what stand behind that
-rather than the arithmetic alone.
+That is roughly twice what the review estimated. A residual fit measures what a
+correction bolted on top of a frozen prediction would recover, where a refit
+restructures every split in the model around the new column, so it bounds a
+refit from below — but nothing predicted a factor of two, and reading the
+direction as confirmation would be reading a prediction out of a result.
+
+**The leakage audit now reads both of its columns, and stand occupancy misses
+its trigger by twenty-nine milliseconds.** Each estimate has two columns,
+December over all ten airports and July over the three, and the audit was
+applied to the first alone — so an overshoot on the second could not have been
+seen. Read against the column it was estimated on, stand occupancy takes
+**+15.27 s on the July three against an estimated +10.3**: an overshoot of
+**4.971 s** against the 5.000 s the trigger allows. It does not fire. It is
+recorded as a near miss rather than as a pass, because a test cleared by
+twenty-nine thousandths of a second is not evidence of anything, and because
+this gate has already been embarrassed once by a trigger that did not fire
+being read as a result.
+
+On the pre-exclusion fit it did fire, at +15.86 s and an overshoot of 5.56 s.
+What moved it below the line was taking the recorded-taxi tail out of the fit,
+which is worth saying plainly: the margin here is a property of twelve rows.
+What the block rests on is therefore not this test at all. It is the source
+registry, the poison tests, and the measured concentration of the block's gain
+in the band its mechanism names — not the agreement of the two estimates, and
+not the band table in `occupancy.md`, which is built on the rung that never
+read the gap and reports bias rather than gain.
 
 **It carries to an airport the model has never seen**, which the held-out-pair
 split cannot ask and [`../reports/transfer.md`](../reports/transfer.md) can.
@@ -514,46 +542,87 @@ geometric term's own numbers do not move at all — the fitted speeds stay at
 that fit.
 
 **None of it moves the held-out-pair claim**, which is what it should do: none
-of these four is a property of the (airport, stand, runway) pair, and each
-contrast sits within about a second of zero. The plan differences are the one
-exception at −1.1 s [−2.3, −0.0], small and in the direction of a plan quantity
-interacting with a pair-level encoding; it is recorded rather than explained
-away, and the rule does not read that column.
+of these four is a property of the (airport, stand, runway) pair, so each was
+expected within about a second of zero on that contrast. Two of the four came
+in outside it, not one. Stand occupancy is at +1.4 s [+0.3, +2.5] — the only
+one of the four whose interval is visibly clear of zero — and the plan
+differences at −1.1 s [−2.3, −0.0]. The signs point opposite ways and mean
+opposite things: positive is more where the pair is *new*, so occupancy is
+supplying at unseen stands what the encoding would otherwise have carried,
+which is the stand's recent turnaround pattern; negative is more where the pair
+was *seen*, which is what a plan quantity interacting with a pair-level
+encoding looks like. Both are recorded rather than explained away, and the rule
+does not read that column.
 
-**The rule that admitted them, and the one knife-edge.** A rung displaces the
-rung below it if it is no worse on both forward splits' ex-flagged RMSE and no
-worse pooled at the ranking mix; the chain stops at the first failure. The
-destination rung came out **0.0093 s worse on July** while improving December
-by 1.16 s and the ranking mix by 1.13. Read as a comparison of two real numbers
-that stops the chain and strands two rungs; read at the precision every table
-in the report prints — one decimal place — the two rungs print the same number
-and it is a tie. The second reading is the one adopted, it was adopted after
-the number was seen, and `baseline.md` gives it a subsection of its own: the
-literal figures to four decimals, a day-clustered bootstrap on the step whose
-interval contains zero, and a computed check that the reading moves that step
-and no other. The precedent is in the same report, where the encoding arms were
-resolved "inside the tenth of a second this table prints".
+**The rule that admitted them, and the knife-edge that is no longer one.** A
+rung displaces the rung below it if it is no worse on both forward splits'
+ex-flagged RMSE and no worse pooled at the ranking mix; the chain stops at the
+first failure. **All four rungs now clear that rule on the literal reading**,
+improving both splits and the mix.
 
-Two independent noise figures say the same thing. The day-clustered bootstrap
-on that step is +0.0 s [−1.4, +1.2], an interval 274 times as wide as the point
-estimate it brackets. And seed averaging — the same rung refitted under five
-random seeds, changing nothing but the seed — moves the two forward splits by
-1.10 and 1.37 s, which is more than a hundred times the difference the literal
-rule would have turned on.
+They did not before, and the history is kept because it is the more instructive
+state. On the pre-exclusion fit the destination rung came out **0.0093 s worse
+on July** while improving December by 1.16 s and the ranking mix by 1.13 —
+which stops the chain and strands two rungs if `no worse` is read as a
+comparison of two real numbers, and is a tie if it is read at the one decimal
+place every table prints. The second reading was adopted, after the number was
+seen, and `baseline.md` carried a subsection justifying it: the figures to four
+decimals, a day-clustered bootstrap whose interval contained zero by two orders
+of magnitude, and a computed check that the reading moved that step and no
+other. Once the recorded-taxi tail came out of the fit the rung improves July
+by 0.78 s and the tolerance decides nothing, so that subsection is no longer
+printed. The rule is unchanged and is still read at that tolerance; what
+changed is that nothing now depends on it.
 
-**Seed averaging was measured once and adopted.** The submission rung refitted
-under five consecutive seeds, nothing changed but the seed, the predictions
-averaged: 1.10 s in December and 1.37 s in July, both clearing the one second
-fixed as the threshold beforehand. It is an estimator choice and not a rung —
+That is worth more than the seconds it bought. A methodological compromise this
+gate had to argue for at length turned out to be an artefact of a dozen rows
+that no aircraft produced, and the honest reading is that the knife-edge was
+never really about the destination block.
+
+**From the next gate, the July leg of that rule reads the three-airport
+column.** *Recorded 9 September; not applied retroactively, and nothing already
+decided is re-decided by it.* The July criterion above is the pooled figure over
+all ten airports, and that figure is dominated by rows the record-quality term
+does not flag: Rome is 7.8% of the July validation rows and **49% of the
+split's ex-flagged squared error**, at an ex-flagged RMSE of 863 s against
+roughly 200 s everywhere else. Sixty-five rows with a residual over an hour
+carry 41% of it. So a rung can move the July pooled figure by improving Rome's
+tail and do nothing anywhere else, or be held back by Rome while helping the
+other nine — which is what the per-airport table in `baseline.md` now shows for
+the callsign rung, at **−24.0 s [−35.8, −20.7]** at Rome on a rung whose pooled
+July step is −5.5: a quarter of the pooled step is one airport that the ranking
+month does not contain.
+
+July 2026 contains three airports and Rome is not one of them, so the pooled
+column is not even the quantity the ranking month asks about. The three-airport
+column already exists in the report, the expected-headroom estimates were made
+against it, and the leakage trigger now reads it. The acceptance rule should
+too. It is stated here rather than applied now because changing an acceptance
+rule after seeing which rungs it would admit is the failure this document
+exists to prevent; the change binds the next gate, and Gate 2c stands as it was
+decided.
+
+**Seed averaging has been measured three times and is not adopted.** The rung
+below this one first, where it gained 0.78 and 0.98 s and did not clear the
+threshold. Then the submission rung, where it gained 1.10 and 1.37 s and did.
+Then the same rung once the recorded-taxi tail came out of every fit, where it
+gains **0.81 and 0.56 s** and does not — so by the rule fixed before any of it
+ran, the submission is fitted from a single seed and
+`taxiout.models.SEED_AVERAGE_ADOPTED` is `False`.
+
+The three readings together say what the averaging was buying. Most of the
+run-to-run variation five fits were smoothing over came from a handful of
+day-shift rows in the fitting sample; excluding twelve impossible rows did the
+same work for none of the compute. The variance had a cause, and it was not the
+booster. It is an estimator choice and not a rung —
 it changes how the model is fitted and not what it reads — so the ladder stays
 single-seed and only `scripts/make_submission.py` uses it, with
 `taxiout.models.BAGGING_SEEDS` recording the decision beside the booster's
 parameters. It is worth saying what it is: variance reduction, under half a
 percent, and nothing about the aircraft or the airport is understood better for
-it. On the rung below this one it gained 0.78 and 0.98 s and would not have
-been adopted, which is the clearest available measure of how much noise sits in
-a single fit — a hundred times the difference the literal reading of the rule
-would have turned on.
+it. That the same measurement came to 0.78 and 0.98 s one rung below is the
+clearest available measure of how much noise sits in a single fit — a hundred
+times the difference the literal reading of the rule would have turned on.
 
 **The PRU portal data stays out.** EUROCONTROL's own open data at
 `ansperformance.eu/data` carries daily ATFM delay by cause and by airport,

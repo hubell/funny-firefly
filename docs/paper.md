@@ -355,25 +355,48 @@ Source: `reports/congestion.md`, *The ceiling*; `docs/plan.md`.
 ### 6.5 The stand as a shared resource [pending: the Gate 2c refit]
 
 *The mechanism, which the section will argue from `reports/occupancy.md` and
-`reports/baseline.md` once both are regenerated.* A stand holds one aircraft.
-An arrival that on-blocks at the subject's stand before the subject takes off
-means the subject had already left the stand, so its taxi-out is at least the
-gap between that on-block and its take-off — a physical lower bound on the
-hidden field, built entirely from rows the ranking set exposes in full, and
-the same operational quantity A-CDM calls stand availability.
+`reports/baseline.md` once both are regenerated.* **Do not write this section
+from the bound.** The obvious framing — a stand holds one aircraft, so an
+arrival on-blocking there before the subject took off puts a physical lower
+bound on the subject's taxi-out — is true, is the reason the block was built,
+and is a minority of what the block does. Written that way the section would
+claim for the whole what is measured only of a part, and the decomposition in
+`reports/occupancy.md` now says so in numbers.
 
-The section has to carry four things and not three. That the bound is
-**sound below twenty minutes and false above thirty**, which is why it enters
-as a feature and not as a floor; that applying it as a floor was measured and
-**loses**. That the twenty-to-forty-five-minute band is where the signal is,
-and that the previous arrival's aircraft type separates the two mechanisms
-inside it — the subject's own inbound after a fast turnaround, or a different
-aircraft that took the stand after the subject pushed. That the block reads an
-arrival which on-blocked *after* the subject's own off-block, so it is
-admissible under the challenge's post-hoc framing and not under an operational
-one, which is the standing of every take-off-anchored window already in the
-model and is stated rather than left to be noticed. And what it is worth,
-which is the ladder's to say.
+What the block is: **the stand's recent history** — the gap to the last
+arrival, that arrival's lateness and taxi-in, and whether it was the subject's
+own aircraft returning. The bound lives inside that, in one band.
+
+The section has to carry five things.
+
+1. That the bound is **sound below twenty minutes and false above
+   forty-five**, which is why it enters as a feature and not as a floor; and
+   that applying it as a floor was measured and **loses**.
+2. That the **twenty-to-forty-five-minute band is where the bound is the
+   mechanism**, that the previous arrival's aircraft type separates the two
+   cases inside it — the subject's own inbound after a fast turnaround, or a
+   different aircraft that took the stand after the subject pushed — and that
+   it is the differing-type rows the bound speaks about.
+3. That the band is a **minority of the gain**: 22% of the reduction in
+   squared error in December, 36% on the three airports July 2026 contains,
+   against 48% in December from gaps past an hour where the previous arrival
+   was the subject's own type and the gap bounds nothing. The block earns
+   most of its keep as turnaround pattern, and the two shares move by a
+   factor of several between the legs, so any sentence about what the block
+   *is* has to name the leg it is true of.
+4. That the block reads an arrival which on-blocked *after* the subject's own
+   off-block, so it is admissible under the challenge's post-hoc framing and
+   not under an operational one — the standing of every take-off-anchored
+   window already in the model, and one of the two places in this entry where
+   exploiting the ranking process could be alleged.
+5. That the **leakage audit misses its trigger by twenty-nine milliseconds** on
+   the July three — +15.27 s against an estimated +10.3, an overshoot of 4.971
+   against 5.000 allowed — and that it *fired* on the fit of 8 September, before
+   the recorded-taxi tail was excluded. A dozen rows moved it below the line, so
+   the section must not present the pass as reassurance. What the block rests on
+   is the source registry, the poison tests, and the concentration in (2) and
+   (3) — not the agreement of the residual-fit estimate with the refit, which is
+   the thing that failed.
 
 Source, when written: `reports/occupancy.md`; `reports/baseline.md`, *The
 Gate 2c blocks*; `docs/modelling_notes.md`, *Leakage watch*.
@@ -788,11 +811,37 @@ From `docs/prior_art.md`, *Sources*.
   the callsign prefix, so §5.4's leave-one-airport-out figures move too. The
   taxi-speed range the abstract quotes comes from the geometric fit rather than
   from the booster, and does not.
-- **Seed averaging is now part of the submitted model** and §8 should say so:
-  five seeds, nothing changed but the seed, the predictions averaged, adopted
-  on a rule fixed before it ran. It is variance reduction and worth under half
-  a percent, and the paper should present it as an estimator choice rather than
-  as a modelling result.
+- **Seed averaging is NOT part of the submitted model**, and §8 should say so.
+  It has been measured three times against a rule fixed before the first of
+  them — 0.78/0.98 s one rung below, 1.10/1.37 s on the submission rung, and
+  0.81/0.56 s on that rung once the recorded-taxi tail came out of the fit — and
+  only the middle reading cleared the one-second threshold. The submission is
+  fitted from a single seed and `taxiout.models.SEED_AVERAGE_ADOPTED` is
+  `False`. The three readings are worth a sentence of their own: most of the
+  run-to-run variance five fits were smoothing over came from a dozen day-shift
+  rows in the fitting sample, so excluding them did the same work for none of
+  the compute. Present it as an estimator choice that was measured and declined,
+  not as a modelling result.
+- **The recorded-taxi tail is out of every fit, and it moves every fitted
+  figure in this paper.** `taxiout.models.fit_rows` excludes training rows
+  recording a taxi over four hours — twelve rows in the training year, day-shift
+  records no aircraft produced — and the ladder, the k-sensitivity diagnostic,
+  the seed average, the transfer report and the submission all read that one
+  rule. On the submission rung it is worth 2.6 s on both forward splits. The
+  arm moves from 233.4/343.7 to **231.8/343.6**, and the chain closes at
+  **218.0/325.6**, 237.9 on the July three, 219.1 at the ranking mix. A two-hour
+  threshold was fixed before the run as the second arm and is *not* adopted: it
+  is 2.7 s worse on July, because the two-to-four hour band holds real long
+  holds. §4's tail treatment is unaffected — this is a fit-side exclusion and
+  the record-quality term is unchanged — but §4 should note that the term
+  removes rows by covered cell and is blind to a day-shift in an uncovered one,
+  which is the gap this fills.
+- **§6.5 gains a schedule-anchored diagnostic** (`occupancy-tfree`), off the
+  chain and out of the submission, which re-selects the stand's last arrival at
+  or before the subject's *scheduled* time. It answers how much of the
+  stand-occupancy block survives an operational framing: **42% in December, 34%
+  on July all-ten, and 4% on the three airports July 2026 contains**. That last
+  figure is the uncomfortable one and §6.5 should not bury it.
 - **Which rung each figure is anchored to.** The submitted model is
   `+ shrunk encoding, replacing the stand`. §6.4's ceiling and §7.3's
   worst-case costs are on that rung; §6.3's plan-lag figures and every
