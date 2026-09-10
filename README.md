@@ -219,6 +219,7 @@ make tails        # needs the challenge data; writes reports/tails.md
 make geometry-gaps  # needs the challenge data and the OSM cache; writes reports/geometry_gaps.md
 make congestion   # needs the challenge data; writes reports/congestion.md
 make occupancy    # needs the challenge data and the residuals; writes reports/occupancy.md
+make residual     # needs the challenge data and the residuals; writes reports/residual.md
 make baseline     # needs the challenge data; writes reports/baseline.md
 make transfer     # needs the challenge data; writes reports/transfer.md
 make submission TEAM=<name>   # needs the challenge data; writes a submission

@@ -6,7 +6,7 @@
 PYTHON ?= python3
 
 .PHONY: all data metar ourairports reports crosscheck data-review synthetic tails \
-        geometry-gaps congestion occupancy baseline transfer sweep submission test \
+        geometry-gaps congestion occupancy residual baseline transfer sweep submission test \
         lint licence-check clean help
 
 help:
@@ -99,6 +99,13 @@ congestion:
 # bound behind it holds. Fits no model. A few minutes.
 occupancy:
 	$(PYTHON) scripts/report_occupancy.py
+
+# Reads data/challenge/ and the validation residuals 'make baseline' writes
+# under data/processed/residuals/. Writes what the model's remaining error is:
+# the shape of the tail, the classes it is enriched in, the error by plan lag,
+# and the largest rows. Fits no model. A few minutes.
+residual:
+	$(PYTHON) scripts/report_residual.py
 
 # Reads data/challenge/ and the matrices from 'make reports'. Writes the
 # ablation ladder. Needs the modelling extras; takes a few minutes.
