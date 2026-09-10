@@ -2480,6 +2480,17 @@ HEADROOM_TRIGGER_S = 5.0
 # direction.
 HEADROOM_NEAR_MISS_S = 1.0
 
+# What the same test did on the ladder as committed at ``ad1eecf``, before the
+# recorded-taxi tail came out of every fit. Quoted and not computed, on the same
+# footing as ``BAGGING_EARLIER_GAINS_S``: that run fitted rows this one does
+# not, so a figure recomputed here would be a different measurement wearing the
+# same name. It is recorded because a test that fires and then stops firing has
+# said something, and a report that only ever prints the second reading is
+# reporting an outcome rather than a measurement.
+# (gain, estimated, overshoot) in seconds, on the July three.
+HEADROOM_FIRED_AT = (15.86, 10.3, 5.56)
+HEADROOM_FIRED_COMMIT = "ad1eecf"
+
 
 def _closest(margins):
     """The block that came nearest to tripping the audit, fired or not."""
@@ -2872,7 +2883,12 @@ def _tfree_section(results, forward, arm) -> list[str]:
             else f"**{pct(ratios[0], 0)} of what the block buys survives the"
             " operational framing.**"
         )
-        + " The remainder is what the take-off anchor is worth, and it is the part"
+        + " **These are lower bounds.** The schedule anchor is stricter than an"
+        " operational rule: at pushback every arrival up to the subject's own"
+        " off-block is known, not only those on-blocking before its *scheduled*"
+        " time, so a block anchored on the actual off-block would see more than"
+        " this one does and keep more than these figures show."
+        " The remainder is what the take-off anchor is worth, and it is the part"
         " of the block that rests on the post-hoc reading. Neither figure changes"
         " what the submission is fitted from -- the chain above is unchanged and"
         " this rung is not on it -- and neither is offered as a reason to keep or"
@@ -3509,6 +3525,13 @@ def section_gate2c(
                         " reported as a near miss rather than as a pass, because the"
                         " whole reason this audit reads both of its columns is that a"
                         " trigger which did not fire was once taken for a result."
+                        f" On the ladder as committed at `{HEADROOM_FIRED_COMMIT}`,"
+                        " before the recorded-taxi tail came out of every fit, the same"
+                        f" test **fired**: {HEADROOM_FIRED_AT[0]:+,.2f} s against"
+                        f" {HEADROOM_FIRED_AT[1]:+,.1f} s estimated, an overshoot of"
+                        f" {HEADROOM_FIRED_AT[2]:.2f} s. Twelve rows leaving the fit"
+                        " moved it below the line, which is the measure of how little"
+                        " this test is carrying."
                         if HEADROOM_TRIGGER_S - _closest(margins)[4]
                         < HEADROOM_NEAR_MISS_S
                         else " The remaining blocks are further inside it."
@@ -3667,12 +3690,20 @@ def _band_section(results, features, y, forward, arm) -> list[str]:
                 )
                 + ". That band is where the block's own docstring puts the mechanism"
                 " -- the subject has certainly left the stand, and the arrival that"
-                " took it is close enough to bound the taxi-out. A column carrying the"
-                " answer by another route would not concentrate on one narrow band of"
-                " a quantity it is not the answer to; it would help wherever the answer"
-                " is hard. That concentration is what stands behind the block in place"
-                " of the agreement of two estimates, and unlike the sentence it"
-                " replaces it is measured here rather than asserted."
+                " took it is close enough to bound the taxi-out -- so the"
+                " concentration is **consistent with the mechanism**. It is not"
+                " evidence against another route: "
+                + "; ".join(
+                    f"{pct(1 - cut, 0)} of the cut on {label} is outside that band"
+                    for label, _share, cut in concentrated
+                )
+                + ", and the block helps in every band, which is what a column"
+                " carrying ordinary information about the stand's day would also do."
+                " What stands behind the block is the source registry, the poison"
+                " tests, the both-sides parity of the gap in"
+                " [`occupancy.md`](occupancy.md), and the schedule-anchored"
+                " measurement below -- not this table alone, and not the agreement of"
+                " two estimates."
                 if some
                 else "**The cut does not concentrate in the band the mechanism"
                 " names.** "
@@ -3905,14 +3936,14 @@ def section_tail_exclusion(
     for hours in TAIL_EXCLUSION_ARMS:
         label = "none" if hours is None else f"taxi > {hours:.0f} h"
         cells = [label]
-        deltas, regressions, dropped_total = [], [], 0
+        deltas, regressions, dropped_by_split = [], [], []
         for split in forward:
             got = arms.get((split.name, hours))
             ref = arms.get((split.name, None))
             if got is None or ref is None:
                 cells += ["n/a", "n/a"]
                 continue
-            dropped_total += got["dropped"]
+            dropped_by_split.append(got["dropped"])
             delta = got["rmse_ex_flagged"] - ref["rmse_ex_flagged"]
             deltas.append(delta)
             cells += [
@@ -3960,7 +3991,9 @@ def section_tail_exclusion(
         three = [figure(s, hours, three=True) for s in forward]
         three = [v for v in three if np.isfinite(v)]
         cells.append(num(three[-1], 1) if three else "n/a")
-        cells.append(f"{dropped_total:,}")
+        # Per split, never summed: the two fits exclude different rows and a
+        # single figure reads as one number of rows that left one fit.
+        cells.append(" / ".join(f"{n:,}" for n in dropped_by_split) or "n/a")
         if hours is None:
             cells.append("the reference")
             verdicts[hours] = (False, [], [])
@@ -4024,7 +4057,7 @@ def section_tail_exclusion(
                 f"{forward[1].name.title()} (s)",
                 "vs no exclusion",
                 f"{forward[1].name.title()}, the three (s)",
-                "rows out",
+                "rows out (" + " / ".join(s.name.title() for s in forward) + ")",
                 "verdict",
             ],
             rows,
@@ -4175,12 +4208,14 @@ def section_bagging(bagging: dict, splits, key: str) -> list[str]:
         (
             "**What the earlier adoption was measuring.** It cleared the threshold at"
             " 1.10 and 1.37 s before the recorded-taxi tail came out of the fit and"
-            " does not clear it now, which says what the averaging was doing: most of"
-            " the run-to-run variation five seeds were smoothing over came from a"
-            " handful of day-shift rows in the fitting sample. Excluding twelve"
-            " impossible rows did the same work for none of the compute. That is"
-            " worth more than the seconds either change bought, because it says the"
-            " variance had a cause rather than being the price of using a booster."
+            " does not clear it now, which says what the averaging was doing -- and"
+            " says it at two different sizes. In December the gain fell 1.10 to"
+            " 0.81, so the day-shift rows were **about half** of what five seeds"
+            " were smoothing over; in July it fell 1.37 to 0.56, so they were"
+            " **most** of it. Excluding twelve impossible rows did much of the same"
+            " work for none of the compute. That is worth more than the seconds"
+            " either change bought, because it says a good part of the variance had"
+            " a cause rather than being the price of using a booster."
             if not adopt
             else ""
         ),

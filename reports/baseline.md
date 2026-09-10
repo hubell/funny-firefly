@@ -952,7 +952,7 @@ The block buys a reduction in the sum of squared error, and an SSE adds over row
 | over 120 | 27,522 | 42.6% | 8.5% | -19 | -14 |
 | no arrival | 102 | 0.2% | 0.1% | -105 | -62 |
 
-**The band the mechanism names carries more of the cut than of the rows.** On December, all ten airports the `20-45` band is 1.0% of the rows and 22.0% of the cut; on July, the three the `20-45` band is 1.9% of the rows and 35.8% of the cut. That band is where the block's own docstring puts the mechanism -- the subject has certainly left the stand, and the arrival that took it is close enough to bound the taxi-out. A column carrying the answer by another route would not concentrate on one narrow band of a quantity it is not the answer to; it would help wherever the answer is hard. That concentration is what stands behind the block in place of the agreement of two estimates, and unlike the sentence it replaces it is measured here rather than asserted.
+**The band the mechanism names carries more of the cut than of the rows.** On December, all ten airports the `20-45` band is 1.0% of the rows and 22.0% of the cut; on July, the three the `20-45` band is 1.9% of the rows and 35.8% of the cut. That band is where the block's own docstring puts the mechanism -- the subject has certainly left the stand, and the arrival that took it is close enough to bound the taxi-out -- so the concentration is **consistent with the mechanism**. It is not evidence against another route: 78% of the cut on December, all ten airports is outside that band; 64% of the cut on July, the three is outside that band, and the block helps in every band, which is what a column carrying ordinary information about the stand's day would also do. What stands behind the block is the source registry, the poison tests, the both-sides parity of the gap in [`occupancy.md`](occupancy.md), and the schedule-anchored measurement below -- not this table alone, and not the agreement of two estimates.
 
 **What the rest of the cut is, and it is not the bound.** Past an hour the gap is not a bound on anything: the stand may have been re-occupied and released, or the aircraft towed. The block still earns there, and what it earns is the stand's recent history -- the previous arrival's lateness, its taxi-in, whether it flew the subject's own type and operator. That is a turnaround-pattern signal rather than a physical bound, it is admissible on exactly the same footing, and calling the whole block a bound overstates what most of it does. The share is in the table above rather than in this sentence.
 
@@ -970,9 +970,9 @@ A diagnostic beside the chain, on no rung of it and in no submission. The stand-
 | July, all ten | 343.6 | 341.0 | +2.65 | 335.8 | +7.81 | 34% |
 | July, the three | 256.2 | 255.6 | +0.59 | 240.9 | +15.27 | 4% |
 
-**Between 4% and 42% of what the block buys survives the operational framing.** The remainder is what the take-off anchor is worth, and it is the part of the block that rests on the post-hoc reading. Neither figure changes what the submission is fitted from -- the chain above is unchanged and this rung is not on it -- and neither is offered as a reason to keep or drop anything. It is here because a reviewer is entitled to ask how much of the block would survive a rule the challenge does not impose, and the honest answer is a number rather than a paragraph.
+**Between 4% and 42% of what the block buys survives the operational framing.** **These are lower bounds.** The schedule anchor is stricter than an operational rule: at pushback every arrival up to the subject's own off-block is known, not only those on-blocking before its *scheduled* time, so a block anchored on the actual off-block would see more than this one does and keep more than these figures show. The remainder is what the take-off anchor is worth, and it is the part of the block that rests on the post-hoc reading. Neither figure changes what the submission is fitted from -- the chain above is unchanged and this rung is not on it -- and neither is offered as a reason to keep or drop anything. It is here because a reviewer is entitled to ask how much of the block would survive a rule the challenge does not impose, and the honest answer is a number rather than a paragraph.
 
-**The leakage audit, applied.** No block beats its estimated headroom by more than 5 s, so the trigger does not fire. The closest is `+ stand occupancy` on July, the three, which takes +15.27 s against an estimated +10.3 s -- an overshoot of **4.971 s** against the 5.000 s the trigger allows. That is a margin of 0.029 s, and a test passed by that much is not evidence of anything. It is reported as a near miss rather than as a pass, because the whole reason this audit reads both of its columns is that a trigger which did not fire was once taken for a result.
+**The leakage audit, applied.** No block beats its estimated headroom by more than 5 s, so the trigger does not fire. The closest is `+ stand occupancy` on July, the three, which takes +15.27 s against an estimated +10.3 s -- an overshoot of **4.971 s** against the 5.000 s the trigger allows. That is a margin of 0.029 s, and a test passed by that much is not evidence of anything. It is reported as a near miss rather than as a pass, because the whole reason this audit reads both of its columns is that a trigger which did not fire was once taken for a result. On the ladder as committed at `ad1eecf`, before the recorded-taxi tail came out of every fit, the same test **fired**: +15.86 s against +10.3 s estimated, an overshoot of 5.56 s. Twelve rows leaving the fit moved it below the line, which is the measure of how little this test is carrying.
 
 ## Seed averaging
 
@@ -1007,7 +1007,7 @@ averaging.
 
 
 
-**What the earlier adoption was measuring.** It cleared the threshold at 1.10 and 1.37 s before the recorded-taxi tail came out of the fit and does not clear it now, which says what the averaging was doing: most of the run-to-run variation five seeds were smoothing over came from a handful of day-shift rows in the fitting sample. Excluding twelve impossible rows did the same work for none of the compute. That is worth more than the seconds either change bought, because it says the variance had a cause rather than being the price of using a booster.
+**What the earlier adoption was measuring.** It cleared the threshold at 1.10 and 1.37 s before the recorded-taxi tail came out of the fit and does not clear it now, which says what the averaging was doing -- and says it at two different sizes. In December the gain fell 1.10 to 0.81, so the day-shift rows were **about half** of what five seeds were smoothing over; in July it fell 1.37 to 0.56, so they were **most** of it. Excluding twelve impossible rows did much of the same work for none of the compute. That is worth more than the seconds either change bought, because it says a good part of the variance had a cause rather than being the price of using a booster.
 
 ## The recorded-taxi tail, out of the fit
 
@@ -1021,11 +1021,11 @@ The record-quality term removes rows by *cell* -- an airport crossed with whethe
 
 The reference row is the same rung fitted with nothing excluded. It is refitted here rather than read off the ladder, because the ladder now carries the adopted exclusion and reading an arm against it would be reading it against itself.
 
-| excluded from the fit | December (s) | vs no exclusion | July (s) | vs no exclusion | July, the three (s) | rows out | verdict |
+| excluded from the fit | December (s) | vs no exclusion | July (s) | vs no exclusion | July, the three (s) | rows out (December / July) | verdict |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| none | 220.6 | -- | 328.3 | -- | 239.4 | 0 | the reference |
-| taxi > 4 h | 218.0 | -2.57 | 325.6 | -2.74 | 237.9 | 12 | passes |
-| taxi > 2 h | 218.6 | -1.96 | 331.0 | +2.70 | 237.1 | 201 | no |
+| none | 220.6 | -- | 328.3 | -- | 239.4 | 0 / 0 | the reference |
+| taxi > 4 h | 218.0 | -2.57 | 325.6 | -2.74 | 237.9 | 7 / 5 | passes |
+| taxi > 2 h | 218.6 | -1.96 | 331.0 | +2.70 | 237.1 | 138 / 63 | no |
 
 **Adopted: `taxi > 4 h`,** and `TAIL_EXCLUSION_ADOPTED_H` is that threshold, so every fit in this report -- the ladder, the k-sensitivity diagnostic and the seed average -- carries it. No figure here comes from a mixture of the two. The wider arm is not adopted: `taxi > 2 h` regresses at LIRF on july by +19.7 s [+4.0, +33.5]. The rows between the two thresholds are not all artefacts -- at Paris and Heathrow most of them carry a Network Manager record and an ordinary schedule lag, so some are real long holds, and excluding them trades genuine tail signal for variance. That is the whole reason both thresholds were run rather than one.
 

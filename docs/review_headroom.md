@@ -268,8 +268,9 @@ times and is **not adopted**: 0.78 and 0.98 s on the rung below the submission,
 once the recorded-taxi tail came out of the fit — the last against the same one
 second fixed as the threshold beforehand. §5 put it at "typically 1–2% on a
 tabular RMSE"; it came to half a percent and then to less. The three readings
-say what it was buying: most of the run-to-run variation five fits were
-smoothing over came from a dozen day-shift rows in the fitting sample, and
-removing them did the same work for none of the compute. The two free
+say what it was buying, and at two different sizes: the dozen day-shift rows
+in the fitting sample were about half of what five fits were smoothing over in
+December (1.10 to 0.81) and most of it in July (1.37 to 0.56), so removing them
+did much of the same work for none of the compute. The two free
 difference columns came in at −1.9 and −4.0 against the "±1 s" predicted, which
 is the same lower-bound effect at a smaller scale.

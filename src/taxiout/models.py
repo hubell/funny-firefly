@@ -177,7 +177,8 @@ BOOSTER_PARAMS: dict[str, object] = {
     "verbose": -1,
 }
 
-# Seed averaging, adopted 8 September. The submission rung is fitted five times
+# Seed averaging, measured three times and NOT adopted. The submission rung is
+# fitted five times
 # with nothing changed but the seed and the predictions averaged. It is an
 # ESTIMATOR CHOICE and not a rung of the ladder: it changes how the model is
 # fitted and not what it reads, so the ladder stays single-seed -- an ablation
@@ -192,11 +193,13 @@ BOOSTER_PARAMS: dict[str, object] = {
 # (``TAIL_EXCLUSION_ADOPTED_H``) it gained 0.81 and 0.56, and by the same rule
 # it is **not** adopted.
 #
-# That is not a coincidence and it is the interesting part: most of what five
-# seeds were smoothing over was a handful of day-shift rows in the fitting
-# sample. Removing twelve impossible rows did what averaging five fits had been
-# doing, and did it for none of the compute. Averaging seeds is variance
-# reduction; the variance it was reducing had a cause, and the cause is gone.
+# That is not a coincidence and it is the interesting part, though it is worth
+# stating at the size it actually holds: the day-shift rows were **about half**
+# of what five seeds were smoothing over in December (1.10 -> 0.81) and **most**
+# of it in July (1.37 -> 0.56). Removing twelve impossible rows did much of what
+# averaging five fits had been doing, for none of the compute. Averaging seeds
+# is variance reduction; a good part of the variance it was reducing had a
+# cause, and the cause is gone.
 #
 # ``reports/baseline.md``'s *Seed averaging* section is the measurement and
 # carries a reproducibility check: the first of the seeds is the one the ladder
