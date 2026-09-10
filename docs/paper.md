@@ -787,19 +787,19 @@ run, not after.
 Source: `reports/baseline.md`, *The ceiling this was built against* and
 *What the shipped arm is, in its own terms*.
 
-### 9.5 What the residual actually is [settled on the refit of 9 September; figures marked † await their generator section]
+### 9.5 What the residual actually is [settled]
 
 The error the model has left is a thin tail of individual holds. Three
 measurements say so, and none of them is the absence of a queue model.
 
 **Its shape.** On the December split, rows with a residual over ten minutes
-are 1.9% of the rows and 38.9% of the squared error; over twenty minutes,
-0.24% and 17.8%, and four in five of those are under-predictions†. On the
-three July airports the same tail is 1.8% of the rows and 49.3% of the
-squared error, two thirds of it under-predicted†. The under-predicted rows
+are 1.86% of the rows and 38.9% of the squared error; over twenty minutes,
+0.24% and 17.8%, and four in five of those are under-predictions. On the
+three July airports the same tail is 1.79% of the rows and 49.3% of the
+squared error, three in five of it under-predicted. The under-predicted rows
 have a median actual taxi-out of 37 minutes against a median prediction of
 23 in December, 43 against 27 on the July three, and a ninetieth percentile
-near an hour in December and past it on the July three†.
+of 57 minutes in December and 73 on the July three.
 
 **It is not shared.** The oracle of §6.4 — a departure's residual regressed
 on its same-runway neighbors' mean residual, a quantity no admissible
@@ -808,28 +808,30 @@ rung, and the lag-1 autocorrelation of consecutive residuals under two
 minutes apart is 0.20 and 0.09. A queue everyone stands in would show in
 both. These misses belong to one aircraft at a time.
 
-**It is enriched where individual holds live.** Heavies are 22% of December's
-rows and 33% of its worst one percent of residuals†. Departures without a
-Network Manager record — a plan cancelled and refiled after a long delay
-loses its join, so the missing record is itself a delay signal — are 0.9% of
-the rows, 4.4% of the worst one percent and 3.5% of the squared error in
-December, and 2.0%, 8.2% and 14.2% on the July three, where they run at
-635 s RMSE against 238 pooled†. Departures whose stand was taken by an
+**It is enriched where individual holds live.** Heavies are 21.6% of
+December's rows and 32.5% of its worst one percent of residuals. Departures
+without a Network Manager record — a plan cancelled and refiled after a long
+delay loses its join, so the missing record is itself a delay signal — are
+0.94% of the rows, 4.4% of the worst one percent and 3.5% of the squared error
+in December, and 1.99%, 8.2% and 14.2% on the July three, where they run at
+635 s RMSE against 237.9 pooled. Departures whose stand was taken by an
 aircraft of another type twenty to forty-five minutes before take-off — the
-rows §6.5's bound speaks about — are 0.5% of the rows and 3.4% of the worst
-one percent even after the block that reads them, their mean under-prediction
-cut from +235 s to +7†. And the error grows with the plan lag as a
-conditional mean between two modes must: against 184 s at the fifteen-to-
-thirty-minute lag most rows have, the December RMSE is 422 s at forty-five
-to sixty minutes past the filed off-block and 643 s at one to two hours†.
-Long lag is sometimes gate delay and sometimes a hold, and no exposed field
-separates them.
+rows §6.5's bound speaks about — are 0.54% of the rows and 3.4% of the worst
+one percent even after the block that reads them; inside that band the block
+cut the mean under-prediction from +235 s to +7, which is
+`reports/occupancy.md`'s measurement rather than this section's. And the error
+grows with the plan lag as a conditional mean between two modes must: against
+184 s at the fifteen-to-thirty-minute lag most rows have, the December RMSE is
+421 s at forty-five to sixty minutes past the filed off-block and 642 s at one
+to two hours. Long lag is sometimes gate delay and sometimes a hold, and no
+exposed field separates them.
 
 **One row, and which July figure this paper quotes.** Over all ten airports
 the July split's ex-flagged RMSE is 325.6 s. One departure at Fiumicino
 recording a taxi-out of 87,002 seconds — a day-shift in a cell the
-record-quality term does not cover, so no term touches it — carries 34% of
-that figure's squared error†, and July 2026 contains no Fiumicino rows. The
+record-quality term does not cover, so no term touches it, and the four-hour
+exclusion is fit-side only and never reaches the scoring set — carries 33.8%
+of that figure's squared error, and July 2026 contains no Fiumicino rows. The
 July figure quoted for the submitted model is therefore the three-airport
 one, 237.9 s; the pooled figure stays in `reports/baseline.md` with this
 reason beside it, and the rule that admitted the blocks was read on the
@@ -845,12 +847,14 @@ inspection — which the challenge data does not carry and the open dataset
 that might, EUROCONTROL's own daily ATFM delay by airport and cause, was
 excluded on its license (§2.2).
 
-Source: `reports/congestion.md`, *The ceiling*; `reports/baseline.md`,
-*Per airport* and *The recorded-taxi tail, out of the fit*;
-`reports/occupancy.md`, *Where the gain lands*; `docs/review_headroom.md`
-§1–2. The † figures are computed for this draft from the stored residuals
-of `+ plan differences` and are to be replaced by a *What the residual is*
-section of `reports/baseline.md` before the paper is circulated.
+Source: `reports/residual.md`, which computes the shape of the tail, the
+enrichment classes, the error by plan lag, the largest rows and the
+per-airport shares from the submitted rung's stored residuals;
+`reports/congestion.md`, *The ceiling*, for the oracle and the
+autocorrelation; `reports/baseline.md`, *Per airport* and *The recorded-taxi
+tail, out of the fit*; `reports/occupancy.md`, *Where the gain lands*, for the
+in-band before and after; `docs/review_headroom.md` §1–2. Every figure in this
+section now has a generator; none is computed for the draft.
 
 ## 10. Reproducing this [settled]
 
@@ -905,10 +909,11 @@ From `docs/prior_art.md`, *Sources*.
   0.81/0.56 s on that rung once the recorded-taxi tail came out of the fit — and
   only the middle reading cleared the one-second threshold. The submission is
   fitted from a single seed and `taxiout.models.SEED_AVERAGE_ADOPTED` is
-  `False`. The three readings are worth a sentence of their own: most of the
-  run-to-run variance five fits were smoothing over came from a dozen day-shift
-  rows in the fitting sample, so excluding them did the same work for none of
-  the compute. Present it as an estimator choice that was measured and declined,
+  `False`. The three readings are worth a sentence of their own, at the size it
+  holds: the dozen day-shift rows were about half of what five fits were
+  smoothing over in December (1.10 -> 0.81) and most of it in July
+  (1.37 -> 0.56), so excluding them did much of the same work for none of the
+  compute. Present it as an estimator choice that was measured and declined,
   not as a modelling result.
 - **The recorded-taxi tail is out of every fit, and it moves every fitted
   figure in this paper.** `taxiout.models.fit_rows` excludes training rows
@@ -924,17 +929,22 @@ From `docs/prior_art.md`, *Sources*.
   the record-quality term is unchanged — but §4 should note that the term
   removes rows by covered cell and is blind to a day-shift in an uncovered one,
   which is the gap this fills.
-- **§6.5 and §9.5 are written**, on 10 September, from `reports/occupancy.md`,
-  `reports/baseline.md` and `reports/congestion.md` as regenerated on 9
-  September. §9.5 carries figures marked † — the tail's shape, the three
-  enrichment classes, the RMSE by plan lag, and the one Fiumicino row that is
-  34% of July's pooled squared error — computed for the draft from the stored
-  residuals of `+ plan differences`. They stand until `reports/baseline.md`
-  gains a *What the residual is* section that prints them, at which point the
-  daggers come off and the figures are re-read. The July figure the paper
-  quotes for the submitted model is the three-airport one, 237.9 s, with the
-  one-row reason; the pooled 325.6 s stays in the report. Seed averaging is
-  not adopted and the rule that declined it stands as written.
+- **§6.5 and §9.5 are written**, on 10 September. §9.5's figures were marked †
+  in the draft — computed for it from the stored residuals of
+  `+ plan differences` — and the daggers are now **off**: `reports/residual.md`
+  is the generator that prints them, and each figure has been re-read against
+  it. Three moved on that re-reading and are worth naming, because they are the
+  case for having built the generator rather than leaving the draft's own
+  arithmetic in place: the July-three tail is three in five under-predicted and
+  not two thirds, the plan-lag RMSEs are 421 and 642 rather than 422 and 643,
+  and the Fiumicino row is 33.8% of July's pooled squared error rather than
+  34%. The report went to `reports/residual.md` rather than into
+  `reports/baseline.md` as the draft anticipated: it reads stored residuals and
+  refits nothing, so it runs in seconds and does not belong behind a 2.5-hour
+  ladder. The July figure the paper quotes for the submitted model is the
+  three-airport one, 237.9 s, with the one-row reason; the pooled 325.6 s stays
+  in the report. Seed averaging is not adopted and the rule that declined it
+  stands as written.
 - **§6.5 gains a schedule-anchored diagnostic** (`occupancy-tfree`), off the
   chain and out of the submission, which re-selects the stand's last arrival at
   or before the subject's *scheduled* time. It answers how much of the
