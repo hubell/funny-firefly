@@ -352,54 +352,99 @@ minutes and needed no model.*
 
 Source: `reports/congestion.md`, *The ceiling*; `docs/plan.md`.
 
-### 6.5 The stand as a shared resource [pending: the Gate 2c refit]
+### 6.5 The stand's recent history, and the bound inside it [settled: the Gate 2c refit of 9 September]
 
-*The mechanism, which the section will argue from `reports/occupancy.md` and
-`reports/baseline.md` once both are regenerated.* **Do not write this section
-from the bound.** The obvious framing — a stand holds one aircraft, so an
-arrival on-blocking there before the subject took off puts a physical lower
-bound on the subject's taxi-out — is true, is the reason the block was built,
-and is a minority of what the block does. Written that way the section would
-claim for the whole what is measured only of a part, and the decomposition in
-`reports/occupancy.md` now says so in numbers.
+The last block added to the model reads the arrivals at the subject's own
+stand: the gap from the last arrival's on-block to the subject's take-off,
+that arrival's lateness and taxi-in, whether it flew the subject's aircraft
+type and operator, and the gap to the previous departure off the same stand.
+Every field is one the ranking set exposes for arrivals in full (§6.1). On
+the ladder it is worth 8.4 s in December (231.8 → 223.5 s ex-flagged) and
+7.8 in July (343.6 → 335.8); on the three airports July 2026 contains, 15.3 s
+(256.2 → 240.9), the largest single step above the plan lags. Its
+held-out-pair contrast is +1.5 s [+0.6, +2.5]: it buys slightly more where
+the pair is new, which is what a stand-level quantity should do where the
+encoding has nothing to say about the stand.
 
-What the block is: **the stand's recent history** — the gap to the last
-arrival, that arrival's lateness and taxi-in, and whether it was the subject's
-own aircraft returning. The bound lives inside that, in one band.
+**The bound, and where it holds.** A stand holds one aircraft, so an arrival
+that on-blocks at the subject's stand before the subject takes off means the
+subject had already pushed back, and the gap is a lower bound on its
+taxi-out. That is why the block was built, and it is true only in a band.
+Measured on the December rows of the rung that never read the gap: under
+twenty minutes the bound holds in 97–100% of rows and the model already
+respects it; at 20–25 minutes it holds in 94% of rows while the model
+violates it in 17%, under-predicting those rows by 181 s on average; at
+30–35 minutes, 71% and 54%; by 40–45 it holds in 11% of rows, and past
+forty-five minutes essentially never, because a stand identifier can denote
+a position that holds two aircraft and because aircraft are towed. Applied
+as a rule it loses at every cap tried — +0.1 s at twenty minutes, +1.2 at
+thirty, +20.3 at forty-five in December — since a floor can only act where
+the model is below the gap, and where the bound is true the model already
+obeys it. It enters as a feature, and the booster finds the band.
 
-The section has to carry five things.
+**Where the gain lands, and how much of it is the bound.** The block's
+reduction in squared error is a sum over rows, so it can be attributed to
+disjoint bands of the gap and the shares add. The 20–45 minute band is 1.0%
+of December's rows and 22.0% of the cut; on the July three, 1.9% and 35.8%.
+Inside it the previous arrival's type separates the two cases the band
+contains. Where the type differs — a different aircraft took the stand after
+the subject pushed — 900 December rows carry 17.8% of the whole cut and
+their mean under-prediction falls from +235 s to +7; where it matches, the
+subject's own inbound after a fast turnaround, 686 rows carry 4.2% and go
+from +58 s to −21. That is the bound doing what the mechanism says, on the
+rows it speaks about, and it is a minority of the block on every leg. Past an
+hour the gap bounds nothing, and the block still earns there: 47.8% of
+December's cut sits on gaps over an hour where the previous arrival was the
+subject's own type — the subject's own inbound — against 7.6% on the July
+three, where the short gaps carry the block instead. What it reads at those
+gaps is the stand's recent history: the inbound's lateness and taxi-in, the
+scheduled ground time, whether the aircraft on the stand was the subject's
+own. That is a turnaround-pattern signal, admissible on exactly the same
+footing as the bound and a different thing from it. The two shares move by a
+factor of several between the legs, so a sentence about what this block *is*
+has to name the leg it is true of.
 
-1. That the bound is **sound below twenty minutes and false above
-   forty-five**, which is why it enters as a feature and not as a floor; and
-   that applying it as a floor was measured and **loses**.
-2. That the **twenty-to-forty-five-minute band is where the bound is the
-   mechanism**, that the previous arrival's aircraft type separates the two
-   cases inside it — the subject's own inbound after a fast turnaround, or a
-   different aircraft that took the stand after the subject pushed — and that
-   it is the differing-type rows the bound speaks about.
-3. That the band is a **minority of the gain**: 22% of the reduction in
-   squared error in December, 36% on the three airports July 2026 contains,
-   against 48% in December from gaps past an hour where the previous arrival
-   was the subject's own type and the gap bounds nothing. The block earns
-   most of its keep as turnaround pattern, and the two shares move by a
-   factor of several between the legs, so any sentence about what the block
-   *is* has to name the leg it is true of.
-4. That the block reads an arrival which on-blocked *after* the subject's own
-   off-block, so it is admissible under the challenge's post-hoc framing and
-   not under an operational one — the standing of every take-off-anchored
-   window already in the model, and one of the two places in this entry where
-   exploiting the ranking process could be alleged.
-5. That the **leakage audit misses its trigger by twenty-nine milliseconds** on
-   the July three — +15.27 s against an estimated +10.3, an overshoot of 4.971
-   against 5.000 allowed — and that it *fired* on the fit of 8 September, before
-   the recorded-taxi tail was excluded. A dozen rows moved it below the line, so
-   the section must not present the pass as reassurance. What the block rests on
-   is the source registry, the poison tests, and the concentration in (2) and
-   (3) — not the agreement of the residual-fit estimate with the refit, which is
-   the thing that failed.
+**What survives an operational rule.** The block reads an arrival that
+on-blocked *after* the subject's own off-block. Under the challenge's
+post-hoc framing — the take-off time is given, and every take-off-anchored
+window in the model has the same standing — it is admissible; under an
+operational one it is not, and this is one of the two places in the entry
+where exploiting the ranking process could be alleged (`AOBT_3_flt`,
+excluded, is the other). How much of the block would survive an operational
+rule is measured rather than argued. A diagnostic rung off the chain and out
+of the submission re-anchors the block on the schedule — the stand's last
+arrival at or before the subject's *scheduled* time, every column read from
+that choice, so that nothing in it needs the take-off — and it keeps 42% of
+the block's gain in December, 34% in July over all ten airports, and **4% on
+the three airports July 2026 contains**. The schedule anchor is stricter than
+operational, since at pushback the arrivals up to the actual off-block are
+known and not only those before the schedule, so these are lower bounds; but
+on the airports the ranking's July month contains, the block is a post-hoc
+instrument almost entirely, and this section says so rather than burying it.
 
-Source, when written: `reports/occupancy.md`; `reports/baseline.md`, *The
-Gate 2c blocks*; `docs/modelling_notes.md`, *Leakage watch*.
+**The audit.** Each block's refit gain is read against the residual-fit
+headroom estimated before it was built (`docs/review_headroom.md`), on both
+legs the estimate was made on, and the audit trips at five seconds over. On
+the July three the block takes 15.27 s against an estimated 10.3 — 4.971 s
+over, twenty-nine thousandths under the trigger. On the fit of 8 September,
+before twelve day-shift rows came out of the fitting sample (§4), the same
+test fired at 5.56 s. A test passed by that much is not evidence, and it is
+not offered as reassurance. What the block rests on is the source registry
+and the poison tests of §6.1; the parity of the gap on both sides of the
+data, where no airport's share of stands re-taken within twenty minutes
+moves by more than two points between 2025 and 2026; the concentration
+above, which is consistent with the mechanism and is not proof against
+another route; and the schedule-anchored measurement, which puts a number on
+the part of the block that is the post-hoc reading.
+
+Three smaller blocks stand on it in the chain — the operator read as the
+callsign prefix, the destination's bearing and distance with the holiday
+calendar, and the plan's two differences — and are read in
+`reports/baseline.md`, *The Gate 2c blocks*, each net of the blocks below it.
+
+Source: `reports/occupancy.md`; `reports/baseline.md`, *The Gate 2c blocks*,
+*Where the stand-occupancy gain lands* and *The same block without the
+subject's take-off*; `docs/modelling_notes.md`, *Leakage watch*.
 
 ## 7. Validation
 
@@ -591,9 +636,13 @@ carries what the two forward splits say about the model that is
 submitted, per airport and with and without the record-quality term, and
 leaves one line for the organizers' figure. Every number is from
 `reports/baseline.md` as regenerated on 5 September, for the rung named in
-`taxiout.models.SUBMISSION_KEY`, which is now `+ shrunk encoding, replacing
-the stand` — the arm §7.4 chose, fitted by the inference-time encoder that
-lands with it.*
+`taxiout.models.SUBMISSION_KEY` as it stood on 5 September, `+ shrunk
+encoding, replacing the stand` — the arm §7.4 chose, fitted by the
+inference-time encoder that lands with it. **[pre-refit: the submitted rung is
+now `+ plan differences`, four blocks above that arm and fitted without the
+recorded-taxi tail; every figure in this section is re-read from the
+regenerated report at the freeze, after the pinned OSM rebuild, and the July
+figure it will quote is the three-airport one, for the reason §9.5 gives.]***
 
 **Pooled.** On the December split, which stands in for January 2026 at all
 ten airports, the submitted model scores **233.4 s** over the rows the
@@ -738,33 +787,70 @@ run, not after.
 Source: `reports/baseline.md`, *The ceiling this was built against* and
 *What the shipped arm is, in its own terms*.
 
-### 9.5 What the residual actually is [pending: the Gate 2c refit]
+### 9.5 What the residual actually is [settled on the refit of 9 September; figures marked † await their generator section]
 
-*The analysis exists in `docs/review_headroom.md` §1 and is written up here
-once the refit has moved the numbers it rests on.* The claim the section
-makes is that the error the model has left is **not a queue**, and that this
-follows from three measurements rather than from the absence of one.
+The error the model has left is a thin tail of individual holds. Three
+measurements say so, and none of them is the absence of a queue model.
 
-The big misses are a thin tail of individual holds: about 2% of rows carry
-between two fifths and a half of the squared error, they are
-under-predictions of forty minutes to three hours put at ten to forty, and
-the neighbour-residual oracle of §6.4 already shows that knowing every
-same-runway neighbour's outcome exactly buys nine or ten seconds — so
-whatever these rows are, they are not a queue everyone is standing in. They
-are enriched in three identifiable classes: heavies, departures with no
-Network Manager record (whose plan was cancelled and refiled, so the missing
-join is itself a delay signal), and departures whose stand was re-occupied
-before they took off. And the error grows with the plan lag exactly as a
-conditional mean between two modes must, since long lag is sometimes gate
-delay and sometimes a hold and no exposed field separates them.
+**Its shape.** On the December split, rows with a residual over ten minutes
+are 1.9% of the rows and 38.9% of the squared error; over twenty minutes,
+0.24% and 17.8%, and four in five of those are under-predictions†. On the
+three July airports the same tail is 1.8% of the rows and 49.3% of the
+squared error, two thirds of it under-predicted†. The under-predicted rows
+have a median actual taxi-out of 37 minutes against a median prediction of
+23 in December, 43 against 27 on the July three, and a ninetieth percentile
+near an hour in December and past it on the July three†.
 
-The section should end where the evidence ends: the remaining error is
-individual, it is not shared, and no field the challenge exposes predicts it.
-That is a bound on this entry and, if it holds, a bound on every entry
-working from the same columns.
+**It is not shared.** The oracle of §6.4 — a departure's residual regressed
+on its same-runway neighbors' mean residual, a quantity no admissible
+feature may read — buys 8.8 s in December and 8.4 in July on the submitted
+rung, and the lag-1 autocorrelation of consecutive residuals under two
+minutes apart is 0.20 and 0.09. A queue everyone stands in would show in
+both. These misses belong to one aircraft at a time.
 
-Source, when written: `docs/review_headroom.md` §1; `reports/baseline.md`;
-`reports/congestion.md`, *The ceiling*.
+**It is enriched where individual holds live.** Heavies are 22% of December's
+rows and 33% of its worst one percent of residuals†. Departures without a
+Network Manager record — a plan cancelled and refiled after a long delay
+loses its join, so the missing record is itself a delay signal — are 0.9% of
+the rows, 4.4% of the worst one percent and 3.5% of the squared error in
+December, and 2.0%, 8.2% and 14.2% on the July three, where they run at
+635 s RMSE against 238 pooled†. Departures whose stand was taken by an
+aircraft of another type twenty to forty-five minutes before take-off — the
+rows §6.5's bound speaks about — are 0.5% of the rows and 3.4% of the worst
+one percent even after the block that reads them, their mean under-prediction
+cut from +235 s to +7†. And the error grows with the plan lag as a
+conditional mean between two modes must: against 184 s at the fifteen-to-
+thirty-minute lag most rows have, the December RMSE is 422 s at forty-five
+to sixty minutes past the filed off-block and 643 s at one to two hours†.
+Long lag is sometimes gate delay and sometimes a hold, and no exposed field
+separates them.
+
+**One row, and which July figure this paper quotes.** Over all ten airports
+the July split's ex-flagged RMSE is 325.6 s. One departure at Fiumicino
+recording a taxi-out of 87,002 seconds — a day-shift in a cell the
+record-quality term does not cover, so no term touches it — carries 34% of
+that figure's squared error†, and July 2026 contains no Fiumicino rows. The
+July figure quoted for the submitted model is therefore the three-airport
+one, 237.9 s; the pooled figure stays in `reports/baseline.md` with this
+reason beside it, and the rule that admitted the blocks was read on the
+pooled figure as it was fixed, not on this one.
+
+What is left is individual, it is not shared, and no field the challenge
+exposes predicts it: the fields the model had not read were measured before
+they were built (`docs/review_headroom.md` §2), and the four that carried
+anything are in the model. That is a bound on this entry and, if the argument
+holds, on every entry working from the same columns. What would move it is
+information about the hold itself — a regulation, a de-icing queue, a runway
+inspection — which the challenge data does not carry and the open dataset
+that might, EUROCONTROL's own daily ATFM delay by airport and cause, was
+excluded on its license (§2.2).
+
+Source: `reports/congestion.md`, *The ceiling*; `reports/baseline.md`,
+*Per airport* and *The recorded-taxi tail, out of the fit*;
+`reports/occupancy.md`, *Where the gain lands*; `docs/review_headroom.md`
+§1–2. The † figures are computed for this draft from the stored residuals
+of `+ plan differences` and are to be replaced by a *What the residual is*
+section of `reports/baseline.md` before the paper is circulated.
 
 ## 10. Reproducing this [settled]
 
@@ -792,13 +878,15 @@ From `docs/prior_art.md`, *Sources*.
   encoding arm; §5.4 from `reports/geometry_gaps.md` of the same day. Every
   figure will change only if a generator's numbers change.
 - **What waits.** Two placeholders, both marked `[score]`: the organizers'
-  figure in the abstract and in §8.
+  figure in the abstract and in §8. And the figure pass over §8, the abstract
+  and §1.2, held for the freeze so the pinned OSM rebuild and the refit are
+  read into the paper once rather than twice.
 - **What the Gate 2c refit moves, and what it does not.** Four blocks were
   added above the encoding arm on 8 September — stand occupancy, the callsign
   prefix, the destination geometry with the holiday calendar, and the plan's
   own differences — and §6.5 and §9.5 are the two sections they call for,
-  both marked `[pending]` until `reports/occupancy.md` and the regenerated
-  `reports/baseline.md` are read. **Every figure in §8, and the pooled figures
+  both now written from the regenerated `reports/occupancy.md` and
+  `reports/baseline.md`. **Every figure in §8, and the pooled figures
   quoted in the abstract and in §1.2, are on the pre-refit submission rung and
   must be re-read against the regenerated report before the paper is
   circulated.** The figures that do *not* move are the ones anchored below the
@@ -836,6 +924,17 @@ From `docs/prior_art.md`, *Sources*.
   the record-quality term is unchanged — but §4 should note that the term
   removes rows by covered cell and is blind to a day-shift in an uncovered one,
   which is the gap this fills.
+- **§6.5 and §9.5 are written**, on 10 September, from `reports/occupancy.md`,
+  `reports/baseline.md` and `reports/congestion.md` as regenerated on 9
+  September. §9.5 carries figures marked † — the tail's shape, the three
+  enrichment classes, the RMSE by plan lag, and the one Fiumicino row that is
+  34% of July's pooled squared error — computed for the draft from the stored
+  residuals of `+ plan differences`. They stand until `reports/baseline.md`
+  gains a *What the residual is* section that prints them, at which point the
+  daggers come off and the figures are re-read. The July figure the paper
+  quotes for the submitted model is the three-airport one, 237.9 s, with the
+  one-row reason; the pooled 325.6 s stays in the report. Seed averaging is
+  not adopted and the rule that declined it stands as written.
 - **§6.5 gains a schedule-anchored diagnostic** (`occupancy-tfree`), off the
   chain and out of the submission, which re-selects the stand's last arrival at
   or before the subject's *scheduled* time. It answers how much of the
