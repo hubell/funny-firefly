@@ -241,3 +241,66 @@ Makefile's help text says so.
 15.27 s near miss, 0.81 and 0.56 s). Sentences already wrong in the committed
 `occupancy.md`, `congestion.md` and `transfer.md` are left to a separate
 change.
+
+## The reference container, 2026-09-12
+
+**What was run.** Two full pipeline runs -- `baseline`, `residual`,
+`occupancy`, `congestion`, `transfer` -- inside a container on the reference
+machine, in a reflink copy of the tree at `067c4af`, with the repository's own
+interpreter and installed wheels mounted read-only and
+`OPENBLAS_CORETYPE=SkylakeX`, `OPENBLAS_NUM_THREADS=8`, `OMP_NUM_THREADS=8`,
+`PYTHONHASHSEED=0`, `TZ=UTC` and `LC_ALL=C.UTF-8` set. The base is Debian
+trixie, pinned by digest, whose glibc is 2.41 against the host's 2.44 and whose
+`libgomp` is its own: `lib_lightgbm.so` takes the OpenMP runtime from the
+system, and that runtime is what `deterministic` makes order its sums.
+
+**The result.** The two container runs agree on all 69 files byte for byte, the
+five reports and the 52 residual files among them. Against the host's run C,
+all 52 residual files are byte-identical and each of the five reports differs
+in one line: the date it was generated on, which comes from the clock.
+[`container-2026-09-12.md`](container-2026-09-12.md) records both comparisons.
+Two files there differ for reasons outside the container, named so the reader
+need not wonder: this record itself, which gained its Phase 2 section between
+run C's snapshot and the copy, and `synthetic_airport.svg`, which the container
+snapshot did not copy and which neither run writes.
+
+The cheaper check ran first and says the same thing about the machinery rather
+than the reports: in the container the feature frame's 175 digests and the
+booster's predictions on December's `identifiers` rung were bit-identical to
+the host's, which is what made the full runs worth the five hours.
+
+**Times.** The ladder took 7,758 s and 7,577 s in the container against
+7,550 s on the host, so containerisation costs nothing measurable; `transfer`
+800 s and 808 s against 843 s; the three short reports the same 14, 14 and
+102 s.
+
+**The Containerfile is a draft and does not build.** Two pins are unfilled and
+both need a machine with registry and index access, which this one is not: the
+base image digest, and the package hashes in `requirements-freeze.txt`. Until
+they are filled the `--require-hashes` install refuses to install anything.
+That is the intended failure: a base image by tag is not a version, and a
+version without a hash pins no bits, because a wheel can be rebuilt and
+re-uploaded under the same version. So what the runs above establish is what
+the container changes about a run -- nothing, on this machine -- and not that
+the image builds.
+
+**What none of this establishes.**
+
+- Any CPU other than the reference Ryzen 7 7800X3D. The coretype pin names an
+  AVX-512 kernel, so the image requires such a host and fails on one without
+  it rather than computing with another kernel. What a different kernel would
+  give is unmeasured.
+- arm64, and the Mac the committed reports came from.
+- One pair of glibc versions crossed once, 2.44 against 2.41, and one
+  `libgomp` other than the host's. No older glibc, no musl, no other OpenMP
+  build.
+- One container runtime, rootless podman, on this kernel. Docker, containerd,
+  a cgroup CPU quota or a narrower cpuset are untested, and a memory limit
+  below the ladder's 8.1 GiB peak would end a run rather than change it.
+- A machine with a core count other than eight; `n_jobs` is 8, and
+  thread-count independence was measured at 1, 8 and 14 threads on this part
+  alone.
+- The image's own install path: the uv installer fetch, `uv python install
+  3.13.5`, and a fresh resolution of the thirty packages from the index. The
+  runs above used the host's interpreter and wheels.
+- GPU: nothing has been fitted on one, here or anywhere in this repository.
