@@ -20,6 +20,7 @@ help:
 	@echo "make geometry-gaps  the unimpeded term against the data -> reports/geometry_gaps.md"
 	@echo "make congestion   how the excess term was built -> reports/congestion.md"
 	@echo "make occupancy    the stand as a shared resource -> reports/occupancy.md"
+	@echo "make residual     what the model's remaining error is -> reports/residual.md"
 	@echo "make baseline     run the ablation ladder      -> reports/baseline.md"
 	@echo "make transfer     leave one airport out, ten times -> reports/transfer.md"
 	@echo "make sweep        the one parameter sweep, October 2025 -> data/processed/sweep_october.csv"
@@ -35,6 +36,11 @@ help:
 	@echo "'make synthetic' needs neither, and is the one geometry report a"
 	@echo "clean checkout can regenerate. The four targets below it need the"
 	@echo "challenge data under data/challenge/, which is never committed."
+	@echo ""
+	@echo "Measured on the reference machine, eight cores: 'make baseline' takes"
+	@echo "about two hours and peaks at 8 GiB of memory, 'make transfer' about a"
+	@echo "quarter of an hour, 'make congestion' two minutes, and 'make residual'"
+	@echo "and 'make occupancy' under a minute each."
 
 all: data reports test licence-check
 
@@ -89,33 +95,35 @@ geometry-gaps:
 
 # Reads data/challenge/, the matrices and the edge sets from 'make reports'.
 # Writes how the congestion features were built and whether the construction
-# holds on both sides of the data; fits no model. About a minute.
+# holds on both sides of the data; fits no model. About two minutes.
 congestion:
 	$(PYTHON) scripts/report_congestion.py
 
 # Reads data/challenge/ and the validation residuals 'make baseline' writes
 # under data/processed/residuals/. Writes how the stand-occupancy block was
 # built, whether the gap means the same on both sides, and where the physical
-# bound behind it holds. Fits no model. A few minutes.
+# bound behind it holds. Fits no model. Under a minute.
 occupancy:
 	$(PYTHON) scripts/report_occupancy.py
 
 # Reads data/challenge/ and the validation residuals 'make baseline' writes
 # under data/processed/residuals/. Writes what the model's remaining error is:
 # the shape of the tail, the classes it is enriched in, the error by plan lag,
-# and the largest rows. Fits no model. A few minutes.
+# and the largest rows. Fits no model. Under a minute.
 residual:
 	$(PYTHON) scripts/report_residual.py
 
 # Reads data/challenge/ and the matrices from 'make reports'. Writes the
-# ablation ladder. Needs the modelling extras; takes a few minutes.
+# ablation ladder. Needs the modelling extras; about two hours on eight cores,
+# with a peak of 8 GiB of memory.
 baseline:
 	$(PYTHON) scripts/run_baselines.py
 
 # Reads data/challenge/ and the matrices from 'make reports'. Ten fits: train
 # on nine airports, predict the tenth, with no identifier of the tenth in the
 # frame. Answers the question the challenge's test set cannot pose, and the one
-# no identifier-based entry can answer at all. An hour or more.
+# no identifier-based entry can answer at all. About a quarter of an hour on
+# eight cores.
 transfer:
 	$(PYTHON) scripts/report_transfer.py
 

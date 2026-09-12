@@ -778,9 +778,10 @@ def section_ladder(results, splits, tails: Tails) -> list[str]:
     lines = [
         "## The ablation ladder",
         "",
-        "Each rung adds one term of the decomposition. The rung that matters is",
-        "the fourth to the fifth -- geometry added to a model that already has the",
-        "identifiers -- and on a forward split it is expected to be small, because",
+        "Each rung adds one term of the decomposition. The step that matters is",
+        f"`{LADDER_BY_KEY[CLAIM[0]].label}` to `{LADDER_BY_KEY[CLAIM[1]].label}` --",
+        "geometry added to a model that already has the identifiers -- and on a",
+        "forward split it is expected to be small, because",
         "a saturated identifier model has seen every pair it is asked about. The",
         "held-out-pair split below is where the difference is supposed to appear.",
         "",
@@ -792,7 +793,7 @@ def section_ladder(results, splits, tails: Tails) -> list[str]:
         "per-airport constant fitted on the same training rows -- the excess held",
         "as a constant, which is exactly what Gate 2 exists to replace with a",
         "model -- and is the column to compare them on. The boosted rungs predict",
-        "taxi-out directly and need no offset, so it is blank for them.",
+        "taxi-out directly and need no offset, so it reads n/a for them.",
         "",
         "The plan-lag rung reads three exposed planning values -- the flight",
         "plan's first and last off-block estimates and the schedule -- as take-off",
@@ -812,8 +813,10 @@ def section_ladder(results, splits, tails: Tails) -> list[str]:
         "runway saturation, which was built as the cheap queueing proxy, measured",
         "against the ceiling and found to be worth nothing, and which is read",
         "against the weather rung it was added to rather than against whatever the",
-        "submission has since moved to. Each of those groups has its own section",
-        "below, with the rule that admitted or rejected it. The submission is",
+        "submission has since moved to. The encoding arms and the Gate 2c blocks",
+        "each have a section below with the rule that admitted or rejected them;",
+        "the saturation rung's measurement against the ceiling is in",
+        "[`congestion.md`](congestion.md). The submission is",
         f"fitted from `{TOP_RUNG.label}`, and the per-airport, strata and",
         "split-share sections read that rung.",
     ]
@@ -1556,6 +1559,9 @@ def section_encoding(
         chosen = min(passing)[2]
         best_pooled = min(passing, key=lambda p: _rank_pooled(p[2]))[2]
         pooled_gap = _rank_pooled(chosen) - _rank_pooled(best_pooled)
+        pooled_spread = max(_rank_pooled(k) for _, _, k in passing) - _rank_pooled(
+            best_pooled
+        )
         keeps = [k for d, _, k in sorted(passing) if not d]
         drops = [k for d, _, k in sorted(passing) if d]
         why = (
@@ -1585,6 +1591,14 @@ def section_encoding(
                     )
                     + " at the ranking mix, inside the tenth of a second this table"
                     " prints -- so nothing is being traded away for the mechanism"
+                    if pooled_spread < 0.1
+                    else ". The pooled figure agrees with it -- "
+                    + " against ".join(
+                        f"{num(_rank_pooled(k), 1)} s" for _, _, k in sorted(passing)
+                    )
+                    + " at the ranking mix, so the arm that keeps the runway is also"
+                    " the best of them pooled and nothing is being traded away for"
+                    " the mechanism"
                     if abs(pooled_gap) < 0.1
                     else (
                         f". It is not the best of them pooled -- {num(_rank_pooled(chosen), 1)}"
@@ -1712,7 +1726,16 @@ def section_encoding(
             f"against the control's {ceiling['pooled_before']:.1f} s. Taking the signs literally instead --"
             " letting a bucket where the control is already ahead of the ratio count"
             f" against the total -- gives {ceiling['pooled_signed']:+.2f} s,",
-            "and the gap between those two numbers is the whole of the pooled figure.",
+            f"and the {ceiling['pooled_floored'] - ceiling['pooled_signed']:.2f} s"
+            " between those two numbers is what the buckets held at zero would take"
+            " back"
+            + (
+                " -- more than the floored figure itself, so the ceiling is positive"
+                " only because of that convention."
+                if ceiling["pooled_floored"] - ceiling["pooled_signed"]
+                > abs(ceiling["pooled_floored"])
+                else "."
+            ),
             "",
             "Read against that: "
             + (
@@ -2087,14 +2110,31 @@ def section_encoding(
                 default=None,
             )
             if best is not None:
+                # The arm the decomposition is about: the one that ships if one
+                # does, else the strongest on the thin bucket. They were the same
+                # arm until a refit put another a second ahead on that bucket, and
+                # a section that decomposes one arm while the next reads another
+                # describes two models as one.
+                ships = (
+                    chosen != ENCODING_CONTROL
+                    and chosen in buckets
+                    and all(chosen in f["held"] for f in sums)
+                )
+                subject = chosen if ships else best
                 seen_delta = float(
                     np.mean(
-                        [f["seen"][ENCODING_CONTROL] - f["seen"][best] for f in per_fold]
+                        [
+                            f["seen"][ENCODING_CONTROL] - f["seen"][subject]
+                            for f in per_fold
+                        ]
                     )
                 )
                 held_delta = float(
                     np.mean(
-                        [f["held"][ENCODING_CONTROL] - f["held"][best] for f in per_fold]
+                        [
+                            f["held"][ENCODING_CONTROL] - f["held"][subject]
+                            for f in per_fold
+                        ]
                     )
                 )
 
@@ -2140,13 +2180,10 @@ def section_encoding(
                     FREQUENCY_BUCKETS[0],
                     FREQUENCY_BUCKETS[1],
                 )
-                # The arm the decomposition is about: the one that ships if one
-                # does, else the strongest on the thin bucket, which is the arm
-                # the section had to account for when none shipped.
-                chosen_arm = chosen if chosen != ENCODING_CONTROL else best
-                thin_gain = sum(_pooled_gain(best, b) for b in FREQUENCY_BUCKETS[:-1])
-                total_gain = _pooled_gain(best, None)
-                hi_gain = _pooled_gain(best, hi)
+                chosen_arm = subject
+                thin_gain = sum(_pooled_gain(subject, b) for b in FREQUENCY_BUCKETS[:-1])
+                total_gain = _pooled_gain(subject, None)
+                hi_gain = _pooled_gain(subject, hi)
                 # The same decomposition at the weights the competition scores.
                 # Done in the sum-of-squares domain, where the buckets are
                 # additive and the shares therefore sum to one.
@@ -2171,7 +2208,7 @@ def section_encoding(
                 }
                 thin_take = float(
                     buckets[ENCODING_CONTROL].loc[thin_b, "rmse_s"]
-                ) - float(buckets[best].loc[thin_b, "rmse_s"])
+                ) - float(buckets[subject].loc[thin_b, "rmse_s"])
                 thin_room = ceiling["buckets"][thin_b]["headroom"]
                 improves_both = [
                     k
@@ -2198,7 +2235,9 @@ def section_encoding(
                     (
                         (
                             f"{len(improves_both)} of the {len(arms)} arms improve *both*"
-                            " forward splits, and the arm the rule chooses is one of them. What"
+                            " forward splits, and the arm the rule chooses is"
+                            f" {'one of them' if chosen in improves_both else 'not among them'}."
+                            " What"
                             " it bought is decomposed here rather than asserted, because"
                             " the rung's name says where the block was aimed and the"
                             " decomposition says where it landed, and those are not the"
@@ -2215,8 +2254,21 @@ def section_encoding(
                         " nothing should be on the record as measured rather than"
                         " merely dropped."
                     ),
-                    f"Take the strongest of them on the `{thin_b}` bucket,",
-                    f"`{LADDER_BY_KEY[best].label}`, and split what it bought.",
+                    (
+                        f"Take the arm the rule chose, `{LADDER_BY_KEY[subject].label}`,"
+                        " and split what it bought."
+                        + (
+                            ""
+                            if subject == best
+                            else f" It is not the strongest on the `{thin_b}` bucket --"
+                            f" `{LADDER_BY_KEY[best].label}` is, by"
+                            f" {float(buckets[subject].loc[thin_b, 'rmse_s']) - float(buckets[best].loc[thin_b, 'rmse_s']):.1f} s"
+                            " -- and the arm that ships is the one to account for."
+                        )
+                        if subject == chosen
+                        else f"Take the strongest of them on the `{thin_b}` bucket,"
+                        f" `{LADDER_BY_KEY[best].label}`, and split what it bought."
+                    ),
                     "",
                     f"On pairs the model had already seen it is worth **{seen_delta:+,.1f} s**. On pairs",
                     f"held out of training it is worth **{held_delta:+,.1f} s**.",
@@ -2264,7 +2316,7 @@ def section_encoding(
                         " there was nothing there to take."
                     ),
                     f"The bucket is {pct(ceiling['share'][thin_b], 2)} of the rows, so whatever it does there is",
-                    f"worth {_pooled_gain(best, thin_b):+.2f} s pooled and no more.",
+                    f"worth {_pooled_gain(subject, thin_b):+.2f} s pooled and no more.",
                     "",
                     (
                         f"On the `{lo}` bucket -- pairs never seen -- "
@@ -2800,7 +2852,7 @@ TFREE_KEY = "occupancy-tfree"
 TFREE_AGAINST = "occupancy"
 
 
-def _tfree_section(results, forward, arm) -> list[str]:
+def _tfree_section(results, forward, arm, floors=None) -> list[str]:
     """What the stand-occupancy block is worth without the subject's take-off.
 
     Not a rung of the chain and not in the submission: one diagnostic, read
@@ -2809,8 +2861,10 @@ def _tfree_section(results, forward, arm) -> list[str]:
     """
     if not any((s.name, TFREE_KEY, "valid") in results for s in forward):
         return []
+    floors = floors or {}
     rows = []
     ratios = []
+    inside = []
     for split, figure, leg in (
         (forward[0], _ex_flagged, f"{forward[0].name.title()}, all ten"),
         (forward[1], _ex_flagged, f"{forward[1].name.title()}, all ten"),
@@ -2825,6 +2879,8 @@ def _tfree_section(results, forward, arm) -> list[str]:
         if not all(np.isfinite(v) for v in (base, full_v, free_v)):
             continue
         full_gain, free_gain = base - full_v, base - free_v
+        if leg in floors and abs(free_gain) < floors[leg]:
+            inside.append((leg, free_gain, floors[leg]))
         share = free_gain / full_gain if full_gain else float("nan")
         if np.isfinite(share):
             ratios.append(share)
@@ -2882,6 +2938,11 @@ def _tfree_section(results, forward, arm) -> list[str]:
             if len(ratios) > 1
             else f"**{pct(ratios[0], 0)} of what the block buys survives the"
             " operational framing.**"
+        )
+        + "".join(
+            f" On {leg} the schedule-anchored gain, {g:+,.2f} s, is inside that"
+            f" leg's {f:.2f} s noise floor, so its share cannot be told from zero."
+            for leg, g, f in inside
         )
         + " **These are lower bounds.** The schedule anchor is stricter than an"
         " operational rule: at pushback every arrival up to the subject's own"
@@ -2990,9 +3051,10 @@ def _three_ex_flagged(entry) -> float:
 
 
 def section_gate2c(
-    results, features, y, raw, splits, tails: Tails, references
+    results, features, y, raw, splits, tails: Tails, references, floors=None
 ) -> list[str]:
     """The four Gate 2c rungs, the rule applied, and where the chain stops."""
+    floors = floors or {}
     chain = [k for k in GATE_2C_RUNGS if (splits[0].name, k, "valid") in results]
     forward = [s for s in splits if not s.name.startswith("pairs-")]
     if not chain or len(forward) < 2:
@@ -3239,8 +3301,9 @@ def section_gate2c(
         "is a ratio -- a cut of more than roughly 64% of the ex-tail airport-mean",
         "baseline, or a validation-to-leaderboard gap -- because that file records that",
         "an absolute threshold does not transfer between targets. A block",
-        "cannot buy more than the information it carries, so an overshoot means it is",
-        "carrying something else. Each leg is read against the column its headroom was",
+        "cannot buy more than the information it carries, so an overshoot is",
+        "consistent with its carrying something else. Each leg is read against the",
+        "column its headroom was",
         "estimated on: December over all ten airports, July over the three July 2026",
         "contains. The plan-difference row is the one exception to how",
         "that column reads: the review gave those two columns as `+/- 1 s` rather than",
@@ -3499,7 +3562,7 @@ def section_gate2c(
         ]
     lines += ["", *_per_airport_section(results, raw, features, y, forward, chain)]
     lines += ["", *_band_section(results, features, y, forward, arm)]
-    lines += ["", *_tfree_section(results, forward, arm)]
+    lines += ["", *_tfree_section(results, forward, arm, floors)]
     lines += [
         "",
         "**The leakage audit, applied.** "
@@ -3545,7 +3608,35 @@ def section_gate2c(
                 for k, g, e, leg in overshoot
             )
             + f", which is more than the {HEADROOM_TRIGGER_S:.0f} s the trigger allows."
-            " There are two readings of an overshoot and the difference between them"
+            + "".join(
+                f" On {leg} it fires by {g - e - HEADROOM_TRIGGER_S:.2f} s"
+                + (
+                    f", inside the {floors[leg]:.2f} s noise floor on that leg: the"
+                    " verdict is within what changing the seed alone produces, a"
+                    " near miss on the other side of the line."
+                    if leg in floors and g - e - HEADROOM_TRIGGER_S < floors[leg]
+                    else f", outside the {floors[leg]:.2f} s noise floor on that leg."
+                    if leg in floors
+                    else "."
+                )
+                for _, g, e, leg in overshoot
+            )
+            + (
+                " Read literally, the rule above says a block that trips the audit is"
+                " not a success. The chain's rule does not read the audit, and the"
+                " block stays in the chain and in the submission: an overshoot inside"
+                " the seed floor cannot tell leakage from noise. That reading was"
+                " adopted after the number was seen, and the report says so in those"
+                " words."
+                if any(
+                    leg in floors
+                    and g - e - HEADROOM_TRIGGER_S < floors[leg]
+                    and set(LADDER_BY_KEY[k].features) <= set(TOP_RUNG.features)
+                    for k, g, e, leg in overshoot
+                )
+                else ""
+            )
+            + " There are two readings of an overshoot and the difference between them"
             " matters, so both are stated."
         ),
         *(
@@ -3553,8 +3644,10 @@ def section_gate2c(
             if not overshoot
             else [
                 "",
-                "**The two instruments disagree by about a factor of two, and that is"
-                " the finding.** The headroom was estimated by fitting a small booster"
+                "**The two instruments disagree -- the refit takes "
+                + " and ".join(f"{g / e:.2f} times" for _, g, e, _ in overshoot if e)
+                + " what the headroom estimated -- and that is the finding.** The"
+                " headroom was estimated by fitting a small booster"
                 " on the *stored residuals* of a frozen model, cross-validated within"
                 " the validation month itself"
                 + (
@@ -3570,12 +3663,11 @@ def section_gate2c(
                 " refit restructures every split in the model around the new column and"
                 " can use it to condition the blocks already there. So a residual fit"
                 " is expected to come in *under* a refit. What is not established is"
-                " the size of that gap: nothing here predicted a factor of two, no"
+                " the size of that gap: nothing here predicted the ratio above, no"
                 " theorem bounds it, and reading the direction as confirmation would be"
                 " reading a prediction out of a result. The honest statement is that"
-                " the trigger fired, the mechanism below is what the block is checked"
-                " against instead, and the estimate is now known to be the weaker of"
-                " the two instruments.",
+                " the trigger fired and that, on this evidence, the estimate is the"
+                " weaker of the two instruments.",
                 "",
                 "**The other reading is leakage**, and it is the one the trigger exists"
                 " for: a block cannot buy more than the information it carries, so an"
@@ -3587,8 +3679,10 @@ def section_gate2c(
                 " every departure's hidden fields leaves the frame unmoved, and"
                 " poisoning the arrivals' on-block times moves the `occ_` columns and"
                 " the arrival counts and nothing else. Those two bound what the block"
-                " *can* read. What follows bounds where what it read actually landed.",
-                " The decomposition above -- *Where the stand-occupancy gain lands* -- is what the block is checked against instead, and it is a measurement rather than the agreement of two estimates, which is the thing that failed.",
+                " *can* read. Where what it read actually landed is bounded by the"
+                " decomposition above -- *Where the stand-occupancy gain lands* --"
+                " which is a measurement rather than the agreement of two estimates,"
+                " the thing that failed.",
             ]
         ),
     ]
@@ -3749,10 +3843,18 @@ def _band_section(results, features, y, forward, arm) -> list[str]:
 # this section measures have to be the same one, or the report is measuring
 # something the model does not do.
 # The gain, on BOTH forward splits, below which the averaged fit is not adopted.
-# One second on a 230-second error is four tenths of a percent, which is about
-# the size of the run-to-run variation the ladder already shows, and adopting
-# something smaller would be adopting noise.
+# One second on a 230-second error is four tenths of a percent, which was about
+# the size of the run-to-run variation the ladder showed when the rule was set,
+# before the booster was made repeatable, and adopting something smaller would
+# be adopting noise.
 BAGGING_GAIN_S = 1.0
+
+# The same measurement on this rung before the recorded-taxi tail came out of
+# the fit, when it cleared the threshold and was adopted. Quoted and not
+# computed, on the same footing as the figures below, and for the same reason:
+# the run that made it fitted rows this report no longer fits, under the
+# booster's earlier setting. (December, July), in seconds of ex-flagged RMSE.
+BAGGING_BEFORE_TAIL_GAINS_S: tuple[float, float] = (1.10, 1.37)
 
 # The same measurement on the rung below, which did not clear the threshold and
 # was not adopted. Quoted and not computed, on the same footing as
@@ -3809,12 +3911,25 @@ def seed_average(features, y, splits, results, tails: Tails, key: str) -> dict:
             icao=features.loc[split.valid, "icao"],
             flagged=flagged[split.valid],
         )
+        # Each seed scored on its own as well, for the noise floor: the spread of
+        # these is how far one fit's figure moves when nothing but the seed does.
+        singles = [
+            evaluate(
+                y[split.valid],
+                p,
+                icao=features.loc[split.valid, "icao"],
+                flagged=flagged[split.valid],
+            )
+            for p in preds
+        ]
         out[split.name] = {
             "rmse_ex_flagged": float(
                 ev.loc[ev["icao"] == "all", "rmse_ex_flagged_s"].iloc[0]
             ),
             "single": _ex_flagged(base),
             "reproduced": float(np.max(np.abs(preds[0] - base["pred"]))),
+            "seeds": [_ex_flagged({"eval": e}) for e in singles],
+            "seeds_three": [_three_ex_flagged({"eval": e}) for e in singles],
         }
     return out
 
@@ -4108,8 +4223,9 @@ def section_tail_exclusion(
     ]
 
 
-def section_bagging(bagging: dict, splits, key: str) -> list[str]:
+def section_bagging(bagging: dict, splits, key: str, floors=None) -> list[str]:
     """What averaging five seeds is worth, and whether it was adopted."""
+    floors = floors or {}
     forward = [s for s in splits if not s.name.startswith("pairs-")]
     got = [s for s in forward if s.name in bagging]
     if not got:
@@ -4119,6 +4235,16 @@ def section_bagging(bagging: dict, splits, key: str) -> list[str]:
         for s in got
     }
     adopt = len(got) == len(forward) and all(g >= BAGGING_GAIN_S for g in gains.values())
+    # The earlier measurement against this one, split by split, with the floor
+    # the change has to be read against. Computed, because the figures it is
+    # about are computed and a sentence that quotes them by hand goes stale.
+    before = dict(zip((s.name for s in forward), BAGGING_BEFORE_TAIL_GAINS_S))
+    falls = [
+        (s.name, before[s.name], gains[s.name], floors.get(f"{s.name.title()}, all ten"))
+        for s in got
+        if s.name in before
+    ]
+    top = max(falls, key=lambda t: 1.0 - t[2] / t[1]) if falls else None
     rows = [
         [
             s.name.title(),
@@ -4153,14 +4279,17 @@ def section_bagging(bagging: dict, splits, key: str) -> list[str]:
         " They are recorded because a threshold that is only reported on the occasion"
         " it was cleared is not a threshold. It was measured a second time on this"
         f" rung, before the recorded-taxi tail came out of the fit, and cleared the"
-        " threshold at 1.10 and 1.37 s; the figures below are the third measurement,"
+        f" threshold at {BAGGING_BEFORE_TAIL_GAINS_S[0]:.2f} and"
+        f" {BAGGING_BEFORE_TAIL_GAINS_S[1]:.2f} s; the figures below are the third"
+        " measurement,"
         " on the same rung with that tail excluded.",
         "",
         "The rule, fixed before the run: adopt only if the average gains at least",
         f"{BAGGING_GAIN_S:.0f} s on **both** forward splits' ex-flagged RMSE. One second on a",
         "230-second error is four tenths of a percent, about the size of the",
-        "run-to-run variation the ladder already shows, and adopting less than that",
-        "would be adopting noise.",
+        "run-to-run variation the ladder showed when the rule was set, before the",
+        "booster was made repeatable, and adopting less than that would be adopting",
+        "noise.",
         "",
         "The last column is a reproducibility check rather than a result: the first",
         "seed is the one the ladder itself fitted with, so its predictions should",
@@ -4207,17 +4336,202 @@ def section_bagging(bagging: dict, splits, key: str) -> list[str]:
         "",
         (
             "**What the earlier adoption was measuring.** It cleared the threshold at"
-            " 1.10 and 1.37 s before the recorded-taxi tail came out of the fit and"
-            " does not clear it now, which says what the averaging was doing -- and"
-            " says it at two different sizes. In December the gain fell 1.10 to"
-            " 0.81, so the day-shift rows were **about half** of what five seeds"
-            " were smoothing over; in July it fell 1.37 to 0.56, so they were"
-            " **most** of it. Excluding twelve impossible rows did much of the same"
-            " work for none of the compute. That is worth more than the seconds"
-            " either change bought, because it says a good part of the variance had"
-            " a cause rather than being the price of using a booster."
-            if not adopt
+            + " and".join(f" {b:.2f}" for _, b, _, _ in falls)
+            + " s before the recorded-taxi tail came out of the fit and does not clear"
+            " it now. "
+            + " ".join(
+                (
+                    f"In {name.title()} the gain fell from {b:.2f} to {g:.2f} s, by"
+                    f" {1.0 - g / b:.0%}"
+                    if g <= b
+                    else f"In {name.title()} the gain rose from {b:.2f} to {g:.2f} s"
+                )
+                + (
+                    f" -- {abs(b - g):.2f} s, against a noise floor of {f:.2f} s on"
+                    " that leg."
+                    if f is not None
+                    else "."
+                )
+                for name, b, g, f in falls
+            )
+            + " The earlier figures were measured before the booster was made"
+            " repeatable, so each fall mixes the exclusion with that change."
+            + (
+                f" In {top[0].title()} the fall is most of the gain: excluding twelve"
+                " impossible rows did most of what averaging five fits had been doing,"
+                " for none of the compute, so that part of the variance had a cause"
+                " rather than being the price of using a booster."
+                if top is not None and 1.0 - top[2] / top[1] > 0.5
+                else " Neither fall is most of the gain."
+            )
+            if not adopt and falls
             else ""
+        ),
+    ]
+
+
+# The multiple of one fit's seed spread that a comparison between two boosters
+# has to exceed before it is read as more than the seed: the spread of a
+# difference of two fits whose seed noise is independent is the square root of
+# two times that of one. Fixed before the first run that printed it, in
+# reports/migration-2026-09-10.md.
+NOISE_FLOOR_FACTOR = float(np.sqrt(2.0))
+
+
+def _noise_legs(splits) -> list[tuple[str, str, bool]]:
+    """``(split, label, the three only)`` for every leg the floor is read on."""
+    forward = [s for s in splits if not s.name.startswith("pairs-")]
+    legs = [(s.name, f"{s.name.title()}, all ten", False) for s in forward]
+    if len(forward) > 1:
+        legs.append((forward[1].name, f"{forward[1].name.title()}, the three", True))
+    return legs
+
+
+def _noise_floors(bagging: dict, splits) -> dict[str, float]:
+    """The noise floor on each leg, by the leg's label; empty without seed refits.
+
+    The same figure ``section_noise_floor`` prints, so a section that reads a
+    difference against it reads the number the reader can find in that table.
+    """
+    out: dict[str, float] = {}
+    for name, label, three in _noise_legs(splits):
+        if name not in bagging:
+            continue
+        seeds = np.asarray(
+            bagging[name]["seeds_three" if three else "seeds"], dtype=float
+        )
+        if len(seeds) > 1:
+            out[label] = NOISE_FLOOR_FACTOR * float(np.std(seeds, ddof=1))
+    return out
+
+
+def section_noise_floor(results, bagging: dict, tail_arms: dict, splits) -> list[str]:
+    """How far a figure moves with the seed alone, and what sits inside that.
+
+    The five seed refits are the seed-averaging section's own; nothing is
+    refitted here. The comparisons are every rung against the rung it is read
+    against and every tail-exclusion arm against the fit with nothing out --
+    the differences the report's conclusions are drawn from.
+    """
+    legs = [leg for leg in _noise_legs(splits) if leg[0] in bagging]
+    if not legs:
+        return []
+    floors: dict[str, float] = {}
+    spread = []
+    for name, label, three in legs:
+        seeds = np.asarray(
+            bagging[name]["seeds_three" if three else "seeds"], dtype=float
+        )
+        sd = float(np.std(seeds, ddof=1))
+        floors[label] = NOISE_FLOOR_FACTOR * sd
+        spread.append(
+            [
+                label,
+                f"{seeds.min():,.2f} to {seeds.max():,.2f}",
+                f"{sd:.2f}",
+                f"{floors[label]:.2f}",
+            ]
+        )
+
+    def metric(entry, three: bool) -> float:
+        return _three_ex_flagged(entry) if three else _ex_flagged(entry)
+
+    comparisons: list[tuple[str, str, dict[str, float]]] = []
+    for rung in LADDER:
+        base = base_of(rung)
+        if base is None:
+            continue
+        deltas = {}
+        for name, label, three in legs:
+            entry = results.get((name, rung.key, "valid"))
+            below = results.get((name, base.key, "valid"))
+            if entry is not None and below is not None:
+                deltas[label] = metric(entry, three) - metric(below, three)
+        if deltas:
+            comparisons.append((f"`{rung.label}`", f"`{base.label}`", deltas))
+    for hours in TAIL_EXCLUSION_H:
+        deltas = {}
+        for name, label, three in legs:
+            arm = tail_arms.get((name, hours))
+            ref = tail_arms.get((name, None))
+            if arm is not None and ref is not None:
+                field = "three" if three else "rmse_ex_flagged"
+                deltas[label] = arm[field] - ref[field]
+        if deltas:
+            comparisons.append(
+                (f"taxi > {hours:g} h out of the fit", "nothing out of the fit", deltas)
+            )
+
+    inside = [
+        c
+        for c in comparisons
+        if any(np.isfinite(d) and abs(d) < floors[lab] for lab, d in c[2].items())
+    ]
+    rows = []
+    for what, against, deltas in inside:
+        cells = [what, against]
+        for _, label, _ in legs:
+            d = deltas.get(label, float("nan"))
+            if not np.isfinite(d):
+                cells.append("n/a")
+            else:
+                cells.append(f"**{d:+.2f}**" if abs(d) < floors[label] else f"{d:+.2f}")
+        rows.append(cells)
+    uncertain = 1.0 / np.sqrt(2.0 * (BAGGING_SEEDS - 1))
+    return [
+        "## The noise floor",
+        "",
+        "A fit that repeats to the bit makes a run repeatable, and says nothing",
+        "about whether a small difference between two fits means anything. A fit's",
+        "figure still moves with its random seed -- through the rows and the columns",
+        "each tree samples, and the sample of rows its histogram bins are cut from --",
+        "and the seed-averaging section above refits"
+        f" `{LADDER_BY_KEY[SUBMISSION_KEY].label}` under {BAGGING_SEEDS} seeds on"
+        " each forward split. The spread of those single-seed figures is how far a"
+        " figure moves when nothing but the seed does.",
+        "",
+        *table(
+            [
+                "leg",
+                f"range of the {BAGGING_SEEDS} single-seed ex-flagged RMSEs (s)",
+                "standard deviation (s)",
+                "floor (s)",
+            ],
+            spread,
+            "-rrr",
+        ),
+        "",
+        "The floor is the standard deviation times the square root of two, fixed"
+        " before the first run that printed it. A comparison between two boosters"
+        " is the difference of two single-seed fits, and the square root of two is"
+        " the spread of such a difference when the two fits' seed noise is"
+        " independent. They share one seed value, so that is an approximation;"
+        " where the shared seed makes them move together the true spread is smaller,"
+        " and the floor errs towards calling a difference noise. A comparison"
+        " smaller than the floor is within what changing the seed alone produces."
+        " Four limits, stated rather than hidden. The spread is measured on one rung"
+        " and assumed for the others. With"
+        f" {BAGGING_SEEDS} seeds the standard deviation is itself uncertain by about"
+        f" {uncertain:.0%}. The PRU reference and the geometric rungs draw no seed,"
+        " so where one of them is on a side the floor overstates the seed's share;"
+        " they are listed by the same rule. And the held-out-pair folds have no seed"
+        " refits, so their contrasts are not covered here; their own intervals are"
+        " in their section.",
+        "",
+        "The comparisons the floor was fixed to cover are each rung against the rung"
+        " it is read against and each tail-exclusion arm against the fit with nothing"
+        " out. The report draws others -- one encoding arm against another, the"
+        " k-sensitivity refits, the seed average against one seed -- that are not"
+        f" checked here. Of those covered, {len(inside)} of {len(comparisons)} have a"
+        " change in ex-flagged RMSE below the floor on at least one leg, and are"
+        " listed. A change in bold is below the floor on its leg; the test is on the"
+        " unrounded figures, so a change printed equal to its floor can sit on either"
+        " side of it. Negative is better.",
+        "",
+        *table(
+            ["comparison", "read against", *[label for _, label, _ in legs]],
+            rows,
+            "--" + "r" * len(legs),
         ),
     ]
 
@@ -4535,6 +4849,7 @@ def main() -> int:
     # and never inside it.
     print("averaging seeds on the submission rung ...")
     bagging = seed_average(features, y, splits, results, tails, SUBMISSION_KEY)
+    floors = _noise_floors(bagging, splits)
 
     # The recorded-taxi tail, as a fit-side exclusion, on the submission rung
     # only: two thresholds fixed before the run, both reported, adopted by the
@@ -4576,13 +4891,15 @@ def main() -> int:
         + [""]
         + section_encoding(results, features, y, splits, tails, sensitivity, references)
         + [""]
-        + section_gate2c(results, features, y, dep, splits, tails, references)
+        + section_gate2c(results, features, y, dep, splits, tails, references, floors)
         + [""]
-        + section_bagging(bagging, splits, SUBMISSION_KEY)
+        + section_bagging(bagging, splits, SUBMISSION_KEY, floors)
         + [""]
         + section_tail_exclusion(
             tail_arms, results, dep, features, y, splits, tails, SUBMISSION_KEY
         )
+        + [""]
+        + section_noise_floor(results, bagging, tail_arms, splits)
         + [""]
         + section_per_airport(results, splits, tails)
         + [""]

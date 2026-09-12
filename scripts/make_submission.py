@@ -337,9 +337,9 @@ def main() -> int:
     # applies is ``taxiout.models.SEED_AVERAGE_ADOPTED`` rather than a decision
     # taken here, so that this script cannot ship a model the report says was
     # measured and not adopted. It is currently False: once the recorded-taxi
-    # tail came out of every fit, averaging five seeds gained 0.81 s and 0.56 s
-    # on the two forward splits against a one-second threshold fixed before any
-    # of it ran.
+    # tail came out of every fit, averaging five seeds gained 0.86 s and 0.54 s
+    # on the two forward splits, with the booster made repeatable, against a
+    # one-second threshold fixed before any of it ran.
     if SEED_AVERAGE_ADOPTED:
         model = SeedAverage(RUNG.features).fit(X.loc[fit_rows], y[fit_rows])
         how = f"under {BAGGING_SEEDS} seeds"

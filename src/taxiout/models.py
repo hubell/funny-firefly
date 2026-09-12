@@ -173,7 +173,29 @@ BOOSTER_PARAMS: dict[str, object] = {
     "max_cat_threshold": 64,
     "cat_smooth": 20.0,
     "random_state": 20260902,
-    "n_jobs": -1,
+    # Repeatable to the bit, which the booster was not: two ladder runs on one
+    # machine agreed byte for byte on none of the fifty-two residual files
+    # (``reports/linux-run2-vs-run1.txt``), and fifteen fits of one rung gave
+    # fifteen different models (``reports/determinism.md``). ``deterministic``
+    # makes LightGBM's threaded sums -- the initial score and the per-leaf
+    # totals -- run in a fixed order; without it the order in which threads
+    # combine them varies from run to run and moves whole trees. Forcing the
+    # column-wise histograms removes the second source: left to itself LightGBM
+    # times both layouts at the start of every fit and keeps the faster, so the
+    # layout could change from one fit to the next. Column-wise rather than
+    # row-wise because, on the rung measured, it gave the same bits at 8 and at
+    # 14 threads and the same bits as the old parameters at one thread;
+    # row-wise repeats only at a fixed thread count. It was chosen on that
+    # property before any ladder figure under it existed, and costs between a
+    # quarter and a third more per fit than the setting it replaces at the same
+    # thread count.
+    "deterministic": True,
+    "force_col_wise": True,
+    # The reference machine's eight cores. The column-wise setting gave the same
+    # bits at every thread count measured, so this sets the speed and not the
+    # result. The -1 it replaces meant the machine's logical CPU count:
+    # fourteen on the Mac where the committed reports were made, eight here.
+    "n_jobs": 8,
     "verbose": -1,
 }
 
@@ -191,15 +213,16 @@ BOOSTER_PARAMS: dict[str, object] = {
 # was not adopted. On the submission rung it gained 1.10 and 1.37 and was. And
 # once the recorded-taxi tail came out of every fit
 # (``TAIL_EXCLUSION_ADOPTED_H``) it gained 0.81 and 0.56, and by the same rule
-# it is **not** adopted.
+# it is **not** adopted. Refitted once the booster was made repeatable it gains
+# 0.86 and 0.54, and the rule gives the same answer.
 #
-# That is not a coincidence and it is the interesting part, though it is worth
-# stating at the size it actually holds: the day-shift rows were **about half**
-# of what five seeds were smoothing over in December (1.10 -> 0.81) and **most**
-# of it in July (1.37 -> 0.56). Removing twelve impossible rows did much of what
-# averaging five fits had been doing, for none of the compute. Averaging seeds
-# is variance reduction; a good part of the variance it was reducing had a
-# cause, and the cause is gone.
+# What the tail exclusion took out of the gain is the interesting part, and it
+# is worth stating at the size it holds: about a fifth of it in December
+# (1.10 -> 0.86) and three fifths in July (1.37 -> 0.54). The two earlier
+# figures were measured before the booster was made repeatable. In July,
+# removing twelve impossible rows did most of what averaging five fits had been
+# doing, for none of the compute: averaging seeds is variance reduction, and
+# much of the variance it was reducing there had a cause.
 #
 # ``reports/baseline.md``'s *Seed averaging* section is the measurement and
 # carries a reproducibility check: the first of the seeds is the one the ladder
@@ -762,9 +785,12 @@ LADDER_BY_KEY: dict[str, Rung] = {r.key: r for r in LADDER}
 #
 # Two rungs of the ladder proper sit above this one.
 #
-# The saturation rung is the older case: a measured negative that costs half a
-# second in December and eight tenths in July, takes none of the ceiling, and
-# belongs in the ladder and the write-up rather than in the model.
+# The saturation rung is the older case: it takes none of the ceiling, and with
+# the booster made repeatable it moves the ex-flagged RMSE by -0.21 s in
+# December and +0.29 s in July, at the edge of the seed floor on the first leg
+# and inside it on the second (``reports/baseline.md``, *The noise floor*). A
+# block worth that little belongs in the ladder and the write-up rather than
+# in the model.
 #
 # ``+ shrunk encoding, replacing stand and runway`` is out too, though it sits
 # below this rung on the ladder and so no longer appears in
