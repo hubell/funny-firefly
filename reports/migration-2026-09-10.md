@@ -84,9 +84,10 @@ thread count. The row-wise one repeats only at a fixed count, because its
 histograms are summed over row blocks sized by the thread count. **That
 independence belongs to this rung and not to the configuration**, which the
 Phase 4 section below measured afterwards: fitted at one thread instead of
-eight, three of December's 25 rungs grow different trees, column-wise or not,
-by 158.3 s, 40.3 s and 4.97 s on a flight. Which three, and why, is not
-explained by anything measured. Every reported run uses eight.
+eight, with the column-wise setting every Phase 4 fit used, three of
+December's 25 rungs grow different trees, by 158.3 s, 40.3 s and 4.97 s on a
+flight. Which three, and why, is not explained by anything measured. Every
+reported run uses eight.
 
 **The cost** is the median fit time of this rung: the column-wise
 configuration takes 30.4 s at 8 threads against 23.0 s for the current
