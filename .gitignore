@@ -35,6 +35,11 @@ CLAUDE.md
 secrets.toml
 credentials*
 
+# CatBoost writes its training log into the working directory whenever the
+# booster falls back to it, which happens wherever lightgbm is not importable.
+# No test fits one, so there is no train_dir to point somewhere else.
+catboost_info/
+
 # python
 __pycache__/
 *.py[cod]

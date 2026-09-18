@@ -191,10 +191,41 @@ BOOSTER_PARAMS: dict[str, object] = {
     # thread count.
     "deterministic": True,
     "force_col_wise": True,
-    # The reference machine's eight cores. The column-wise setting gave the same
-    # bits at every thread count measured, so this sets the speed and not the
-    # result. The -1 it replaces meant the machine's logical CPU count:
-    # fourteen on the Mac where the committed reports were made, eight here.
+    # Eight threads, and part of the result rather than only of the speed. On
+    # December's ``identifiers`` rung the column-wise setting gives the same
+    # bits at 1, 2, 4, 8 and 14 threads, and that does NOT generalise. Fitted at
+    # one thread instead, December's 25 rungs split three ways: nine are
+    # bit-identical to their eight-thread fits, thirteen differ only in the last
+    # bits of a sum taken in another order, and three grow different trees --
+    # ``weather-nolag`` by 158.3 s, ``throughput`` by 40.3 s and
+    # ``corridor-nolag`` by 4.97 s on a flight. At four threads, on December,
+    # only ``corridor-nolag`` grows different trees; seven differ in the last
+    # bits and seventeen are bit-identical. July's 25 rungs, fitted at one
+    # thread, grow no different trees at all: four differ in the last bits and
+    # twenty-one are bit-identical. No printed RMSE moves at the precision the
+    # reports carry, so where it happens it is invisible in a report and real
+    # in the model. Most rungs therefore survive a change of thread count and
+    # some do not, which is why every reported run pins this value rather than
+    # trusting the ones that do.
+    #
+    # Which rungs move is unexplained. All six rungs measured with LightGBM's
+    # dataset construction logged build a multi-value bin group, the three that
+    # move and the three that do not alike, and the sparse rate does not
+    # separate them either, so neither is what distinguishes them.
+    #
+    # What it is NOT is the machine's core count. Two of the rungs that move at
+    # one thread were refitted with ``n_jobs`` left at eight and the process
+    # confined first to four CPUs and then to two, and both gave the ladder's
+    # own digests every time: the row blocks follow the parameter and not the
+    # cores on offer. That was measured by narrowing one machine rather than by
+    # running on another, so what it settles is that the core count is not part
+    # of the result -- this pins a thread count, not a host.
+    # ``reports/threads-2026-09-12.md`` is the measurement and
+    # ``scripts/fast_lane.py`` is what makes it; fits at other counts belong
+    # there rather than here.
+    #
+    # The -1 it replaces meant the machine's logical CPU count, which made the
+    # fit depend on whatever host it ran on.
     "n_jobs": 8,
     "verbose": -1,
 }
