@@ -167,13 +167,20 @@ def tracked_files() -> list[str]:
     ]
     try:
         proc = subprocess.run(
-            ["git", "check-ignore", "--stdin"],
+            ["git", "check-ignore", "-z", "--stdin"],
             cwd=REPO,
-            input="\n".join(candidates),
+            input="\0".join(candidates),
             capture_output=True,
             text=True,
         )
-        ignored = set(proc.stdout.split())
+        # NUL-delimited in both directions. The default line format splits a
+        # path containing a space into fragments that match no candidate, and
+        # C-quotes any path holding a non-ASCII byte; either leaves an ignored
+        # file looking un-ignored, so it gets scanned and counted. That errs
+        # conservatively -- more files checked, never fewer -- but it makes the
+        # printed file count wrong, and a count nobody can trust is one nobody
+        # reads. The output is NUL-*terminated*, hence the empty final field.
+        ignored = set(proc.stdout.split("\0")) - {""}
     except FileNotFoundError:
         ignored = set()
     return sorted(f for f in candidates if f not in ignored)

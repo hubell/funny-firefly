@@ -149,14 +149,28 @@ def environment() -> dict:
     import scipy
     from threadpoolctl import threadpool_info
 
-    cpu = ""
+    # The instruction set, where the machine will say. ``None`` where it will
+    # not -- an unreadable /proc/cpuinfo, or a platform that names the field
+    # something else, as aarch64 does -- because "this CPU has no AVX" and "no
+    # one asked this CPU" are different statements and only the first is a
+    # claim about the hardware.
+    flags: set[str] | None = None
     try:
         for line in Path("/proc/cpuinfo").read_text().splitlines():
-            if line.startswith("model name"):
-                cpu = line.split(":", 1)[1].strip()
+            if line.split(":", 1)[0].strip() in ("flags", "Features"):
+                flags = set(line.split(":", 1)[1].split())
                 break
     except OSError:
-        cpu = platform.processor()
+        flags = None
+    isa = (
+        None
+        if flags is None
+        else "AVX-512"
+        if "avx512f" in flags
+        else "AVX2"
+        if "avx2" in flags
+        else "no AVX2"
+    )
     keys = (
         "OPENBLAS_NUM_THREADS",
         "OMP_NUM_THREADS",
@@ -171,7 +185,7 @@ def environment() -> dict:
         "scipy": scipy.__version__,
         "lightgbm": lightgbm.__version__,
         "machine": platform.machine(),
-        "cpu": cpu,
+        "isa": isa,
         "cores": os.cpu_count(),
         "loadavg_at_start": list(os.getloadavg()),
         "env": {k: os.environ.get(k) for k in keys},
@@ -183,6 +197,23 @@ def environment() -> dict:
             for p in threadpool_info()
         ],
     }
+
+
+# The settings a run pinned, as a short phrase, or "" where it pinned none.
+# Only the ones that could change a fit are here: the two thread counts the
+# libraries read, the BLAS kernel, and the hash seed.
+_PINNED = (
+    ("OMP_NUM_THREADS", "OMP"),
+    ("OPENBLAS_NUM_THREADS", "OpenBLAS"),
+    ("OPENBLAS_CORETYPE", "kernel"),
+    ("PYTHONHASHSEED", "hashseed"),
+)
+
+
+def _pinned(record: dict) -> str:
+    env = record["environment"]["env"]
+    said = [f"{name} {env[key]}" for key, name in _PINNED if env.get(key) is not None]
+    return "environment pinned: " + ", ".join(said) if said else ""
 
 
 def peak_rss_mib() -> float:
@@ -455,6 +486,35 @@ def _records(kind: str) -> list[dict]:
     return sorted(out, key=lambda r: r["started"])
 
 
+# The parameters that tell one configuration in ``CONFIGS`` from another, read
+# off ``CONFIGS`` itself so that a new entry cannot go unrecognized.
+_FLAGS = tuple(dict.fromkeys(k for extra in CONFIGS.values() for k in extra))
+
+
+def _configuration(record: dict) -> str:
+    """The configuration a fit ran, read off the parameters it recorded.
+
+    Not the ``config`` it was launched under. That name says what the fit
+    added to ``BOOSTER_PARAMS`` as they stood when it ran, and they changed:
+    once ``deterministic`` and ``force_col_wise`` were in them, a fit launched
+    as ``current`` ran what ``deterministic-col`` names, and grouping by the
+    launch name would put two parameter sets under one label. A flag set that
+    no entry carries is named by its flags rather than by the nearest entry.
+    """
+    flags = {k for k in _FLAGS if record["params"].get(k)}
+    for name, extra in CONFIGS.items():
+        if {k for k, v in extra.items() if v} == flags:
+            return name
+    return "+".join(k for k in _FLAGS if k in flags)
+
+
+def _listed(items: list[str]) -> str:
+    """``a``, ``a and b``, ``a, b and c``; ``none`` for nothing."""
+    if not items:
+        return "none"
+    return items[0] if len(items) == 1 else ", ".join(items[:-1]) + " and " + items[-1]
+
+
 def _max_delta(a, b) -> float:
     """Largest absolute difference; infinite if the missing values differ."""
     a = np.asarray(a, dtype=np.float64)
@@ -605,19 +665,35 @@ def report(args) -> int:
     for name, why in skipped:
         print(f"reference {name!r} skipped: {why}")
 
-    # Every fit, grouped by configuration and thread count across processes.
+    # Every fit, grouped by the configuration named by its recorded parameters,
+    # by thread count, by whether it was logged and by the environment it ran
+    # under, across processes. The environment belongs in the key because a run
+    # made with the thread and hash settings pinned is not the same condition as
+    # one made with them unset, and pooling the two would average a row that
+    # repeats into one that does not and report neither.
     groups: dict[tuple, list[dict]] = {}
     for r in runs:
-        groups.setdefault((r["config"], r["n_jobs"], r["verbose"]), []).append(r)
+        groups.setdefault(
+            (_configuration(r), r["n_jobs"], r["verbose"], _pinned(r)), []
+        ).append(r)
     preds = {f["file"]: np.load(WORK / f["file"]) for r in runs for f in r["fits"]}
     order = list(CONFIGS)
     keys = sorted(
         groups,
-        key=lambda k: (order.index(k[0]) if k[0] in order else len(order), k[2], k[1]),
+        key=lambda k: (
+            order.index(k[0]) if k[0] in order else len(order),
+            k[2],
+            k[1],
+            k[3],
+        ),
     )
 
     def label(key) -> str:
-        return f"`{key[0]}`" + (" (logged)" if key[2] else "")
+        return (
+            f"`{key[0]}`"
+            + (" (logged)" if key[2] else "")
+            + (f" ({key[3]})" if key[3] else "")
+        )
 
     summary: dict[tuple, dict] = {}
     for key in keys:
@@ -658,7 +734,7 @@ def report(args) -> int:
         well over the rest -- one did here by half -- and a mean over six fits
         would charge that to the configuration.
         """
-        ref = summary.get(("current", key[1], False))
+        ref = summary.get(("current", key[1], False, key[3]))
         if ref is None or key[0] == "current":
             return "--"
         ratio = np.median(summary[key]["seconds"]) / np.median(ref["seconds"]) - 1.0
@@ -737,16 +813,24 @@ def report(args) -> int:
     # from the tree as it stands when the report is written.
     base_params: dict | None = None
     mixed: list[str] = []
+    # Processes shown under a name other than the one they were launched under,
+    # keyed by the pair of names.
+    renamed: dict[tuple[str, str], list[dict]] = {}
     for r in runs:
-        extras = CONFIGS.get(r["config"], {})
+        if _configuration(r) != r["config"]:
+            renamed.setdefault((r["config"], _configuration(r)), []).append(r)
+        # The flags a fit recorded are what its configuration's name says, so
+        # they are left out; any other parameter that differs is a real
+        # difference in what was fitted.
+        flags = {k for k in _FLAGS if r["params"].get(k)}
         base = {
             k: v
             for k, v in r["params"].items()
-            if k not in ("n_jobs", "verbose") and k not in extras
+            if k not in ("n_jobs", "verbose") and k not in flags
         }
         if base_params is None:
             base_params = base
-        if base != base_params or any(r["params"].get(k) != v for k, v in extras.items()):
+        if base != base_params:
             mixed.append(r["tag"])
     used = sorted({r["build"] for r in runs})
     per = sorted({len(r["fits"]) for r in runs})
@@ -771,7 +855,14 @@ def report(args) -> int:
         "",
         "## Setup",
         "",
-        f"- Machine: {env['cpu']}, {env['cores']} logical CPUs, {env['machine']}.",
+        "- Machine: "
+        + env["machine"]
+        + (
+            f" with {env['isa']}"
+            if env.get("isa")
+            else " (these fits did not record the instruction set)"
+        )
+        + f", {env['cores']} logical CPUs.",
         f"- Python {env['python']}, numpy {env['numpy']}, pandas {env['pandas']}, "
         f"pyarrow {env['pyarrow']}, scipy {env['scipy']}, LightGBM {env['lightgbm']}.",
     ]
@@ -941,6 +1032,26 @@ def report(args) -> int:
         + ".",
         "",
     ]
+    if renamed:
+        said = []
+        for (was, now), rs in renamed.items():
+            one = len(rs) == 1
+            flags = [
+                f"`{k}={rs[0]['params'][k]}`" for k in _FLAGS if rs[0]["params"].get(k)
+            ]
+            said.append(
+                _listed([f"`{r['tag']}`" for r in rs])
+                + f" {'was' if one else 'were'} launched as `{was}` after that change, "
+                f"recorded {_listed(flags)}, and so appear{'s' if one else ''} under "
+                f"`{now}`."
+            )
+        text += [
+            "Fits are grouped and named by the parameters each one recorded, not by "
+            "the configuration it was launched under: a launch name says what the "
+            "fit added to `BOOSTER_PARAMS` as they stood when it ran, and they "
+            "changed. " + " ".join(said),
+            "",
+        ]
     if mixed:
         text += [
             "**These fit processes ran under different base parameters from the",

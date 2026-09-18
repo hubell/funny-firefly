@@ -30,11 +30,14 @@ Data (c) OpenStreetMap contributors, ODbL 1.0.
 
 Measured with `scripts/check_determinism.py` on one split and one rung,
 December's `identifiers`, fitted repeatedly from a cached feature frame
-instead of by refitting the ladder: five builds of the frame and 51 fits in
-17 processes, run one after another. Every figure below is in
-[`determinism.md`](determinism.md), which the script generates, except the
-reproducibility column quoted next, which is read from the committed
-`baseline.md` and from run 1's copy of it, kept outside the repository.
+instead of by refitting the ladder: on 11 September, five builds of the frame
+and 51 fits in 17 processes, run one after another. Every figure below is in
+[`determinism.md`](determinism.md), which the script generates (regenerated
+on 18 September with the container run and the two scaling runs, eight fits in
+three processes, and three further builds of the frame, it now counts eight
+builds and 59 fits in 20 processes), except the reproducibility column quoted
+next, which is read from the committed `baseline.md` and from run 1's copy of
+it, kept outside the repository.
 
 **The report's own check already failed here.** The seed-averaging section's
 reproducibility column reads `0.00e+00` on both splits in the committed
@@ -49,8 +52,12 @@ geometric fits and the rung's design. Under `OPENBLAS_NUM_THREADS=1` exactly
 one changes: the `geometric-class` rung's predictions, where
 `np.linalg.lstsq` runs in `taxiout.unimpeded`, by 2.90e-08 s at most, which
 moves that rung's December RMSE by 8.70e-11 s. Two builds at one BLAS thread
-agree with each other, as three at the default of eight do, so the difference
-repeats at a fixed thread count and reaches no booster input.
+agree with each other, as three at the default of eight did on 11 September,
+so the difference repeats at a fixed thread count and reaches no booster
+input. Since the regeneration the report has five builds at the default, all
+identical, and `ctr1`, built in the container with the environment pinned
+(OMP 8, OpenBLAS 8, kernel SkylakeX, hashseed 0), identical to `a` on every
+component.
 
 **The booster does not repeat, and the thread reductions are why.** Under the
 current parameters every fit was a new outcome: fifteen fits at 8 and 14
@@ -72,9 +79,14 @@ strategy chosen by timing is a second, smaller source.
 | `deterministic`, `force_row_wise` | 1 in 6, two processes | 1 in 6, two processes | 19.49 s apart |
 
 The column-wise configuration also gives the same bits as the current
-parameters at one thread, so on this machine its result does not depend on
-the thread count at all. The row-wise one repeats only at a fixed count,
-because its histograms are summed over row blocks sized by the thread count.
+parameters at one thread, so on this rung its result does not depend on the
+thread count. The row-wise one repeats only at a fixed count, because its
+histograms are summed over row blocks sized by the thread count. **That
+independence belongs to this rung and not to the configuration**, which the
+Phase 4 section below measured afterwards: fitted at one thread instead of
+eight, three of December's 25 rungs grow different trees, column-wise or not,
+by 158.3 s, 40.3 s and 4.97 s on a flight. Which three, and why, is not
+explained by anything measured. Every reported run uses eight.
 
 **The cost** is the median fit time of this rung: the column-wise
 configuration takes 30.4 s at 8 threads against 23.0 s for the current
@@ -99,11 +111,12 @@ Written before any ladder figure under the new configuration exists.
 
 **The configuration** is `deterministic=True` with `force_col_wise=True` and
 `n_jobs` 8, in `BOOSTER_PARAMS`. It is chosen on one property measured above
--- it alone repeated at every thread count tried and gave the same bits at 1,
-8 and 14 threads -- and on no figure it produces. The row-wise configuration,
-the one alternative that also repeats, is run once as well, so that what the
-choice between the two changes is on the record: every printed figure that
-differs between them, and every conclusion that does.
+-- on the rung measured it alone repeated at every thread count tried, and
+gave the same bits at 1, 8 and 14 threads -- and on no figure it produces.
+The row-wise configuration, the one alternative that also repeats, is run
+once as well, so that what the choice between the two changes is on the
+record: every printed figure that differs between them, and every conclusion
+that does.
 
 **The reproduction criterion.** Two consecutive runs of `make baseline`,
 `residual`, `occupancy`, `congestion` and `transfer` under that
@@ -197,8 +210,9 @@ worth nothing. What it does change:
   the pair-frequency buckets, and one ordering in `congestion.md`.
 
 No sentence rests on any of these. The pooled ladder moves by at most 0.4 s and
-a single bucket by 1.7 s. The choice was fixed on thread-count independence,
-and on this evidence it decides nothing a reader would act on.
+a single bucket by 1.7 s. The choice was fixed on the thread-count
+independence the measured rung showed, and on this evidence it decides nothing
+a reader would act on.
 
 **The noise floor.** The five seed refits `baseline.md` already made give, per
 leg, the standard deviation of five single-seed ex-flagged RMSEs:
@@ -284,6 +298,17 @@ re-uploaded under the same version. So what the runs above establish is what
 the container changes about a run -- nothing, on this machine -- and not that
 the image builds.
 
+*Both pins were filled on 2026-09-13; the paragraph above stands as what was
+true when these runs were made.* The hashes came from the command the freeze
+file prescribes, run where there is index access. The base image is pinned to
+the published amd64 image rather than to the multi-arch index, which is the
+architecture this environment commits to everywhere else. The image still has
+not been built and still cannot be built here. One thing the filling did not
+settle: no digest for the base these two runs used survives anywhere in this
+repository or in this machine's image store, so what is pinned now is the tag's
+published digest and not a verified match for what they ran on. The
+Containerfile says so in its own header.
+
 **What none of this establishes.**
 
 - Any CPU other than the reference Ryzen 7 7800X3D. The coretype pin names an
@@ -297,10 +322,117 @@ the image builds.
 - One container runtime, rootless podman, on this kernel. Docker, containerd,
   a cgroup CPU quota or a narrower cpuset are untested, and a memory limit
   below the ladder's 8.1 GiB peak would end a run rather than change it.
-- A machine with a core count other than eight; `n_jobs` is 8, and
-  thread-count independence was measured at 1, 8 and 14 threads on this part
-  alone.
+- A host whose core count is not eight -- though the core count itself is no
+  longer the open question it was. Two of the rungs that move at one thread
+  were refitted with `n_jobs` left at eight and the process confined first to
+  four CPUs and then to two, and gave the ladder's own digests every time, so
+  the row blocks the histograms are summed over follow the parameter and not
+  the cores on offer (Phase 4 below). That was measured by narrowing this
+  machine rather than by running on a second one, so what it settles is that
+  the core count is not part of the result -- not that another host reproduces
+  these figures, which only that host can say. What `n_jobs` itself is worth is
+  the Phase 4 section: at one thread three of December's 25 rungs are different
+  models.
 - The image's own install path: the uv installer fetch, `uv python install
   3.13.5`, and a fresh resolution of the thirty packages from the index. The
   runs above used the host's interpreter and wheels.
 - GPU: nothing has been fitted on one, here or anywhere in this repository.
+
+## The booster's thread count (Phase 4), 2026-09-12 to 2026-09-13
+
+**What was run.** The ladder's 25 non-diagnostic booster rungs on each split
+(the diagnostic `occupancy-tfree` was not refitted), refitted at a chosen
+`n_jobs` and each compared with the rung's stored residuals: 9 runs and 114
+fits over the December and July splits, made on 2026-09-12 to 2026-09-13,
+with LightGBM 4.7.0 in the 2 runs that record their versions. What is
+compared is the largest absolute difference over the split's validation rows,
+in seconds of taxi-out time: at or below 1e-06 s it is the last bits of a sum
+taken in another order, and above it the fit grew a different set of trees.
+Every figure below is in [`threads-2026-09-12.md`](threads-2026-09-12.md),
+which is generated from the run records, except the wall-clock comparison,
+whose two times are read from the records themselves, and those of the
+paragraph on [`determinism.md`](determinism.md), which are in that report.
+
+**December.** Fitted afresh at eight threads, one at a time, which is how
+every reported figure was fitted, all 25 rungs reproduce the ladder's stored
+residuals exactly. At one thread they do not. Fitted eight at once, 3 of the
+25 grow different trees, `weather-nolag` by 158.3 s, `throughput` by 40.27 s
+and `corridor-nolag` by 4.972 s on a flight; 13 differ in the last bits only
+and 9 are bit-identical. `weather-nolag` and `throughput`, refitted at one
+thread one at a time, move by the same 158.3 s and 40.27 s and give the same
+digests alone as beside the others, so fitting beside other fits is not what
+moves them; `corridor-nolag` was not fitted at one thread alone. At four
+threads, one at a time, only `corridor-nolag` grows different trees, by
+4.972 s; 7 differ in the last bits and 17 are bit-identical.
+
+**The parameter, not the cores.** `throughput` and `weather-nolag` were
+refitted with `n_jobs` left at eight and the process confined first to 4 CPUs
+and then to 2, and all 4 fits gave the ladder's own digests, `6e626da12f` and
+`0d84cc7335`. The row blocks the histograms are summed over are therefore cut
+by `n_jobs` and not by the number of CPUs the process can see.
+
+**July.** Fitted at one thread, one at a time, none of July's 25 rungs grows
+different trees: 4 differ in the last bits only and 21 are bit-identical.
+
+**What a reader would see.** On neither split does any rung's RMSE move at the
+one decimal the reports print, under any condition run.
+
+**What it costs.** Running fits beside each other gains 1.08x in wall clock,
+which the report does not carry. December's run of all 25 rungs as eight
+one-thread fits side by side took 1,409 s, and its run one at a time at eight
+threads 1,528 s; those two times are the records' own, and 1.08x is their
+ratio.
+
+**Which rungs move is unexplained.** With LightGBM's dataset construction
+logged, all 6 rungs measured build a multi-value bin group and then use none
+of it, the 3 that move and the 3 that do not (`corridor`, `throughput-nolag`
+and `weather`) alike, and the sparse rate does not separate them either:
+0.865997 and 0.874267 are each reported by a rung that moves and by one that
+does not. No mechanism is claimed. Logging left the fits alone: the 6
+rung-and-condition pairs fitted both logged and quiet each gave one digest.
+
+**What it establishes.** The reproduction claim is a claim at `n_jobs` 8,
+which `BOOSTER_PARAMS` pins, and not a claim about the configuration at every
+thread count: on December a change of thread count gives a different model
+for 3 of the 25 rungs at one thread, fitted eight at once, and for 1 at four.
+It is a claim about a thread count and not about an eight-core machine,
+because, on the two rungs refitted with fewer CPUs, the row blocks follow the
+parameter and not the CPUs on offer. And what the thread count is worth is not
+the same on both splits: at one thread 3 of December's 25 rungs grow different
+trees, fitted eight at once, and none of July's, fitted one at a time.
+
+**`determinism.md`, regenerated on 18 September.** The report on December's
+`identifiers` rung now carries what was recorded after 11 September: the
+container run and the two scaling runs, eight fits in three processes, and
+three further builds of the frame. It counts eight builds and 59 fits in 20
+processes. It names each fit by the parameters it recorded rather than by the
+configuration it was launched under, so the three processes launched as
+`current` after `deterministic` and `force_col_wise` entered `BOOSTER_PARAMS`
+appear under `deterministic-col`: the scaling runs at 2 and at 4 threads,
+three fits each, and the container's two fits at 8 on a row of their own,
+with the environment pinned (OMP 8, OpenBLAS 8, kernel SkylakeX, hashseed 0).
+Each gives one outcome, identical to `deterministic-col` at 8 and 14 threads
+and to `current` at one thread. The three builds are identical to `a` on
+every component. Every table entry the report carried on 11 September is
+unchanged. Beside them, the component table gains a column for each new
+build, the setup line names the architecture where it named the CPU model,
+the seed sentence names `ctr1`'s fixed seed, the generation date is the
+regeneration's, and the totals, the fits to a process (2 to 3, where it said
+3) and the low end of the load average as a fit began (0.53, where it said
+1.39) moved with the new records.
+
+**What none of this establishes.**
+
+- Another host. Every fit here ran on the reference machine; narrowing its
+  CPUs, for the two rungs refitted that way, settles that the core count is
+  not part of their result, not what a second machine gives.
+- Any LightGBM other than the one these runs used, 4.7.0 in the 2 that record
+  it. The library's own documentation says `deterministic` should keep results
+  stable across a change in the number of threads, and
+  [`threads-2026-09-12.md`](threads-2026-09-12.md) quotes it; in these runs 3
+  of December's 25 rungs grow different trees at one thread, fitted eight at
+  once, and 1 at four.
+- A split, a rung or a thread count not fitted here: four threads was run on
+  December alone, July only at one thread, and `occupancy-tfree` not at all.
+- The mechanism. Which rungs move at another thread count, and why, is not
+  explained by anything measured.
