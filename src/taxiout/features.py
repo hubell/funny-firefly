@@ -609,59 +609,65 @@ def build_features(
     out["wake_class"] = _level(frame["WK_TBL_CAT_flt"])
     out["aircraft_type"] = _level(frame["AIRCRAFT_TYPE_mvt"])
 
-    for c, values in planlag_features(frame, movements).items():
-        out[c] = values
+    # Each block below adds a dozen or more columns, and assigning them one at
+    # a time reallocates the whole frame every time -- pandas warns about it,
+    # and at two million rows it is the most expensive thing this function
+    # does. They are collected and joined in one go instead. The columns are
+    # the same objects either way, so the frame is unchanged; what changes is
+    # how many times it was copied to get there.
+    #
+    # The shrunk encoding is last and is not built here. It depends on the
+    # split -- on which rows the model may read a target from -- and this
+    # function knows nothing about splits, so the caller computes it per fold
+    # with ``taxiout.encoding.encode_split`` and overlays it with
+    # ``with_encoding``. Left out, the columns are missing rather than zero,
+    # and the ladder skips any rung that reads them, exactly as it does for
+    # the corridor block without its edge sets.
+    blocks: dict[str, object] = {}
+    for block in (
+        planlag_features(frame, movements),
+        congestion_features(frame, movements),
+        (
+            {c: np.nan for c in CORRIDOR_FEATURES}
+            if edges is None
+            else corridor_features(frame, movements, matrix, edges)
+        ),
+        weather_features(frame, weather),
+        saturation_features(frame, movements),
+        occupancy_features(frame, movements),
+        occupancy_tfree_features(frame, movements),
+        callsign_features(frame),
+        destination_features(frame, airports),
+        holiday_features(frame),
+        plandiff_features(frame),
+        {
+            c: (np.nan if encoded is None or c not in encoded else encoded[c])
+            for c in ENCODING_FEATURES
+        },
+    ):
+        blocks.update(block)
 
-    for c, values in congestion_features(frame, movements).items():
-        out[c] = values
+    # One construction, from the columns rather than from two frames: a concat
+    # of the early frame with the blocks would hold both plus the result, and
+    # at two million rows each of those is about a gigabyte. ``FEATURE_COLUMNS``
+    # order is the dict's insertion order, so the frame comes out in it.
+    columns: dict[str, object] = dict(out.items())
+    columns.update(blocks)
 
-    if edges is None:
-        for c in CORRIDOR_FEATURES:
-            out[c] = np.nan
-    else:
-        for c, values in corridor_features(frame, movements, matrix, edges).items():
-            out[c] = values
+    def _column(value):
+        return (
+            value if isinstance(value, pd.Series) else pd.Series(value, index=frame.index)
+        )
 
-    for c, values in weather_features(frame, weather).items():
-        out[c] = values
-
-    for c, values in saturation_features(frame, movements).items():
-        out[c] = values
-
-    for c, values in occupancy_features(frame, movements).items():
-        out[c] = values
-
-    for c, values in occupancy_tfree_features(frame, movements).items():
-        out[c] = values
-
-    for c, values in callsign_features(frame).items():
-        out[c] = values
-
-    for c, values in destination_features(frame, airports).items():
-        out[c] = values
-
-    for c, values in holiday_features(frame).items():
-        out[c] = values
-
-    for c, values in plandiff_features(frame).items():
-        out[c] = values
-
-    # The shrunk encoding is not built here. It depends on the split -- on
-    # which rows the model may read a target from -- and this function knows
-    # nothing about splits, so the caller computes it per fold with
-    # ``taxiout.encoding.encode_split`` and overlays it with ``with_encoding``.
-    # Left out, the columns are missing rather than zero, and the ladder skips
-    # any rung that reads them, exactly as it does for the corridor block
-    # without its edge sets.
-    for c in ENCODING_FEATURES:
-        out[c] = np.nan if encoded is None or c not in encoded else encoded[c]
-
-    for c in FEATURE_COLUMNS:
-        if c in CATEGORICAL_FEATURES:
-            out[c] = out[c].astype("category")
-        else:
-            out[c] = out[c].astype("float32")
-    return out[list(FEATURE_COLUMNS)]
+    typed = {
+        c: (
+            _column(columns[c]).astype("category")
+            if c in CATEGORICAL_FEATURES
+            else _column(columns[c]).astype("float32")
+        )
+        for c in FEATURE_COLUMNS
+    }
+    return pd.DataFrame(typed, index=frame.index, copy=False)
 
 
 def feature_block(names: tuple[str, ...] | list[str]) -> list[str]:
