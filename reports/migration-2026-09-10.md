@@ -247,9 +247,9 @@ chosen by mechanism, not score, which the report already says. The
 held-out-pair contrasts have no seed refits and carry their own intervals.
 
 **Run times, measured on run A.** `make baseline` 2 h 06 min at a peak of
-8.1 GiB, `transfer` 14 min, `congestion` 1 min 42 s, `residual` 13 s and
-`occupancy` 14 s, on eight cores; run B's `baseline` took 2 h 07 min. The
-Makefile's help text says so.
+7.9 GiB (8,087 MiB), `transfer` 14 min, `congestion` 1 min 42 s, `residual`
+13 s and `occupancy` 14 s, on eight cores; run B's `baseline` took
+2 h 07 min. The Makefile's help text says so.
 
 **Not changed here.** `docs/paper.md`, `docs/plan.md` and
 `docs/review_headroom.md` quote figures that moved (218.0 and 325.6 s, the
@@ -322,7 +322,8 @@ Containerfile says so in its own header.
   build.
 - One container runtime, rootless podman, on this kernel. Docker, containerd,
   a cgroup CPU quota or a narrower cpuset are untested, and a memory limit
-  below the ladder's 8.1 GiB peak would end a run rather than change it.
+  below the ladder's 7.9 GiB (8,087 MiB) peak would end a run rather than
+  change it.
 - A host whose core count is not eight -- though the core count itself is no
   longer the open question it was. Two of the rungs that move at one thread
   were refitted with `n_jobs` left at eight and the process confined first to
@@ -437,3 +438,122 @@ regeneration's, and the totals, the fits to a process (2 to 3, where it said
   December alone, July only at one thread, and `occupancy-tfree` not at all.
 - The mechanism. Which rungs move at another thread count, and why, is not
   explained by anything measured.
+
+## The fresh operating system (Phase 5), 2026-09-18
+
+**What was run.** The reference machine's operating system was reinstalled:
+Fedora Linux 44, kernel 7.2.5, glibc 2.43, and the system `libgomp` from
+the `libgomp-16.2.1-2.fc44` package, which `lib_lightgbm.so` takes its
+OpenMP runtime from. CPython 3.13.5 and the thirty packages of
+`requirements-freeze.txt` were installed afresh. The packages came from
+the index and were checked against the file's hashes, the first time those
+hashes have installed anything; none was refused, and the installed
+versions match [`linux-freeze.txt`](linux-freeze.txt). numpy and scipy
+carry the same OpenBLAS builds as before, 0.3.27 and 0.3.28, and both
+select the SkylakeX kernel at eight threads. Everything ran in a copy of
+the tree at `9af7e2e`, with no thread, BLAS or hash-seed variable set. The
+cheaper check came first: one build of the feature frame and three fits of
+December's `identifiers` under the reference configuration at `n_jobs` 8.
+Then came `residual`, `occupancy` and `congestion` against the stored
+residual files, and then `baseline`, `transfer`, `residual`, `occupancy`
+and `congestion`, once each.
+
+**The result.** The frame's 175 digests are identical to those of build
+`a` on 11 September. The three fits give one prediction array, the one
+every `deterministic-col` fit in [`determinism.md`](determinism.md) gives.
+The three reports that fit nothing differ from the committed ones in their
+generation date alone. After the full run all 52 residual files are
+byte-identical to the stored ones, and each of the five reports the
+pipeline writes differs in one line, the date it was generated on. Every
+other report and the figure beside them are identical.
+`scripts/compare_runs.py` counts 67 files byte-identical, 5 differing only
+in their generation date, none differing otherwise and none missing.
+
+**Times.** The ladder took 7,542 s at a peak resident set of 8,037 MiB,
+against run A's 7,550 s and 8,087 MiB; `transfer` took 811 s against
+843 s. `residual`, `occupancy` and `congestion`, each run on its own
+against the stored residual files before the ladder, took 13.4, 14.8 and
+103.3 s against run A's 12.8, 14.4 and 101.9 s. The rung's fit took a
+median of 25.0 s against 30.4 s on 11 September, with the same bits.
+Nothing measured says why. Run A's peak was given above as 8.1 GiB, in
+two places, until 19 September; its own timing record says 8,087 MiB,
+which is 7.9 GiB, and both places now say so.
+
+**What it establishes.** A second change of userland on the reference
+machine leaves every residual file and every printed figure where it was.
+This one was not contained, and it installed the packages from the index
+against their hashes. glibc 2.43 with `libgomp` 16.2.1 gives the bits that
+the previous system's glibc 2.44 and its `libgomp` gave, and Debian
+trixie's glibc 2.41 with its own.
+
+**What none of this establishes.**
+
+- Any CPU other than the reference Ryzen 7 7800X3D. The CPU did not
+  change: the same eight cores and the same SkylakeX kernel in OpenBLAS.
+  What another CPU gives is as unmeasured as it was.
+- Any userland beyond the three now run: glibc 2.44, 2.41 and 2.43, each
+  with its own system's `libgomp`. No musl, and no OpenMP runtime other
+  than GNU's.
+- Any other LightGBM or any other package version. The versions are the
+  same thirty as before.
+- The reference image. Nothing here builds it.
+- arm64, or the Mac.
+
+## The encoding's rows, 2026-09-19
+
+**What changed.** The shrunk encoding was fitted on `split.train &
+unflagged` in the ladder, which kept the rows recording a taxi over four
+hours that every booster fit had left out since 10 September, seven in
+December's training rows and five in July's, and on the fit rows in the
+submission. From 19 September both read `taxiout.models.fit_rows`: the
+ladder, `scripts/fast_lane.py` and `scripts/check_determinism.py` now fit
+the encoding as `scripts/make_submission.py` already did, so the ladder
+measures the encoding the submission fits.
+
+**The ladder, regenerated twice.** Under the rule the ladder was
+regenerated twice on 19 September, from 10:24 to 12:47Z and from 16:30 to
+18:54Z, and the two runs agree on every one of the 52 residual files, byte
+for byte. Against the files of 11 September, 16 changed: December's and
+July's for the eight rungs whose features include the encoding,
+`encoding-added`, `encoding-for-stand`, `encoding-for-identifiers`,
+`occupancy`, `occupancy-tfree`, `callsign`, `destination` and
+`plan-diffs`, each of which grows different trees. The other 36, both
+splits of the eighteen rungs that do not read the encoding, are
+byte-identical to 11 September's. `transfer.md` changed in its date alone;
+`baseline.md`, `residual.md`, `occupancy.md` and `congestion.md` moved with
+the 16 files.
+
+**What moved.** The submission rung, `+ plan differences`, goes from 218.1
+to 217.6 s ex-flagged on December, from 325.6 to 325.8 s on July over all
+ten airports, from 237.9 to 237.8 s on July's three, and from 219.2 to
+218.6 s at the ranking set's bucket mix. The Gate 2c chain still climbs to
+the top and the encoding arm chosen is the same. Three verdicts turned:
+
+- The within-variance check is material. Its ratio is 1.56 where it was
+  1.29, against the 1.5 fixed in `taxiout.encoding`, so on the ladder's
+  December leg the pair-level `k` now moves with route length.
+- The leakage audit on `+ stand occupancy` no longer fires. On July's
+  three the block takes +14.64 s against the +10.3 s estimated, an
+  overshoot of 4.345 s against the 5.000 s allowed; on 11 September it
+  fired at +15.67 s, by 0.37 s. On the four regenerations of the ladder
+  in the record the overshoot has read 5.56 s (8 September, `ad1eecf`),
+  4.971 s (10 September, `ff59892`), 5.37 s (11 September, `067c4af`) and
+  4.345 s: fired, missed, fired, missed, with the block unchanged.
+  `baseline.md` now prints that history whether or not the trigger fires.
+- The seed floors moved, from 0.19, 0.39 and 1.28 s to 0.34, 0.23 and
+  1.02 s on December, July over all ten and July's three, and 9 of the 31
+  covered comparisons now sit below them on at least one leg, where 13
+  did. Seed averaging gains 0.48 and 0.52 s, where it gained 0.86 and
+  0.54. The rule that replaced the one-second rule for it was fixed on
+  19 September with the 11 September figures in view, which cleared it,
+  and before this regeneration's figures existed; both sets clear it,
+  and the three-airport and October measurements it also asks for are
+  not yet made.
+
+**What it leaves standing.** The 11 September residual files are kept
+outside the repository, at `/mnt/data2tb/workingdir/residuals-2026-09-11/`.
+The Phase 4 thread-count measurements above were made against them, so
+those measurements stand as made against that record. Of the 25 rungs
+Phase 4 refitted on each split, 18 read no encoding and their files did
+not change; the three that grew different trees at one thread, which
+include the one that did at four, are among them.
