@@ -21,6 +21,12 @@ challenge_data/
 data/challenge/*
 !data/challenge/README.md
 
+# Submission files and the manifest written beside each one. The parquet is
+# already covered by *.parquet; the manifest is JSON and would not be. What the
+# record needs from a manifest goes into reports/ through the script that reads
+# it, so nothing in this directory is ever committed by a stray `git add`.
+data/submissions/
+
 # Assistant configuration and instructions. The repository carries no trace of
 # what wrote it, and these are the two paths that would carry one: neither was
 # ignored, so `git add -A` would have committed the local settings file against

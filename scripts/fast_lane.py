@@ -1102,7 +1102,7 @@ def main() -> int:
     )
     unflagged = ~flagged
     rows = fitting_rows(split.train, ~unflagged, y)
-    encoding = encode_split(features, y, split.train & unflagged)
+    encoding = encode_split(features, y, rows)
 
     STATE.update(
         features=features,

@@ -134,9 +134,10 @@ transfer:
 sweep:
 	$(PYTHON) scripts/sweep_params.py
 
-# Reads data/challenge/ and the matrices; writes a submission file to
-# data/submissions/, which is gitignored and which the script verifies is
-# ignored before writing. TEAM is the team name as the organizers hold it.
+# Reads data/challenge/ and the matrices; writes a submission file and its
+# manifest to data/submissions/, which is gitignored and which the script
+# verifies is ignored before writing either. Refuses to fit with any booster
+# but LightGBM. TEAM is the team name as the organizers hold it.
 submission:
 	@test -n "$(TEAM)" || { echo "usage: make submission TEAM=<name>"; exit 1; }
 	$(PYTHON) scripts/make_submission.py --team $(TEAM)

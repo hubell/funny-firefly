@@ -283,7 +283,7 @@ def build(args) -> int:
     # is the geometric fit) and the geometric rungs themselves, each with the
     # rung's own options, as ``fit_and_predict`` passes them.
     t0 = time.time()
-    encoding = encode_split(features, y, split.train & unflagged)
+    encoding = encode_split(features, y, rows)
     seconds["encoding"] = time.time() - t0
     t0 = time.time()
     geometric: dict[str, str] = {}

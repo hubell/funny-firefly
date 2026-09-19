@@ -230,30 +230,40 @@ BOOSTER_PARAMS: dict[str, object] = {
     "verbose": -1,
 }
 
-# Seed averaging, measured three times and NOT adopted. The submission rung is
-# fitted five times
+# Seed averaging, measured three times and NOT yet adopted. The submission rung
+# is fitted five times
 # with nothing changed but the seed and the predictions averaged. It is an
 # ESTIMATOR CHOICE and not a rung of the ladder: it changes how the model is
 # fitted and not what it reads, so the ladder stays single-seed -- an ablation
 # is about blocks, and averaging every rung would spend five times the compute
 # to move every number by the same amount.
 #
-# Measured three times now, against a rule fixed before the first of them:
-# adopt only if the average gains at least one second on BOTH forward splits'
+# Measured three times, against a rule fixed before the first of them: adopt
+# only if the average gains at least one second on BOTH forward splits'
 # ex-flagged RMSE. On the rung below the submission it gained 0.78 and 0.98 and
 # was not adopted. On the submission rung it gained 1.10 and 1.37 and was. And
 # once the recorded-taxi tail came out of every fit
 # (``TAIL_EXCLUSION_ADOPTED_H``) it gained 0.81 and 0.56, and by the same rule
-# it is **not** adopted. Refitted once the booster was made repeatable it gains
-# 0.86 and 0.54, and the rule gives the same answer.
+# it was **not** adopted. Refitted once the booster was made repeatable it
+# gained 0.86 and 0.54, and refitted on 19 September with the encoding on the
+# same rows as the booster it gains 0.48 and 0.52.
 #
-# What the tail exclusion took out of the gain is the interesting part, and it
-# is worth stating at the size it holds: about a fifth of it in December
-# (1.10 -> 0.86) and three fifths in July (1.37 -> 0.54). The two earlier
-# figures were measured before the booster was made repeatable. In July,
-# removing twelve impossible rows did most of what averaging five fits had been
-# doing, for none of the compute: averaging seeds is variance reduction, and
-# much of the variance it was reducing there had a cause.
+# The one-second rule was retired on 19 September, before any measurement under
+# the rule that replaced it existed: its basis was the run-to-run variation the
+# ladder showed before the booster was made repeatable, and that no longer
+# holds. The rule now: adopt it if, on both forward legs, the five-seed average
+# beats every one of the five single seeds and its gain over the ladder's seed
+# clears that leg's seed floor, and measure it on the three July airports and
+# on October, both printed, before it ships. On 19 September both legs meet the
+# first half, 0.48 and 0.52 against floors of 0.34 and 0.23, and the second has
+# not been measured, so it is not yet adopted.
+#
+# What came out of the gain between the second measurement and the latest is
+# worth stating at the size it holds: 56% of it in December (1.10 -> 0.48) and
+# 62% in July (1.37 -> 0.52), as ``reports/baseline.md`` prints them on 19
+# September. Three things changed in between -- the tail came out of the fit,
+# the booster was made repeatable, and the encoding was fitted on the booster's
+# rows -- and nothing measured separates them.
 #
 # ``reports/baseline.md``'s *Seed averaging* section is the measurement and
 # carries a reproducibility check: the first of the seeds is the one the ladder

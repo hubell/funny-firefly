@@ -16,11 +16,27 @@ with that term on the rows it covers. Nothing here is chosen by a leaderboard
 score; the rung and the hyperparameters are the ones ``reports/baseline.md`` was
 generated with.
 
-The file goes to ``data/submissions/<team>_v<n>.parquet``, and the script
-checks with git that the path is ignored before writing a byte. Predictions
-built from the challenge data are not redistributable and neither is the
-frame that produced them; ``.gitignore`` already excludes every parquet file
-anywhere in the tree, and this verifies rather than assumes it.
+The file goes to ``data/submissions/<team>_v<n>.parquet``, with a manifest
+beside it at ``<team>_v<n>.manifest.json``, and the script checks with git
+that both paths are ignored before writing a byte. Predictions built from the
+challenge data are not redistributable and neither is the frame that produced
+them; ``.gitignore`` excludes every parquet file anywhere in the tree and the
+whole of ``data/submissions/``, and this verifies rather than assumes it.
+
+The manifest says what the file was built from and by: the git revision and
+whether the tree was clean, the booster, its version and the parameters it was
+fitted with, how many rows it was fitted on, how many ranking rows took the
+record-quality term and how many sit on a pair the training year never saw,
+the sha256 of the template read and of the file written, and the time. Two
+fields are left empty for the only values the scorer is ever read for,
+``usedPairs`` and the score. Two builds of one version should differ in the
+time alone.
+
+Only LightGBM is fitted. ``taxiout.models.Booster`` falls back to CatBoost
+where lightgbm is not importable, but that fallback reads three of
+``BOOSTER_PARAMS`` -- the tree count, the learning rate and the seed -- and none
+of the settings that make a fit repeat, and no report was fitted with it. A
+file fitted by it would not be the model the reports measure, so this refuses.
 
 Validation, the template's schema and the read-back check are all
 ``taxiout.submission``'s -- a submission is rejected outright if any row of
@@ -43,9 +59,13 @@ from __future__ import annotations
 
 import argparse
 import glob
+import hashlib
+import json
+import os
 import subprocess
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
@@ -58,6 +78,7 @@ from taxiout.corridor import load_edges  # noqa: E402
 from taxiout.destination import load_airports  # noqa: E402
 from taxiout.metar import load_metar, regime_by_hour  # noqa: E402
 from taxiout.challenge import (  # noqa: E402
+    SUBMITTING,
     load_movements,
     load_ranking,
     load_submitting,
@@ -158,15 +179,59 @@ def load_edge_sets() -> pd.DataFrame:
     return load_edges(files)
 
 
-def is_ignored(path: Path) -> bool:
-    """Whether git would ignore ``path``. Asked, not assumed."""
+def _git(*args: str) -> subprocess.CompletedProcess | None:
+    """A read-only git command in the repository, or ``None`` if there is no git.
+
+    ``GIT_OPTIONAL_LOCKS=0`` so that asking about the tree never refreshes the
+    index: the tree is read here, not written.
+    """
     try:
-        proc = subprocess.run(
-            ["git", "check-ignore", "-q", str(path)], cwd=REPO, capture_output=True
+        return subprocess.run(
+            ["git", *args],
+            cwd=REPO,
+            capture_output=True,
+            text=True,
+            env={**os.environ, "GIT_OPTIONAL_LOCKS": "0"},
         )
     except FileNotFoundError:
-        return False
-    return proc.returncode == 0
+        return None
+
+
+def is_ignored(path: Path) -> bool:
+    """Whether git would ignore ``path``. Asked, not assumed."""
+    proc = _git("check-ignore", "-q", str(path))
+    return proc is not None and proc.returncode == 0
+
+
+def revision() -> tuple[str | None, bool | None]:
+    """The commit checked out, and whether the tree matches it, as git says."""
+    head = _git("rev-parse", "HEAD")
+    status = _git("status", "--porcelain")
+    if head is None or head.returncode != 0:
+        return None, None
+    if status is None or status.returncode != 0:
+        return head.stdout.strip(), None
+    return head.stdout.strip(), not status.stdout.strip()
+
+
+def _length_dependence(encoding) -> dict:
+    """Per level, the measured ratio and whether ``k`` moves with the route."""
+    out = {}
+    for level, shrink in encoding.shrinkage.items():
+        ratio = float(shrink.within.ratio)
+        out[level] = {
+            "ratio": round(ratio, 6) if np.isfinite(ratio) else None,
+            "material": bool(shrink.within.material),
+        }
+    return out
+
+
+def sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for block in iter(lambda: fh.read(1 << 20), b""):
+            digest.update(block)
+    return digest.hexdigest()
 
 
 def next_version(team: str) -> int:
@@ -198,9 +263,20 @@ def main() -> int:
     if not (DATA / "ranking.parquet").exists():
         print(f"no challenge data under {DATA}; nothing to submit", file=sys.stderr)
         return 1
-    if booster_backend() == "none":
+    backend = booster_backend()
+    if backend == "none":
         print('no booster installed; pip install -e ".[modelling]"', file=sys.stderr)
         return 1
+    if backend != "lightgbm":
+        print(
+            f"refusing to fit with {backend}: lightgbm is not importable, and the "
+            "fallback carries none of BOOSTER_PARAMS' determinism settings and was "
+            'never measured by any report; pip install -e ".[modelling]"',
+            file=sys.stderr,
+        )
+        return 1
+    import lightgbm
+
     modules, reason = stream_b()
     if modules is None:
         print(f"WARNING: {reason}; cannot write a submission yet", file=sys.stderr)
@@ -209,14 +285,25 @@ def main() -> int:
 
     version = args.version or next_version(args.team)
     path = SUBMISSIONS / f"{args.team}_v{version}.parquet"
+    manifest = SUBMISSIONS / f"{args.team}_v{version}.manifest.json"
     submission.check_filename(path)
-    if not is_ignored(path):
-        print(
-            f"refusing to write {path.relative_to(REPO)}: git does not ignore it, and "
-            "a submission is built from data that may not be redistributed",
-            file=sys.stderr,
-        )
-        return 1
+    for p in (path, manifest):
+        if not is_ignored(p):
+            print(
+                f"refusing to write {p.relative_to(REPO)}: git does not ignore it, and "
+                "a submission is built from data that may not be redistributed",
+                file=sys.stderr,
+            )
+            return 1
+        # Asked before the fit rather than after it, so that a version already
+        # written costs a message and not a fit.
+        if p.exists() and not args.overwrite:
+            print(
+                f"{p.relative_to(REPO)} exists; bump the version or pass --overwrite",
+                file=sys.stderr,
+            )
+            return 1
+    git_revision, git_clean = revision()
 
     if not METAR.exists() or not any(METAR.glob("*.csv")):
         print(
@@ -244,6 +331,7 @@ def main() -> int:
         drop=True
     )
     rank = to_pandas(load_ranking(DATA, rank_columns, phase="DEP")).reset_index(drop=True)
+    template_sha256 = sha256(DATA / SUBMITTING)
     template = to_pandas(load_submitting(DATA))
     # The congestion block counts the movements around each subject, so each
     # side gets its own movement frame: the training year's for the training
@@ -336,10 +424,12 @@ def main() -> int:
     # single-seed and this is the one place it would apply -- and whether it
     # applies is ``taxiout.models.SEED_AVERAGE_ADOPTED`` rather than a decision
     # taken here, so that this script cannot ship a model the report says was
-    # measured and not adopted. It is currently False: once the recorded-taxi
-    # tail came out of every fit, averaging five seeds gained 0.86 s and 0.54 s
-    # on the two forward splits, with the booster made repeatable, against a
-    # one-second threshold fixed before any of it ran.
+    # measured and not adopted. It is currently False: on 19 September, with the
+    # encoding fitted on the same rows as the booster, averaging five seeds
+    # gains 0.48 s and 0.52 s on the two forward splits, against seed floors of
+    # 0.34 s and 0.23 s. The one-second threshold it was first read against was
+    # retired that day, and the rule that replaced it also asks for the three
+    # July airports and October to be measured before it ships; neither has been.
     if SEED_AVERAGE_ADOPTED:
         model = SeedAverage(RUNG.features).fit(X.loc[fit_rows], y[fit_rows])
         how = f"under {BAGGING_SEEDS} seeds"
@@ -358,16 +448,21 @@ def main() -> int:
         weather=weather,
         airports=airports,
     )
+    bare_prior = None
     if encoder is not None:
         columns = encoder.transform(Xr)
         Xr = with_encoding(Xr, columns)
+        pair = group_key(Xr, "pair")
         seen = pd.Series(
-            group_key(Xr, "pair").map(encoder.moments["pair"]["n"]).to_numpy(),
+            pair.map(encoder.moments["pair"]["n"]).to_numpy(),
             index=Xr.index,
         ).fillna(0.0)
+        unseen = seen <= 0
+        bare_prior = {"pairs": int(pair[unseen].nunique()), "rows": int(unseen.sum())}
         print(
-            f"  {int((seen <= 0).sum()):,} of {len(Xr):,} ranking rows sit on a pair "
-            "the training year never saw and encode to the geometric prior"
+            f"  {bare_prior['rows']:,} of {len(Xr):,} ranking rows, on "
+            f"{bare_prior['pairs']:,} pairs, sit on a pair the training year never saw "
+            "and encode to the geometric prior"
         )
     physical = model.predict(Xr)
     tail = tail_model.predict(rank)
@@ -389,6 +484,41 @@ def main() -> int:
     out = pd.DataFrame({ID: rank[ID].to_numpy(), TARGET: np.rint(pred.to_numpy())})
     written = submission.write(out, template, path, overwrite=args.overwrite)
     print(f"wrote {written.relative_to(REPO)} ({written.stat().st_size:,} bytes)")
+
+    # Written only once the file has read back and validated against the
+    # template, so a manifest never describes a file that was refused.
+    month = pd.to_datetime(rank["MVT_TIME_UTC_mvt"], utc=True).dt.strftime("%Y-%m")
+    # Whether each encoding's within-group variance was found materially
+    # length-dependent, which ``taxiout.encoding`` decides from the fit rows
+    # and which decides whether ``k`` moves with the route: the training rows'
+    # out-of-fold encoding and the ranking rows' lookup each carry their own.
+    sides = {"training": encoded_train, "ranking": encoder} if encoder is not None else {}
+    record = {
+        "file": written.name,
+        "git_revision": git_revision,
+        "git_tree_clean": git_clean,
+        "booster_backend": backend,
+        "booster_version": lightgbm.__version__,
+        "booster_params": dict(model.params),
+        "seeds": BAGGING_SEEDS if SEED_AVERAGE_ADOPTED else 1,
+        "fit_rows": int(fit_rows.sum()),
+        "record_quality_covered_cells": int(tail_model.cells["covered"].sum()),
+        "record_quality_rows": int(tail.notna().sum()),
+        "record_quality_rows_by_month": {
+            m: int(n) for m, n in tail.notna().groupby(month.to_numpy()).sum().items()
+        },
+        "ranking_bare_prior": bare_prior,
+        "encoding_length_dependence": {
+            side: _length_dependence(enc) for side, enc in sides.items()
+        },
+        "template_sha256": template_sha256,
+        "file_sha256": sha256(written),
+        "written_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "scorer_used_pairs": None,
+        "scorer_score": None,
+    }
+    manifest.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
+    print(f"wrote {manifest.relative_to(REPO)}")
     return 0
 
 

@@ -563,9 +563,16 @@ only, so one defaulted block time cannot become a three-row pair's
 encoding; and the one overlap that cannot be guarded, the prior being
 fitted on hundreds of thousands of rows of which a thin pair contributes a
 handful, is stated rather than left to be found. `k` was checked for
-route-length dependence by a rule fixed before the run and found
-immaterial at a ratio of 1.29 against a threshold of 1.5, and a `k/2`–`2k`
-sensitivity moves the arms by at most half a second; `k` is not tuned.
+route-length dependence by a rule fixed before the run. With the encoding
+fitted on the unflagged training rows the check read immaterial, at a ratio
+of 1.29 against a threshold of 1.5. With it fitted since 19 September on the
+rows every fit reads, the check is material on the ladder's December leg, at
+1.56, so there the pair-level `k` moves with route length and the
+stand-level `k` does not; the encoding the submission fits takes the same
+branch, at 1.600 for the pair and 1.477 for the stand in the manifest
+written beside the v4 file. A
+`k/2`–`2k` sensitivity moves the arms by at most half a second; `k` is not
+tuned.
 
 **A gate that was voided rather than failed.** The rule fixed in advance
 required a positive difference in differences on the held-out-pair folds.
@@ -630,11 +637,16 @@ subsections; `tests/test_encoding.py` for the four guards.
 
 ## 8. Results [settled; one figure waits on the organizers]
 
-*The challenge has no leaderboard: the scored parquet goes up at
-submission and the score comes back after the close, so this section
-carries what the two forward splits say about the model that is
-submitted, per airport and with and without the record-quality term, and
-leaves one line for the organizers' figure. Every number is from
+*Nothing here is chosen by a leaderboard score. The challenge ranks
+entries on a leaderboard: "Teams will be ranked based on the best Root
+Mean Square Error (RMSE) achieved across their submissions", in the words
+of its ranking page. This entry's rule for it: at most one upload per
+frozen version, no upload used to choose a feature, a rung, a parameter
+or a rule, and nothing read back from the scorer but `usedPairs` and the
+score. So this section carries what the two forward splits say about the
+model that is submitted, per airport and with and without the
+record-quality term, and leaves one line for the organizers' figure.
+Every number is from
 `reports/baseline.md` as regenerated on 5 September, for the rung named in
 `taxiout.models.SUBMISSION_KEY` as it stood on 5 September, `+ shrunk
 encoding, replacing the stand` — the arm §7.4 chose, fitted by the
@@ -970,6 +982,19 @@ From `docs/prior_art.md`, *Sources*.
   regenerated after the pinned OSM rebuild, re-read it rather than
   assuming; the rebuild moves the matrices, and the matrices move §5 and
   §7.2.
+- **What the regeneration of 19 September made stale, for the figure pass.**
+  The shrunk encoding is fitted on the rows every fit reads from 19
+  September, and the ladder was regenerated under that rule: the submission
+  rung goes from 218.1, 325.6, 237.9 and 219.2 s to 217.6, 325.8, 237.8 and
+  218.6 s (December, July all ten, the July three, the ranking mix). Still
+  quoting the earlier figures: §9.5 (325.6 and 237.9 s, and its figures from
+  `reports/residual.md`, which moved with the rung); the two notes above on
+  the recorded-taxi tail and on §6.5 and §9.5 (218.0/325.6, 237.9, 219.1);
+  `docs/plan.md` lines 499 to 503; and `docs/review_headroom.md` line 224.
+  The seed-averaging note above, and `docs/plan.md` lines 605 to 611, still
+  read the one-second rule, which was retired on 19 September;
+  `reports/baseline.md` now prints the rule that replaced it and reads seed
+  averaging as not yet adopted.
 - **Figures.** The worked airport's SVG is the one figure the paper already
   has. Candidates for two more: the ladder as a bar chart of ex-flagged RMSE
   per rung on both splits; the ceiling as the autocorrelation-by-gap curve.

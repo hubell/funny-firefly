@@ -389,8 +389,8 @@ def run(features, y, raw, splits, tails: Tails, *, keep_residuals: bool = True) 
     the rows it covers are the rows the physical rungs are fitted without. It
     is never fitted on a row it is then scored on.
 
-    The shrunk encoding is likewise recomputed inside every split, from that
-    split's own unflagged training rows, and overlaid onto the frame for the
+    The shrunk encoding is likewise recomputed inside every split, from the
+    rows that split's rungs are fitted on, and overlaid onto the frame for the
     rungs that read it. Computing it once outside this loop would hand every
     held-out pair its own mean and make the contrast below fiction; the
     computation is inside the loop so that it cannot be done any other way.
@@ -418,7 +418,7 @@ def run(features, y, raw, splits, tails: Tails, *, keep_residuals: bool = True) 
         encoding = None
         if ENCODED_RUNGS:
             t0 = time.time()
-            encoding = encode_split(features, y, split.train & unflagged)
+            encoding = encode_split(features, y, fitting_rows(split.train, flagged, y))
             results[("meta", split.name, "encoding")] = encoding
             print(
                 f"  {split.name:>10s} {'encoding':<22s} "
@@ -1659,11 +1659,11 @@ def section_encoding(
         "encoded(pair) = (n * ybar_oof + k * g_hat) / (n + k)",
         "```",
         "",
-        "`ybar_oof` is the out-of-fold mean of taxi-out over that pair's unflagged",
-        "training rows, `g_hat` is the geometric unimpeded prediction for that pair",
-        "plus the per-airport offset that puts it on the same scale as the target,",
-        "and `k` is estimated rather than chosen. The same construction at stand",
-        "level is the second feature.",
+        "`ybar_oof` is the out-of-fold mean of taxi-out over that pair's fit rows (the",
+        "rows `taxiout.models.fit_rows` gives every rung), `g_hat` is the geometric",
+        "unimpeded prediction for that pair plus the per-airport offset that puts it on",
+        "the same scale as the target, and `k` is estimated rather than chosen. The same",
+        "construction at stand level is the second feature.",
         "",
         "**Why the geometry is the prior.** Shrinking toward the airport mean is the",
         "standard remedy and the airport mean knows nothing about this stand: it is",
@@ -2532,21 +2532,139 @@ HEADROOM_TRIGGER_S = 5.0
 # direction.
 HEADROOM_NEAR_MISS_S = 1.0
 
-# What the same test did on the ladder as committed at ``ad1eecf``, before the
-# recorded-taxi tail came out of every fit. Quoted and not computed, on the same
-# footing as ``BAGGING_EARLIER_GAINS_S``: that run fitted rows this one does
-# not, so a figure recomputed here would be a different measurement wearing the
-# same name. It is recorded because a test that fires and then stops firing has
-# said something, and a report that only ever prints the second reading is
-# reporting an outcome rather than a measurement.
-# (gain, estimated, overshoot) in seconds, on the July three.
-HEADROOM_FIRED_AT = (15.86, 10.3, 5.56)
-HEADROOM_FIRED_COMMIT = "ad1eecf"
+# What the same test read on `+ stand occupancy` and the July three on each
+# earlier regeneration of the ladder in the record, oldest first. Quoted and not
+# computed, on the same footing as ``BAGGING_EARLIER_GAINS_S``: each of those
+# runs fitted rows or settings this one does not, so a figure recomputed here
+# would be a different measurement wearing the same name. They are recorded
+# because the test has fired, stopped, fired and stopped again across runs that
+# did not touch the block, and a report that only ever prints the latest
+# reading is reporting an outcome rather than a measurement. Each overshoot is
+# given at the precision its source printed it, and the margin against the
+# trigger is computed from that.
+# (which run, and what its fit was; gain; overshoot; decimals), in seconds.
+HEADROOM_READINGS: tuple[tuple[str, float, float, int], ...] = (
+    # The overshoot this generator has quoted since ``148d876``. The report
+    # committed at ``ad1eecf`` read the December column alone and did not fire;
+    # its own three-airport table gives 257.2 -> 241.4 s on July.
+    (
+        "on the ladder generated on 8 September and committed at `ad1eecf` on 9"
+        " September, before the recorded-taxi tail came out of the fit, and read"
+        " on both columns as the audit is now",
+        15.86,
+        5.56,
+        2,
+    ),
+    # As the report committed at ``ff59892`` printed it.
+    (
+        "on the Mac run, generated on 10 September and committed at `ff59892`,"
+        " with that tail out of the booster's fit",
+        15.27,
+        4.971,
+        3,
+    ),
+    # From the migration record's account of 11 September; runs A, B and C gave
+    # it byte for byte, and ``9af7e2e`` carries that report unchanged.
+    (
+        "under the reference configuration, generated on 11 September and"
+        " committed at `067c4af` on 12 September, with the tail out of the"
+        " booster's fit but not yet out of the encoding's",
+        15.67,
+        5.37,
+        2,
+    ),
+)
+# The one other run on the record: the first on the reference machine, on 10
+# September under the booster's earlier setting, never committed. The migration
+# record gives its gain and that it fired, and nothing finer.
+HEADROOM_UNCOMMITTED_S = 15.43
+# The seed floor on the July three under the reference configuration, from the
+# migration record's noise-floor table of 11 September. Quoted for the same
+# reason as the readings: the floor this run prints is its own. No floor was
+# measured before that configuration.
+HEADROOM_FLOOR_BEFORE_S = 1.28
 
 
 def _closest(margins):
     """The block that came nearest to tripping the audit, fired or not."""
     return max(margins, key=lambda m: m[4])
+
+
+def _against_trigger(over: float, places: int, now: bool = False) -> str:
+    """An overshoot read against the trigger, in words, at the given precision."""
+    m = over - HEADROOM_TRIGGER_S
+    if m > 0:
+        return f"{'fires' if now else 'fired'} by {m:.{places}f} s"
+    return f"{'misses' if now else 'missed'} by {-m:.{places}f} s"
+
+
+def _audit_history(margins, floors, leg: str, key: str = "occupancy") -> list[str]:
+    """What the audit has read on one block and leg, run by run, fired or not.
+
+    Printed whether or not the trigger fires this time, because what it says is
+    about the test and not about this run: the earlier readings are
+    ``HEADROOM_READINGS``, and this run's is taken from ``margins`` rather than
+    typed, so the paragraph cannot disagree with the verdict printed above it.
+    """
+    now = next((m for m in margins if m[0] == key and m[3] == leg), None)
+    said = [
+        f"**What this test has read, run by run.** On `{LADDER_BY_KEY[key].label}`"
+        f" and {leg}, against the same {EXPECTED_HEADROOM_S[key][1]:+,.1f} s"
+        " estimate, the verdict has changed from one regeneration of the ladder"
+        " to the next, and each time what moved it was something other than the"
+        " block: the rows the booster was fitted on; the booster's configuration,"
+        " on another machine; and the rows the encoding was fitted on."
+    ]
+    said += [
+        f" {what[0].upper()}{what[1:]}, the block took {gain:+,.2f} s, an overshoot"
+        f" of {over:.{places}f} s, and the trigger {_against_trigger(over, places)}."
+        for what, gain, over, places in HEADROOM_READINGS
+    ]
+    if now is not None:
+        said.append(
+            " In this run, with the encoding fitted on the rows the booster is"
+            f" fitted on, it takes {now[1]:+,.2f} s, an overshoot of {now[4]:.3f} s,"
+            f" and {_against_trigger(now[4], 3, now=True)}."
+        )
+    said.append(
+        " One more run belongs beside these: the first on the reference machine,"
+        " on 10 September under the booster's earlier setting and never"
+        f" committed, fired at {HEADROOM_UNCOMMITTED_S:+,.2f} s, so under that"
+        " setting the verdict turned on which run was read. The earlier figures"
+        " are quoted from the reports committed at those revisions and from"
+        " [`migration-2026-09-10.md`](migration-2026-09-10.md) rather than"
+        " recomputed: those runs fitted rows or settings this one does not."
+    )
+    floor = []
+    last = HEADROOM_READINGS[-1]
+    was = abs(last[2] - HEADROOM_TRIGGER_S)
+    floor.append(
+        "No seed floor was measured before the reference configuration. Under it"
+        f" the trigger {_against_trigger(last[2], last[3])},"
+        f" {'inside' if was < HEADROOM_FLOOR_BEFORE_S else 'outside'} that leg's"
+        f" floor of {HEADROOM_FLOOR_BEFORE_S:.2f} s"
+    )
+    inside = was < HEADROOM_FLOOR_BEFORE_S
+    if now is not None and leg in floors:
+        is_ = abs(now[4] - HEADROOM_TRIGGER_S)
+        inside = inside and is_ < floors[leg]
+        floor.append(
+            f"; in this run it {_against_trigger(now[4], 3, now=True)},"
+            f" {'inside' if is_ < floors[leg] else 'outside'} a floor of"
+            f" {floors[leg]:.2f} s"
+        )
+    floor.append(
+        ": each verdict is within what changing the seed alone produces, and"
+        " neither can tell leakage from noise."
+        if inside
+        else "."
+    )
+    floor.append(
+        " What this block rests on is the source registry, the poison tests and"
+        " the measured concentration of its gain (*Where the stand-occupancy gain"
+        " lands*, above), and not this test."
+    )
+    return ["".join(said), "", "".join(floor)]
 
 
 # The expected headroom above is a ceiling on what a block can buy. This is the
@@ -3279,8 +3397,12 @@ def section_gate2c(
         "is no worse on **both** forward splits' ex-flagged RMSE **and** no worse",
         "pooled at the ranking set's bucket mix. The chain is climbed in order and",
         "stops at the first failure, and `taxiout.models.SUBMISSION_KEY` moves to the",
-        "highest rung that passes. Nothing here is chosen by a leaderboard score;",
-        "the challenge has no leaderboard.",
+        "highest rung that passes. Nothing here is chosen by a leaderboard score. The",
+        'challenge ranks entries on a leaderboard: "Teams will be ranked based on the',
+        'best Root Mean Square Error (RMSE) achieved across their submissions", in the',
+        "words of its ranking page. This entry's rule for it: at most one upload per",
+        "frozen version, no upload used to choose a feature, a rung, a parameter or a",
+        "rule, and nothing read back from the scorer but `usedPairs` and the score.",
         "",
         "**The held-out-pair column is printed and is not a gate.** None of these four",
         "is a property of the (airport, stand, runway) pair -- stand occupancy is a",
@@ -3588,13 +3710,6 @@ def section_gate2c(
                         " reported as a near miss rather than as a pass, because the"
                         " whole reason this audit reads both of its columns is that a"
                         " trigger which did not fire was once taken for a result."
-                        f" On the ladder as committed at `{HEADROOM_FIRED_COMMIT}`,"
-                        " before the recorded-taxi tail came out of every fit, the same"
-                        f" test **fired**: {HEADROOM_FIRED_AT[0]:+,.2f} s against"
-                        f" {HEADROOM_FIRED_AT[1]:+,.1f} s estimated, an overshoot of"
-                        f" {HEADROOM_FIRED_AT[2]:.2f} s. Twelve rows leaving the fit"
-                        " moved it below the line, which is the measure of how little"
-                        " this test is carrying."
                         if HEADROOM_TRIGGER_S - _closest(margins)[4]
                         < HEADROOM_NEAR_MISS_S
                         else " The remaining blocks are further inside it."
@@ -3685,6 +3800,8 @@ def section_gate2c(
                 " the thing that failed.",
             ]
         ),
+        "",
+        *_audit_history(margins, floors, legs[1][3]),
     ]
     return lines
 
@@ -3842,12 +3959,28 @@ def _band_section(results, features, y, forward, arm) -> list[str]:
 # repeated: the constant that says how the submission is fitted and the constant
 # this section measures have to be the same one, or the report is measuring
 # something the model does not do.
-# The gain, on BOTH forward splits, below which the averaged fit is not adopted.
-# One second on a 230-second error is four tenths of a percent, which was about
-# the size of the run-to-run variation the ladder showed when the rule was set,
-# before the booster was made repeatable, and adopting something smaller would
-# be adopting noise.
+# The gain, on BOTH forward splits, below which the averaged fit was not
+# adopted, until 19 September. One second on a 230-second error is four tenths
+# of a percent, which was about the size of the run-to-run variation the ladder
+# showed when the rule was set, before the booster was made repeatable. That
+# basis no longer holds, and the rule was retired on 19 September, before any
+# measurement under the rule that replaced it existed. It is kept because the
+# section says what the rule was and what it decided while it stood.
 BAGGING_GAIN_S = 1.0
+
+# The rule that replaced it on 19 September, in the words it was fixed in. Its
+# first half reads the two forward legs this report fits. Its second asks for
+# two measurements this report does not make, so until they are made the verdict
+# is "not yet adopted" whatever the two legs show.
+SEED_AVERAGE_RULE = (
+    "Adopt it for the submission if, on both forward legs, the five-seed average"
+    " beats every one of the five single seeds and its gain over the ladder's"
+    " seed clears that leg's seed floor; before it ships it is also measured on"
+    " the three July airports and on October, and both are printed."
+)
+# The measurements that rule asks for before the average ships and that nothing
+# has made yet. Emptied when they are made and printed, and not before.
+SEED_AVERAGE_PENDING: tuple[str, ...] = ("the three July airports", "October")
 
 # The same measurement on this rung before the recorded-taxi tail came out of
 # the fit, when it cleared the threshold and was adopted. Quoted and not
@@ -4234,7 +4367,40 @@ def section_bagging(bagging: dict, splits, key: str, floors=None) -> list[str]:
         s.name: bagging[s.name]["single"] - bagging[s.name]["rmse_ex_flagged"]
         for s in got
     }
-    adopt = len(got) == len(forward) and all(g >= BAGGING_GAIN_S for g in gains.values())
+    # The rule of 19 September, leg by leg, from the figures this section
+    # already has: the average against the best of the single seeds, and its
+    # gain over the ladder's seed against that leg's floor.
+    legs = {}
+    for s in got:
+        seeds = bagging[s.name]["seeds"]
+        floor = floors.get(f"{s.name.title()}, all ten")
+        best = min(seeds) if seeds else float("nan")
+        legs[s.name] = (
+            bool(seeds) and bagging[s.name]["rmse_ex_flagged"] < best,
+            floor is not None and gains[s.name] > floor,
+            best,
+            floor,
+        )
+    both = len(got) == len(forward) and all(b and c for b, c, _, _ in legs.values())
+    adopt = both and not SEED_AVERAGE_PENDING
+    fails = [
+        f"on {name.title()} "
+        + " and ".join(
+            ([] if beats else ["the average does not beat every single seed"])
+            + (
+                []
+                if clears
+                else [
+                    "its gain does not clear that leg's floor"
+                    if floor is not None
+                    else "there is no floor on that leg to read its gain against"
+                ]
+            )
+        )
+        for name, (beats, clears, _best, floor) in legs.items()
+        if not (beats and clears)
+    ] + ([] if len(got) == len(forward) else ["a forward leg was not refitted"])
+    clears_old_rule = all(g >= BAGGING_GAIN_S for g in gains.values())
     # The earlier measurement against this one, split by split, with the floor
     # the change has to be read against. Computed, because the figures it is
     # about are computed and a sentence that quotes them by hand goes stale.
@@ -4244,7 +4410,7 @@ def section_bagging(bagging: dict, splits, key: str, floors=None) -> list[str]:
         for s in got
         if s.name in before
     ]
-    top = max(falls, key=lambda t: 1.0 - t[2] / t[1]) if falls else None
+    most = [name for name, b, g, _ in falls if g <= b and 1.0 - g / b > 0.5]
     rows = [
         [
             s.name.title(),
@@ -4284,12 +4450,18 @@ def section_bagging(bagging: dict, splits, key: str, floors=None) -> list[str]:
         " measurement,"
         " on the same rung with that tail excluded.",
         "",
-        "The rule, fixed before the run: adopt only if the average gains at least",
+        "**The rule those three were read against, and why it was retired.** Fixed",
+        "before the first of them: adopt only if the average gains at least",
         f"{BAGGING_GAIN_S:.0f} s on **both** forward splits' ex-flagged RMSE. One second on a",
         "230-second error is four tenths of a percent, about the size of the",
         "run-to-run variation the ladder showed when the rule was set, before the",
-        "booster was made repeatable, and adopting less than that would be adopting",
-        "noise.",
+        "booster was made repeatable. That basis no longer holds: the booster now",
+        "repeats to the bit, and what is left is the seed's own spread, which *The",
+        "noise floor* below measures. The rule was retired on 19 September, before",
+        "any measurement under the rule that replaced it existed.",
+        "",
+        "**The rule from 19 September**, in the words it was fixed in: "
+        f'"{SEED_AVERAGE_RULE}"',
         "",
         "The last column is a reproducibility check rather than a result: the first",
         "seed is the one the ladder itself fitted with, so its predictions should",
@@ -4309,14 +4481,38 @@ def section_bagging(bagging: dict, splits, key: str, floors=None) -> list[str]:
             "-rrrr",
         ),
         "",
+        "**What the two forward legs show against it.** "
+        + " ".join(
+            f"In {name.title()} the average gains {gains[name]:.2f} s over the"
+            " ladder's seed"
+            + (
+                f" against that leg's floor of {floor:.2f} s, "
+                + ("clearing it" if clears else "not clearing it")
+                if floor is not None
+                else ", with no floor on that leg to read it against"
+            )
+            + f", and at {bagging[name]['rmse_ex_flagged']:,.2f} s it"
+            + (" beats" if beats else " does not beat")
+            + f" every one of the {len(bagging[name]['seeds'])} single seeds, the"
+            f" best of which is {best:,.2f} s."
+            for name, (beats, clears, best, floor) in legs.items()
+        ),
+        "",
         (
-            f"**Adopted:** the average clears {BAGGING_GAIN_S:.0f} s on both splits, so"
-            " the submission is fitted as the mean of"
+            "**Adopted:** both forward legs meet the rule and its further"
+            " measurements are printed, so the submission is fitted as the mean of"
             f" {BAGGING_SEEDS} seeds and `taxiout.models` records it beside the"
             " parameters."
             if adopt
-            else f"**Not adopted:** the gain does not reach {BAGGING_GAIN_S:.0f} s on"
-            " both splits. The submission is fitted from a single seed, and this"
+            else "**Not yet adopted.** Both forward legs meet the rule. What it asks"
+            " for before the average ships, the measurement on "
+            + " and on ".join(SEED_AVERAGE_PENDING)
+            + ", has not been made, so the submission is fitted from a single seed"
+            " until it is."
+            if both
+            else "**Not adopted:** "
+            + "; ".join(fails)
+            + ". The submission is fitted from a single seed, and this"
             " section is the record of the cheapest available improvement having been"
             " measured and found too small to take. It is the same disposition as the"
             " saturation rung, and for the same reason: something that was tried and"
@@ -4335,10 +4531,15 @@ def section_bagging(bagging: dict, splits, key: str, floors=None) -> list[str]:
         ),
         "",
         (
-            "**What the earlier adoption was measuring.** It cleared the threshold at"
+            "**What the earlier adoption was measuring.** It cleared the one-second"
+            " threshold then in force at"
             + " and".join(f" {b:.2f}" for _, b, _, _ in falls)
-            + " s before the recorded-taxi tail came out of the fit and does not clear"
-            " it now. "
+            + " s, before the recorded-taxi tail came out of the fit, and"
+            + (
+                " would clear it now. "
+                if clears_old_rule
+                else " would not clear it now. "
+            )
             + " ".join(
                 (
                     f"In {name.title()} the gain fell from {b:.2f} to {g:.2f} s, by"
@@ -4355,13 +4556,14 @@ def section_bagging(bagging: dict, splits, key: str, floors=None) -> list[str]:
                 for name, b, g, f in falls
             )
             + " The earlier figures were measured before the booster was made"
-            " repeatable, so each fall mixes the exclusion with that change."
+            " repeatable and before the encoding was fitted on the booster's rows, so"
+            " each fall mixes the exclusion with both of those changes, and nothing"
+            " here separates them."
             + (
-                f" In {top[0].title()} the fall is most of the gain: excluding twelve"
-                " impossible rows did most of what averaging five fits had been doing,"
-                " for none of the compute, so that part of the variance had a cause"
-                " rather than being the price of using a booster."
-                if top is not None and 1.0 - top[2] / top[1] > 0.5
+                " On both legs the fall is most of the gain."
+                if len(most) > 1 and len(most) == len(falls)
+                else f" In {most[0].title()} the fall is most of the gain."
+                if most
                 else " Neither fall is most of the gain."
             )
             if not adopt and falls
