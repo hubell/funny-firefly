@@ -14,8 +14,17 @@ excluded -- so that "with and without the term" has a concrete baseline. The
 baseline report, ``reports/baseline.md``, carries the same comparison for
 the real model.
 
-The report carries aggregates only. No stand identifier from either source
-appears, and the script refuses to write one.
+One section answers a question rather than describing the term. A review note
+of 10 September read several callsign prefixes at the covered airport as having
+taxi times equal to their lag in most of their rows with a Network Manager
+record. *The callsign-prefix reading* measures that claim under both readings
+of "equal to the lag" -- the note's and ``taxiout.tails.defaulted_block``'s --
+and prints the (airport, prefix, bucket) cells a prefix split would open under
+the coverage rule as it stands. It changes neither the term nor the rule.
+
+The report carries aggregates only. A callsign prefix is an ICAO airline
+designator and an aggregate over an operator's departures; no stand identifier
+from either source appears, and the script refuses to write one.
 
 Usage
 -----
@@ -35,10 +44,12 @@ import pandas as pd
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
 
+from taxiout.callsign import callsign_features  # noqa: E402
 from taxiout.challenge import load_movements, load_ranking, to_pandas  # noqa: E402
 from taxiout.tails import (  # noqa: E402
     BUCKETS,
     FIT_ONLY_INPUTS,
+    LONG_S,
     MIN_COUNT,
     MIN_SHARE,
     NEAR_S,
@@ -57,6 +68,16 @@ HOUR = 3600.0
 DAY = 86400.0
 JULY_AIRPORTS = ("EDDF", "EGLL", "EHAM")
 STAND_IN_MIN_PAIR = 5
+
+# The airport the callsign-prefix section is about: the one the term's covered
+# cells are at, and the one the review note of 10 September was about. Written
+# out rather than derived from the fitted cells so that the section is about a
+# named airport and does not silently follow a change in coverage.
+PREFIX_AIRPORT = "LIRF"
+
+# How many prefixes that section prints per record side. Enough to show the
+# shape of the claim; the sentence under each table is over every row.
+PREFIX_ROWS = 15
 
 # The four buckets a test departure can fall into with no flight-side record,
 # in the order the tables use, and the three late-or-early ones with a record.
@@ -102,7 +123,11 @@ def rmse(y: pd.Series, p: pd.Series) -> float:
 
 
 def load() -> tuple[pd.DataFrame, pd.DataFrame]:
-    cols = list(PREDICT_INPUTS + FIT_ONLY_INPUTS) + ["STAND_mvt", "RUNWAY_mvt"]
+    cols = list(PREDICT_INPUTS + FIT_ONLY_INPUTS) + [
+        "STAND_mvt",
+        "RUNWAY_mvt",
+        "FLIGHT_mvt",
+    ]
     dep = to_pandas(load_movements(DATA, cols, phase="DEP"))
     dep["ADEP_mvt"] = dep["ADEP_mvt"].astype(str)
     dep["y"] = pd.to_numeric(dep["TAXITIME_SEC_mvt"], errors="coerce").astype(float)
@@ -110,10 +135,24 @@ def load() -> tuple[pd.DataFrame, pd.DataFrame]:
     dep["month"] = dep["MVT_TIME_UTC_mvt"].dt.month
     dep["art"] = defaulted_block(dep).fillna(False).astype(bool)
     dep["bucket"] = flag(dep)["tail_bucket"].astype(str)
-    rk = to_pandas(load_ranking(DATA, list(PREDICT_INPUTS), phase="DEP"))
+    dep["prefix"] = callsign_features(dep)["cs_prefix"].to_numpy()
+    # The review note's reading of "the taxi time equals the lag": the same 60 s
+    # the term uses, with no condition on the lag itself. Beside it, the first
+    # half of ``defaulted_block`` on its own, so the section can measure whether
+    # the two tests are the same test rather than assert that they are.
+    dep["near_lag"] = ((dep["y"] - dep["lag"]).abs() <= NEAR_S).fillna(False)
+    dep["near_block"] = (
+        (dep["BLOCK_TIME_UTC_mvt"] - dep["SCHED_TIME_UTC_mvt"])
+        .dt.total_seconds()
+        .abs()
+        .le(NEAR_S)
+        .fillna(False)
+    )
+    rk = to_pandas(load_ranking(DATA, list(PREDICT_INPUTS) + ["FLIGHT_mvt"], phase="DEP"))
     rk["ADEP_mvt"] = rk["ADEP_mvt"].astype(str)
     rk["month"] = rk["MVT_TIME_UTC_mvt"].dt.month
     rk["bucket"] = flag(rk)["tail_bucket"].astype(str)
+    rk["prefix"] = callsign_features(rk)["cs_prefix"].to_numpy()
     return dep, rk
 
 
@@ -779,6 +818,196 @@ def section_ranking(
     return lines, facts
 
 
+# --------------------------------------------------------------------------
+# the callsign-prefix reading of the term, at the one airport it covers
+
+
+def section_prefixes(dep: pd.DataFrame, rk: pd.DataFrame, model: TailModel) -> list[str]:
+    """What a callsign-prefix split of the cells would and would not add.
+
+    A review note of 10 September, in no report, read several callsign prefixes
+    at the covered airport as having taxi times equal to their lag in most of
+    their rows *with* a Network Manager record -- which, if the term's cells
+    were split by prefix, would be cells the term does not cover. The note's
+    reading of "equal to the lag" is ``|taxi - lag| <= NEAR_S`` with no
+    condition on the lag itself; the term's own reading, ``defaulted_block``,
+    adds the two-hour condition. Both are printed, per prefix and per record,
+    and then the cells a prefix split would actually open. Descriptive: the
+    term, its inputs and its coverage rule are unchanged.
+    """
+    hours = f"{LONG_S / HOUR:.0f}"
+    lines = [
+        f"## The callsign-prefix reading, at {PREFIX_AIRPORT}",
+        "",
+        "A review note of 10 September, written up nowhere until now, read several",
+        f"callsign prefixes at {PREFIX_AIRPORT} *with* a Network Manager record as having",
+        "taxi times equal to their lag in most of their rows. If that were the",
+        "defaulting the term is about, the cells would be under-drawn: the term keys on",
+        "(airport, record, lag band) and would be missing an operator dimension. This",
+        "section measures the claim, and then measures what acting on it would reach.",
+        "It changes nothing -- not the term, not its inputs, not its coverage rule.",
+        "",
+        "Two readings of *the taxi time equals the lag* are printed side by side. The",
+        f"note's is `|taxi - lag| <= {NEAR_S:.0f} s` and nothing else. The term's is",
+        f"`taxiout.tails.defaulted_block`: the *block* time within {NEAR_S:.0f} s of the",
+        f"schedule **and** a lag above {hours} hours.",
+        "",
+        "They are not two tests. The target is take-off minus off-block and the lag is",
+        "take-off minus schedule, so `taxi - lag` is `schedule - block` exactly, and the",
+        "note's test is the term's first condition written another way. The data review",
+        "reports the target equal to take-off minus off-block to the second in every",
+        "training departure, so the identity should hold on the data and not only in",
+        f"algebra: over the {len(dep):,} training departures the two tests agree on",
+        f"{pct(float((dep['near_lag'] == dep['near_block']).mean()), 1)} of rows, with",
+        f"{int((dep['near_lag'] != dep['near_block']).sum()):,} disagreeing. What the",
+        f"term adds is the {hours}-hour condition, and that is the whole of the",
+        "difference between the two columns below.",
+        "",
+        f"{PREFIX_AIRPORT} is the airport the term's covered cells are at, and the one",
+        "the note was about.",
+        "",
+    ]
+    at = dep[dep["ADEP_mvt"] == PREFIX_AIRPORT]
+    if not len(at):
+        return lines + [f"No {PREFIX_AIRPORT} departures in the training year."]
+
+    for norec, label in ((False, "with a record"), (True, "without a record")):
+        part = at[at["LOBT_flt"].isna() == norec]
+        g = part.groupby("prefix", sort=True)
+        grouped = pd.DataFrame({"n": g.size(), "art": g["art"].mean()})
+        grouped["near"] = g["near_lag"].mean()
+        # The median lag of the rows the note's reading catches, which is the
+        # quantity the two readings differ over.
+        grouped["lag"] = (
+            part[part["near_lag"]]
+            .groupby("prefix")["lag"]
+            .median()
+            .reindex(grouped.index)
+        )
+        grouped = grouped[grouped["n"] >= MIN_COUNT].sort_values("near", ascending=False)
+        caught = part[part["near_lag"]]
+        rows = [
+            [
+                str(prefix),
+                f"{int(r['n']):,}",
+                pct(r["art"]),
+                pct(r["near"]),
+                num(r["lag"]),
+            ]
+            for prefix, r in grouped.head(PREFIX_ROWS).iterrows()
+        ]
+        lines += [
+            f"### {PREFIX_AIRPORT} departures {label}",
+            "",
+            f"{len(part):,} rows over {int(part['prefix'].nunique()):,} prefixes, of which",
+            f"{len(grouped):,} have at least {MIN_COUNT} rows. The",
+            f"{min(PREFIX_ROWS, len(grouped))} with the largest share under the note's",
+            "reading are printed. `median lag` is over that prefix's rows the note's",
+            "reading catches, and is what separates the two readings.",
+            "",
+            *table(
+                [
+                    "prefix",
+                    "rows",
+                    f"defaulted, the term ({hours} h)",
+                    f"taxi within {NEAR_S:.0f} s of the lag, the note",
+                    "median lag (s)",
+                ],
+                rows,
+                "-rrrr",
+            ),
+            "",
+            f"Over all {len(part):,} rows {label}: {pct(float(part['art'].mean()))} are",
+            f"defaulted under the term's reading and {pct(float(part['near_lag'].mean()))}",
+            "under the note's, and the rows the note's reading catches have a median lag",
+            f"of {secs(float(caught['lag'].median())) if len(caught) else 'n/a'}.",
+            "",
+        ]
+
+    # What a prefix split would open: (airport, prefix, bucket) cells meeting
+    # the term's own rule, against the (airport, bucket) cells it already covers.
+    cells = at.groupby(["prefix", "bucket"], sort=True).agg(
+        n=("y", "size"), share=("art", "mean")
+    )
+    meet = cells[(cells["n"] >= model.min_count) & (cells["share"] >= model.min_share)]
+    covered = {b for i, b in model.covered.index if i == PREFIX_AIRPORT}
+    new = meet[[b not in covered for _p, b in meet.index]]
+    rk_at = rk[rk["ADEP_mvt"] == PREFIX_AIRPORT]
+    nrows, touched = [], 0
+    for (prefix, bucket), r in new.iterrows():
+        hits = int(((rk_at["prefix"] == prefix) & (rk_at["bucket"] == bucket)).sum())
+        touched += hits
+        nrows.append(
+            [str(prefix), f"`{bucket}`", f"{int(r['n']):,}", pct(r["share"]), f"{hits:,}"]
+        )
+    lines += [
+        "### The cells a prefix split would open",
+        "",
+        f"Every (airport, prefix, bucket) cell at {PREFIX_AIRPORT} meeting the term's own",
+        f"coverage rule -- at least {model.min_count} rows and a defaulted share of at",
+        f"least {pct(model.min_share, 0)} -- that the term's present cells do not already",
+        f"cover. {len(meet):,} cells meet the rule. {len(meet) - len(new):,} of them lie",
+        f"inside the {len(covered)} (airport, bucket) cells the term already covers at",
+        f"{PREFIX_AIRPORT}, so every row in them is predicted for already and splitting",
+        f"by prefix would move nothing there. {len(new):,}",
+        f"{'lies' if len(new) == 1 else 'lie'} outside.",
+        "",
+    ]
+    if nrows:
+        lines += [
+            *table(
+                [
+                    "prefix",
+                    "cell",
+                    "training rows",
+                    "defaulted",
+                    "ranking rows it would touch",
+                ],
+                nrows,
+                "--rrr",
+            ),
+            "",
+            f"{len(new):,} {'cell' if len(new) == 1 else 'cells'} over",
+            f"{int(new['n'].sum()):,} training rows, touching {touched:,} of the",
+            f"{len(rk_at):,} {PREFIX_AIRPORT} ranking departures.",
+            "",
+        ]
+    else:
+        lines += [
+            "None: every cell that meets the rule is inside a cell the term already",
+            "covers, so a prefix split would open nothing and touch no ranking row.",
+            "",
+        ]
+    with_record = at[~at["LOBT_flt"].isna()]
+    without = at[at["LOBT_flt"].isna()]
+    lines += [
+        "**What the two readings say.** The note's arithmetic holds and its reading of",
+        "it does not. The taxi time does equal the lag in most of the rows of several",
+        "prefixes with a record, and what that says is that those operators pushed back",
+        f"within {NEAR_S:.0f} s of their scheduled off-block time -- which is the same",
+        "statement, because the one quantity is the other. On a row where the block time",
+        "is the scheduled time, the lag simply *is* the taxi, so the column reads as high",
+        "as it does at a punctual operator and says nothing about the record. The median",
+        "lag of the rows the note catches is what shows it: with a record it is",
+        f"{secs(float(with_record.loc[with_record['near_lag'], 'lag'].median()))} against",
+        f"a median recorded taxi-out of {secs(float(with_record['y'].median()))} over all",
+        "of this airport's departures with a record; without a record it is",
+        f"{secs(float(without.loc[without['near_lag'], 'lag'].median()))}, which is where",
+        f"the {hours}-hour condition begins to bite, and",
+        f"{pct(float(without['art'].mean()))} of those rows are defaulted under the",
+        "term's reading against",
+        f"{pct(float(with_record['art'].mean()), 3)} of the rows with one. The",
+        f"{hours}-hour condition is not a refinement of the test; it is the test.",
+        "",
+        "**What the cells say.** The table above is the whole exposure of a prefix",
+        "split under the coverage rule as it stands, measured on the training year and",
+        "counted against the ranking set. It is printed so the size of the question is",
+        "on record. This report does not decide it: the term's key, its coverage rule",
+        "and the rows it predicts for are exactly what they were.",
+    ]
+    return lines
+
+
 def section_statement(f_mech: dict, f_worth: dict, f_rank: dict) -> list[str]:
     dec = f_worth["Dec 2025"]
     jul = f_worth["Jul 2025, all"]
@@ -848,6 +1077,7 @@ def main() -> int:
     worth_lines, f_worth = section_worth(dep, sp)
     rank_lines, f_rank = section_ranking(dep, rk, model)
     f_rank["covered_airports"] = f_cells["covered_airports"]
+    prefix_lines = section_prefixes(dep, rk, model)
 
     generated = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     dec = f_worth["Dec 2025"]
@@ -910,6 +1140,8 @@ def main() -> int:
         + worth_lines
         + [""]
         + rank_lines
+        + [""]
+        + prefix_lines
         + [""]
         + section_statement(f_mech, f_worth, f_rank)
         + footer
