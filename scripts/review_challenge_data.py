@@ -59,9 +59,11 @@ from taxiout.challenge import (  # noqa: E402
 )
 from taxiout.coverage import identifier_shape  # noqa: E402
 from taxiout.join import STAGES, UNMATCHED, collapse, join_rates, join_stands  # noqa: E402
+from taxiout.metar import load_metar, regime_by_hour  # noqa: E402
 
 DATA = REPO / "data" / "challenge"
 MATRICES = REPO / "data" / "processed" / "taxi_distance"
+METAR = REPO / "data" / "raw" / "metar"
 OUT = REPO / "reports" / "data_review.md"
 
 DEP_COLUMNS = [
@@ -551,7 +553,81 @@ def section_target(dep: pd.DataFrame) -> tuple[list[str], dict]:
     return lines, facts
 
 
-def section_artefacts(dep: pd.DataFrame, rk_dep: pd.DataFrame) -> tuple[list[str], dict]:
+# At least this many unjoined or four-hours-late departures in an airport-day,
+# and a share of them this many times the airport's own training-year rate,
+# before the day is called out. Both sides of the data are read at the same
+# rule, so the two tables can be set against each other.
+DISRUPTION_MIN_ROWS = 20
+DISRUPTION_RATE_MULTIPLE = 10
+
+
+def disruption_days(
+    frame: pd.DataFrame, unjoined: pd.Series, lag: pd.Series, rate: pd.DataFrame
+) -> pd.DataFrame:
+    """Airport-days whose unjoined or four-hours-late share is far above ``rate``.
+
+    ``rate`` is the per-airport training-year rate of each flag, so the same
+    baseline is used whichever side of the data ``frame`` is.
+    """
+    day = frame["MVT_TIME_UTC_mvt"].dt.tz_convert("UTC").dt.date
+    daily = (
+        frame.assign(day=day, unj=unjoined, late=lag > 4 * HOUR)
+        .groupby(["ADEP_mvt", "day"], observed=True)
+        .agg(n=("unj", "size"), unj=("unj", "sum"), late=("late", "sum"))
+        .reset_index()
+    )
+    keep = []
+    for _, r in daily.iterrows():
+        tr = rate.loc[r["ADEP_mvt"]]
+        for flag in ("unj", "late"):
+            if (
+                r[flag] >= DISRUPTION_MIN_ROWS
+                and r[flag] / r["n"] > DISRUPTION_RATE_MULTIPLE * tr[flag]
+            ):
+                keep.append(r)
+                break
+    return pd.DataFrame(keep, columns=daily.columns)
+
+
+def longest_run(days: pd.DataFrame) -> tuple[str, int]:
+    """The airport with the longest run of consecutive flagged days, and its length.
+
+    A single bad day at one airport and five in a row are different events, and
+    the row counts alone do not say which a table holds.
+    """
+    best = ("none", 0)
+    for ap, g in days.groupby("ADEP_mvt", observed=True):
+        dates = sorted(pd.to_datetime(pd.Series(list(g["day"]))))
+        run = 0
+        for i, d in enumerate(dates):
+            run = run + 1 if i and (d - dates[i - 1]).days == 1 else 1
+            if run > best[1]:
+                best = (str(ap), run)
+    return best
+
+
+def regime_shares(hourly, station: str, day) -> list[str]:
+    """The three regime flags' shares over one station-day's hours.
+
+    The visibility flag is printed at its low band, which is the column
+    ``reports/congestion.md`` compares the two Januaries on.
+    """
+    if hourly is None:
+        return ["n/a", "n/a", "n/a", "n/a"]
+    g = hourly[(hourly["station"] == station) & (hourly["hour"].dt.date == day)]
+    if not len(g):
+        return ["0", "n/a", "n/a", "n/a"]
+    return [
+        f"{len(g):,}",
+        pct(float((g["vis_band"] == 2).mean()), 0),
+        pct(float(g["precip"].mean()), 0),
+        pct(float(g["freezing"].mean()), 0),
+    ]
+
+
+def section_artefacts(
+    dep: pd.DataFrame, rk_dep: pd.DataFrame, hourly=None
+) -> tuple[list[str], dict]:
     facts: dict = {}
     t = dep["TAXITIME_SEC_mvt"].astype(float)
     lag = seconds_between(dep["MVT_TIME_UTC_mvt"], dep["SCHED_TIME_UTC_mvt"])
@@ -678,26 +754,13 @@ def section_artefacts(dep: pd.DataFrame, rk_dep: pd.DataFrame) -> tuple[list[str
 
     # daily anomaly scan on the ranking set: days whose unjoined or late share
     # is far above the airport's own training rate
-    day = rk_dep["MVT_TIME_UTC_mvt"].dt.tz_convert("UTC").dt.date
-    daily = (
-        rk_dep.assign(day=day, unj=runj, late=rlag > 4 * HOUR)
-        .groupby(["ADEP_mvt", "day"], observed=True)
-        .agg(n=("unj", "size"), unj=("unj", "sum"), late=("late", "sum"))
-        .reset_index()
-    )
     train_rate = pd.DataFrame(
         {
             "unj": unjoined.groupby(dep["ADEP_mvt"], observed=True).mean(),
             "late": (lag > 4 * HOUR).groupby(dep["ADEP_mvt"], observed=True).mean(),
         }
     )
-    anomalies = []
-    for _, r in daily.iterrows():
-        tr = train_rate.loc[r["ADEP_mvt"]]
-        unj_odd = r["unj"] >= 20 and r["unj"] / r["n"] > 10 * tr["unj"]
-        late_odd = r["late"] >= 20 and r["late"] / r["n"] > 10 * tr["late"]
-        if unj_odd or late_odd:
-            anomalies.append(r)
+    anomalies = disruption_days(rk_dep, runj, rlag, train_rate)
     arows = [
         [
             str(r["ADEP_mvt"]),
@@ -706,9 +769,25 @@ def section_artefacts(dep: pd.DataFrame, rk_dep: pd.DataFrame) -> tuple[list[str
             f"{int(r['unj']):,}",
             f"{int(r['late']):,}",
         ]
-        for r in anomalies
+        for _, r in anomalies.iterrows()
     ]
     facts["anomalous_days"] = len(anomalies)
+
+    # the same scan on the training year, so the ranking set's days have
+    # something to be unusual against
+    training = disruption_days(dep, unjoined, lag, train_rate)
+    trows = [
+        [
+            str(r["ADEP_mvt"]),
+            str(r["day"]),
+            f"{int(r['n']):,}",
+            f"{int(r['unj']):,}",
+            f"{int(r['late']):,}",
+        ]
+        + regime_shares(hourly, str(r["ADEP_mvt"]), r["day"])
+        for _, r in training.iterrows()
+    ]
+    facts["training_disruption_days"] = len(training)
 
     lines = [
         "## Where the tail comes from",
@@ -792,6 +871,75 @@ def section_artefacts(dep: pd.DataFrame, rk_dep: pd.DataFrame) -> tuple[list[str
                 arows,
                 "--rrr",
             ),
+        ]
+
+    airports_hit = sorted({str(r["ADEP_mvt"]) for _, r in training.iterrows()})
+    rk_airports = sorted({str(r["ADEP_mvt"]) for _, r in anomalies.iterrows()})
+    lines += [
+        "",
+        "### The same days in the training year",
+        "",
+        "The same rule on the training year, so the days above have something to be",
+        f"unusual against: at least {DISRUPTION_MIN_ROWS} unjoined or four-hours-late",
+        "departures in an airport-day, and a share of them over",
+        f"{DISRUPTION_RATE_MULTIPLE} times that airport's own training-year rate -- the",
+        "same rate the table above is read against, so the two are the same",
+        "measurement on the two sides of the data. Beside each day are the three",
+        "weather flags `taxiout.metar.regime_by_hour` gives that station that day, as",
+        "shares of the hours it has a reading for, so a reader can see which of these",
+        "days ran in a regime and which did not.",
+        "",
+    ]
+    if trows:
+        lines += [
+            *table(
+                [
+                    "ICAO",
+                    "day",
+                    "departures",
+                    "no flt record",
+                    "lag > 4 h",
+                    "hours with a reading",
+                    "visibility < 1.5 km",
+                    "precipitation",
+                    "freezing",
+                ],
+                trows,
+                "--rrrrrrr",
+            ),
+            "",
+            f"{len(training):,} airport-days over the training year, at",
+            f"{len(airports_hit)} of the {dep['ADEP_mvt'].nunique()} airports"
+            f" ({', '.join(airports_hit)}).",
+        ]
+    else:
+        lines += ["No airport-day in the training year meets the rule."]
+    for icao in rk_airports:
+        if icao in airports_hit:
+            continue
+        listed = sum(1 for _, r in anomalies.iterrows() if str(r["ADEP_mvt"]) == icao)
+        lines += [
+            "",
+            f"**The training year holds no such day at {icao}**, which the table above",
+            f"lists on {listed:,} {'day' if listed == 1 else 'days'} of the ranking set.",
+        ]
+    if len(training) and len(anomalies):
+        t_run, t_len = longest_run(training)
+        r_run, r_len = longest_run(anomalies)
+        lines += [
+            "",
+            "The two tables are not the same kind of event. The training year's are",
+            "mostly single days at one airport: the longest run of consecutive flagged",
+            f"days is {t_len} at {t_run}, against {r_len} at {r_run} in the ranking set.",
+            "The most four-hours-late departures on any training day is",
+            f"{int(training['late'].max()):,}, against",
+            f"{int(anomalies['late'].max()):,} in the ranking set, and only",
+            f"{int((training['late'] >= DISRUPTION_MIN_ROWS).sum()):,} of the",
+            f"{len(training):,} training days reach the",
+            f"{DISRUPTION_MIN_ROWS}-late threshold at all, against",
+            f"{int((anomalies['late'] >= DISRUPTION_MIN_ROWS).sum()):,} of",
+            f"{len(anomalies):,}. The training year's flagged days are, in the main,",
+            "days the flight-side join failed on rather than days the airport stopped.",
         ]
     return lines, facts
 
@@ -1224,6 +1372,13 @@ def main() -> int:
         print(f"no challenge data under {DATA}; nothing to review", file=sys.stderr)
         return 1
     matrix = load_matrix()
+    hourly = None
+    if METAR.exists() and any(METAR.glob("*.csv")):
+        hourly = regime_by_hour(load_metar(METAR))
+    else:
+        print(
+            f"no METAR cache under {METAR}; the regime columns read n/a", file=sys.stderr
+        )
 
     print("inventory ...")
     inv_lines, inv = section_inventory(DATA)
@@ -1240,7 +1395,7 @@ def main() -> int:
     ap_lines, ap = section_airports(dep, rk_dep)
     ts_lines, ts = section_timestamps(dep, rk_dep)
     tg_lines, tg = section_target(dep)
-    ar_lines, ar = section_artefacts(dep, rk_dep)
+    ar_lines, ar = section_artefacts(dep, rk_dep, hourly)
     rc_lines, rc = section_reconstruction(dep, rk_dep)
     an_lines, an = section_anchors(rk_dep, rates)
     print("joining ...")
