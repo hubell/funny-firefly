@@ -495,6 +495,27 @@ def test_the_criteria_are_constants_and_not_computed():
     assert pr.HALF_LIVES == (3, 12)
     assert pr.SEASON_COLUMNS == ("tko_month", "tko_doy_sin", "tko_doy_cos")
     assert pr.JULY_AVERAGE_POOLED == 325.29
+    # The rule of 19 September reads two forward legs this run does not fit
+    # for it, so its figures are quoted with their lines and are constants on
+    # the same footing as the references and the floors above.
+    legs = {r["leg"]: r for r in pr.RULE_LEGS}
+    assert set(legs) == {"December, all ten", "July, all ten"}
+    assert (legs["December, all ten"]["gain"], legs["December, all ten"]["floor"]) == (
+        0.48,
+        0.34,
+    )
+    assert legs["December, all ten"]["average"] == 217.11
+    assert legs["December, all ten"]["best_single"] == 217.59
+    assert (legs["July, all ten"]["gain"], legs["July, all ten"]["floor"]) == (
+        0.52,
+        0.23,
+    )
+    assert legs["July, all ten"]["average"] == pr.JULY_AVERAGE_POOLED
+    assert legs["July, all ten"]["best_single"] == pr.JULY_SINGLES_POOLED[0]
+    for leg in pr.RULE_LEGS:
+        assert "baseline.md line" in leg["source"]
+        # Each leg's floor is the one this repository already prints for it.
+        assert leg["floor"] in (pr.FLOOR_DECEMBER_ALL, pr.FLOOR_JULY_ALL)
 
 
 # --------------------------------------------------------------------------
@@ -612,6 +633,7 @@ def test_the_report_builds_from_the_records_and_says_nothing_shipped(
         "experiment_2": pr.experiment_2(records, checks, dict(FLOORS)),
         "experiment_3": pr.experiment_3(records, checks),
         "fits": len(records),
+        "fit_seconds": float(sum(r["wall_s"] for r in records.values())),
         "frame": {
             "build_seconds": 56.0,
             "rows": 2085047,
@@ -659,6 +681,7 @@ def test_a_stopped_run_writes_a_report_that_reads_no_figure(tmp_path, monkeypatc
         "stopped": "reproduction",
         "records": records,
         "fits": len(records),
+        "fit_seconds": float(sum(r["wall_s"] for r in records.values())),
         "frame": {"build_seconds": 56.0, "rows": 1, "legs": {}},
         "run": {"wall_seconds": 1.0, "peak_rss_kib": 1},
         "fingerprint": {
@@ -687,3 +710,180 @@ def test_the_records_round_trip_as_json(tmp_path, monkeypatch):
     assert json.loads(path.read_text(encoding="utf-8"))["schedule"] == "H=12"
     assert len(pr.read_kept("december_H12_seed0", "valid")) == len(arm)
     assert pr.movements_on_disk() == {str(int(v)) for v in arm["mvt_id"]}
+
+
+# --------------------------------------------------------------------------
+# what was changed when the pre-registration was copied in
+
+
+def test_every_recorded_place_is_in_the_carried_text_exactly_once():
+    """The manifest is tied to the text, so a drifting entry is a failure."""
+    for place in pr.SUBSTITUTIONS:
+        assert pr.PREREGISTRATION.count(place.marker) == 1, place.where
+
+
+def test_the_counts_are_summed_from_the_list_and_not_written_down():
+    audit = pr.substitution_audit()
+    assert audit["places"] == len(pr.SUBSTITUTIONS)
+    assert audit["work_block_tokens"] == sum(
+        p.tokens for p in pr.SUBSTITUTIONS if p.kind == pr.WORK_BLOCK
+    )
+    assert audit["note_references"] == sum(
+        p.tokens for p in pr.SUBSTITUTIONS if p.kind == pr.NOTE_REFERENCE
+    )
+    assert audit["tokens"] == audit["work_block_tokens"] + audit["note_references"]
+    assert audit["markers_found_once"] and not audit["stray_markers"]
+    assert audit["carried_is_clean"]
+
+
+def test_the_list_holds_only_the_published_side():
+    """Recording that a name was removed must not put the name back."""
+    for place in pr.SUBSTITUTIONS:
+        for field in (place.where, place.marker, place.kind, place.widens or ""):
+            assert not pr.WORK_BLOCK_TOKEN.search(field), place.where
+            assert not pr.NOTE_REFERENCE_TOKEN.search(field), place.where
+
+
+def test_every_kind_in_the_list_is_one_of_the_two():
+    assert {p.kind for p in pr.SUBSTITUTIONS} == {pr.WORK_BLOCK, pr.NOTE_REFERENCE}
+    assert all(p.tokens >= 1 for p in pr.SUBSTITUTIONS)
+
+
+def test_a_clean_checkout_still_audits_against_the_published_text(monkeypatch, tmp_path):
+    """No note on disk: the report says the check was not run, not that it passed."""
+    monkeypatch.setattr(pr, "NOTE", tmp_path / "absent.md")
+    audit = pr.substitution_audit()
+    assert audit["note_checked"] is False
+    assert "not run" in audit["note_verdict"]
+    assert "sha256" not in audit["note_verdict"]
+    assert "note_sha256" not in audit
+    # And the checks that read the published text alone were still made.
+    assert audit["markers_found_once"] and audit["carried_is_clean"]
+    assert audit["places"] == len(pr.SUBSTITUTIONS)
+    text = "\n".join(pr.section_substitutions())
+    assert "**not run**" in text
+    assert f"{audit['places']} places" in text
+
+
+def test_the_audit_notices_a_manifest_that_has_drifted(monkeypatch):
+    """A recorded place that is no longer in the text is caught, not ignored."""
+    stray = pr.Place("nowhere", "a line this text does not carry", pr.WORK_BLOCK, 1)
+    monkeypatch.setattr(pr, "SUBSTITUTIONS", pr.SUBSTITUTIONS + (stray,))
+    audit = pr.substitution_audit()
+    assert not audit["markers_found_once"]
+    assert audit["stray_markers"] == ["nowhere"]
+    # With the note on hand the place count no longer agrees either.
+    if audit.get("note_checked"):
+        assert audit["note_problems"]
+
+
+def test_the_section_prints_the_counts_it_computed():
+    audit = pr.substitution_audit()
+    text = "\n".join(pr.section_substitutions())
+    assert f"**{audit['places']} places, {audit['tokens']} substitutions.**" in text
+    assert f"{audit['work_block_tokens']} work-block names" in text
+    assert f"{audit['note_references']} note file names" in text
+    for place in pr.SUBSTITUTIONS:
+        assert place.where in text
+    # The one place that does more than render a name says so.
+    assert sum(1 for p in pr.SUBSTITUTIONS if p.widens) >= 1
+
+
+# --------------------------------------------------------------------------
+# the guard, and what actually defeats it
+
+
+def test_the_underscores_defeat_the_guard_and_the_code_span_does_not():
+    """``H12`` is a stand identifier at one of the ten airports.
+
+    The guard searches for it with a word boundary on each side. A backtick is
+    not a word character, so a code span is no protection at all; an
+    underscore is, which is why a record name is rendered with its own.
+    """
+    stands = {"H12"}
+    pr.check_no_identifiers("| `july_H12_seed0` | valid |", stands, set())
+    for rendered in ("`H12`", "july H12 seed0", "july-H12-seed0", "july H12", "(H12)"):
+        with pytest.raises(SystemExit, match="stand identifier"):
+            pr.check_no_identifiers(f"| {rendered} | valid |", stands, set())
+
+
+def test_the_fit_table_renders_record_names_with_their_underscores(tmp_path, monkeypatch):
+    monkeypatch.setattr(pr, "WORK", tmp_path)
+    records = _summary(tmp_path)
+    text = "\n".join(
+        pr.section_fits({"records": records, "fits": len(records), "fit_seconds": 1.0})
+    )
+    assert "`july_H12_seed0`" in text
+    assert "july H12 seed0" not in text
+    # And the guard is content with the table as rendered.
+    pr.check_no_identifiers(text, {"H12"}, set())
+
+
+def test_any_label_of_letters_and_digits_can_collide(tmp_path):
+    """The next block prints cell labels; the answer is to rename, not to loosen."""
+    for label in ("A12", "B7X", "C03"):
+        pr.check_no_identifiers(f"cell `sweep_{label}_seed0`", {label}, set())
+        with pytest.raises(SystemExit, match="stand identifier"):
+            pr.check_no_identifiers(f"cell {label}", {label}, set())
+
+
+# --------------------------------------------------------------------------
+# the verdict of the rule, which Experiment 1 owes
+
+
+def test_experiment_1_writes_the_verdict_of_the_rule_and_the_guard(monkeypatch):
+    records, kept = _seed_world(
+        july_three=[237.0, 237.2, 237.4, 237.6, 237.8],
+        october=[220.0, 220.1, 220.2, 220.3, 220.4],
+        gap=[300.0, 300.1, 300.2, 300.3, 300.4],
+    )
+    monkeypatch.setattr(pr, "score", lambda frame, three=False: 236.0 if three else 219.0)
+    checks = pr.Checks()
+    got = pr.experiment_1(records, kept, checks)
+    assert got["rule_holds"] is True
+    assert [r["leg"] for r in got["rule"]] == ["December, all ten", "July, all ten"]
+    assert all(r["beats_every_single"] and r["clears_floor"] for r in got["rule"])
+    what = [r["what"] for r in checks.rows]
+    assert "Experiment 1, the rule of 19 September" in what
+    assert "Experiment 1, the guard of 20 September" in what
+
+
+def test_the_rule_fails_where_a_leg_does_not_clear_its_floor(monkeypatch):
+    thin = (
+        {**pr.RULE_LEGS[0], "gain": 0.10},
+        pr.RULE_LEGS[1],
+    )
+    monkeypatch.setattr(pr, "RULE_LEGS", thin)
+    records, kept = _seed_world(
+        july_three=[237.0, 237.2, 237.4, 237.6, 237.8],
+        october=[220.0, 220.1, 220.2, 220.3, 220.4],
+        gap=[300.0, 300.1, 300.2, 300.3, 300.4],
+    )
+    monkeypatch.setattr(pr, "score", lambda frame, three=False: 236.0 if three else 219.0)
+    got = pr.experiment_1(records, kept, pr.Checks())
+    assert got["rule_holds"] is False
+    assert got["rule"][0]["clears_floor"] is False
+
+
+# --------------------------------------------------------------------------
+# what the two wall figures are
+
+
+def test_the_fit_seconds_are_summed_per_fit_and_not_per_row(tmp_path, monkeypatch):
+    """A fit scored on two sets is one wall time, not two."""
+    monkeypatch.setattr(pr, "WORK", tmp_path)
+    records = _summary(tmp_path)
+    total = sum(r["wall_s"] for r in records.values())
+    rows = sum(len(r["sets"]) for r in records.values())
+    assert rows > len(records), "the fixture needs a fit scored on two sets"
+    assert total == pytest.approx(float(len(records)))
+
+
+def test_inside_the_floor_reads_the_size_and_not_the_sign():
+    assert pr.inside_floor(0.10, 0.40) == "inside it"
+    assert pr.inside_floor(-0.10, 0.40) == "inside it"
+    assert pr.inside_floor(0.37, 0.19) == "outside it"
+    assert pr.inside_floor(-0.84, 0.23) == "outside it"
+    assert pr.inside_floor(None, 0.40) == "n/a"
+    # Equal to the floor is not inside it, the same reading clears_floor uses.
+    assert pr.inside_floor(0.5, 0.5) == "outside it"

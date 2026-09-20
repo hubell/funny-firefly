@@ -47,12 +47,14 @@ Usage
 from __future__ import annotations
 
 import argparse
+import difflib
 import hashlib
 import json
 import re
 import resource
 import sys
 import time
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -110,11 +112,10 @@ def report_path(generated: str) -> Path:
 # Everything below this line down to ``PRINTED_PRECISION_S`` is quoted from
 # the pre-registration of 20 September, from its *Definitions, fixed here*
 # heading onward, and is not edited by this script or by its author after the
-# fits. Two mechanical substitutions were made when it was copied in, both
-# because this file is published and the note it came from is not: references
-# to the working notes were replaced by the repository's own files or dropped,
-# and the numbered work blocks of the working program were rendered as what
-# they denote. No criterion, schedule, grid value or reading rule differs.
+# fits. What was changed when it was copied in is recorded place by place in
+# ``SUBSTITUTIONS`` below, and ``substitution_audit`` checks that record
+# against this text and, where the note is on hand, against the note. No
+# criterion, schedule, grid value or reading rule differs.
 
 PREREGISTRATION = """## Definitions, fixed here
 
@@ -456,6 +457,278 @@ NOISE_FLOOR_FACTOR = rb.NOISE_FLOOR_FACTOR
 INTERVAL_BELOW_S = 1.0
 
 ATTRIBUTION = "Distance matrices derived from OpenStreetMap"
+
+# The commit that carries the dated entry in ``docs/plan.md``. It is the first
+# of the three this run's work was committed as, and the entry is older on disk
+# than the earliest record the run wrote, which is the claim the commit
+# script's own gate checks. Named here so the report can say which commit
+# rather than say "committed ahead of this run", which was not true of anything
+# at the moment the generator first wrote it.
+PLAN_ENTRY_COMMIT = "f7cb53c"
+
+# The rule of 19 September reads two forward legs this run does not fit, so its
+# figures are quoted from ``baseline.md`` with their lines, on the same footing
+# as the references and the floors above. Nothing here recomputes them. July's
+# are reproduced by this run's own five seeds, which is what the reproduction
+# checks already establish, and December's are not measured here at all.
+RULE_LEGS: tuple[dict, ...] = (
+    {
+        "leg": "December, all ten",
+        "ladder_seed": 217.6,
+        "average": 217.11,
+        "best_single": 217.59,
+        "gain": 0.48,
+        "floor": FLOOR_DECEMBER_ALL,
+        "source": "baseline.md lines 1020 and 1023",
+        "reproduced_here": False,
+    },
+    {
+        "leg": "July, all ten",
+        "ladder_seed": 325.8,
+        "average": 325.29,
+        "best_single": 325.81,
+        "gain": 0.52,
+        "floor": FLOOR_JULY_ALL,
+        "source": "baseline.md lines 1021 and 1023",
+        "reproduced_here": True,
+    },
+)
+
+
+# --------------------------------------------------------------------------
+# what was changed when the pre-registration was copied in
+#
+# The note this file quotes is a working note and is not published. Two things
+# in it cannot be carried into a public repository: the numbered work blocks of
+# the working program, which name sessions, and the file names of other working
+# notes. Every place where the carried copy differs from the note is listed
+# below, and the list is the only record of it: the counts the report prints
+# are summed from these entries, so a sentence and a table cannot drift apart.
+#
+# Each entry holds the PUBLISHED side only. The note's own wording is not here,
+# because writing a work block's name into this repository in order to record
+# that one was taken out would defeat the purpose of taking it out.
+
+WORK_BLOCK = "a numbered work block"
+NOTE_REFERENCE = "a working note"
+
+
+@dataclass(frozen=True)
+class Place:
+    """One place where the carried copy differs from the note it quotes.
+
+    ``marker`` is a line of the published text that occurs exactly once in
+    ``PREREGISTRATION``, which is what ties this entry to a place in the text
+    without quoting the note. ``tokens`` is how many names were replaced
+    there, which is not always one: the table cell holds two and Experiment
+    1's outcome paragraph holds five.
+    """
+
+    where: str
+    marker: str
+    kind: str
+    tokens: int
+    widens: str | None = None
+
+
+SUBSTITUTIONS: tuple[Place, ...] = (
+    Place(
+        "The legs table, the October and the gap floor cells",
+        "| October | January to September | October, all ten | pooled ex-flagged | measured in this run |",
+        WORK_BLOCK,
+        2,
+    ),
+    Place(
+        "Definitions, the floor rule",
+        "A floor measured in this run is root two times",
+        WORK_BLOCK,
+        1,
+    ),
+    Place(
+        "Experiment 1, what is done with each outcome",
+        "Nothing ships from this run. The rule is",
+        WORK_BLOCK,
+        5,
+    ),
+    Place(
+        "Experiment 2, what is done with each outcome",
+        "and the wider sweep and the ladder run that",
+        WORK_BLOCK,
+        1,
+    ),
+    Place(
+        "Experiment 4, the closing sentence",
+        "ranking rows. Off the",
+        WORK_BLOCK,
+        1,
+    ),
+    Place(
+        "Experiment 5, the heading",
+        "## Experiment 5: the wider sweep, permitted once on 19 September",
+        WORK_BLOCK,
+        1,
+    ),
+    Place(
+        "Experiment 5, the fit rules",
+        "The submission rung's features as they stand after the",
+        WORK_BLOCK,
+        1,
+        widens=(
+            "the only one of the thirteen that is not purely a rendering of a"
+            " name. The note scopes the clause to the adoptions of one named"
+            " block; the published copy scopes it to the adoptions that precede"
+            " the sweep, which is a wider class. Nothing is adopted, so nothing"
+            " turns on it today, and the record is the note"
+        ),
+    ),
+    Place(
+        "Experiment 5, the floor",
+        "deviation. If this run's October singles were made",
+        WORK_BLOCK,
+        1,
+    ),
+    Place(
+        "Experiment 6, the opening citation",
+        "`residual.md`'s two descriptive sections: the afternoon and the no-record",
+        NOTE_REFERENCE,
+        1,
+        widens=(
+            "points at the repository's own file instead, and the section"
+            " number that pointed into the note went with it. It is the only"
+            " number anywhere in the quoted text that the copy does not carry,"
+            " and it is a pointer into a file this repository does not have"
+            " rather than a criterion"
+        ),
+    ),
+    Place(
+        "Also in this run, the heading",
+        "## Also in this run, not experiments",
+        WORK_BLOCK,
+        1,
+    ),
+    Place(
+        "Not run, the January boundary",
+        "- **The January boundary.** Dropped: 839 of",
+        NOTE_REFERENCE,
+        1,
+    ),
+    Place(
+        "Not run, the external datasets",
+        "at most (the README's section on the datasets considered); nothing in the",
+        NOTE_REFERENCE,
+        1,
+    ),
+    Place(
+        "The amendment, the heading",
+        "## Amendment, 20 September, before the run started",
+        WORK_BLOCK,
+        1,
+    ),
+)
+
+# Where the note lives when it is on hand. A clean checkout does not have it,
+# and the report says the byte-for-byte check was not run rather than saying it
+# passed.
+NOTE = Path("/mnt/data2tb/linux_handover/notes/preregistration_2026-09-20.md")
+NOTE_HEADING = "## Definitions, fixed here"
+
+# Patterns, not names. Each matches any numbered work block or any dated
+# working note, and neither names one, which is the same footing the committed
+# test that asserts their absence from the carried text already stands on.
+WORK_BLOCK_TOKEN = re.compile(r"\bBlock\s+\d+\b")
+NOTE_REFERENCE_TOKEN = re.compile(r"\b[A-Za-z0-9_]+_\d{4}-\d{2}-\d{2}\.md\b")
+
+
+def substitution_audit() -> dict:
+    """What was changed when the pre-registration was copied in, computed.
+
+    Two levels, and the report says which of them ran.
+
+    The first needs only the published text, so it runs in a clean checkout:
+    every marker occurs exactly once in ``PREREGISTRATION``, the counts are
+    summed from the manifest rather than written down anywhere, and the
+    carried text carries no work-block name and no note file name.
+
+    The second needs the note on hand. It aligns the carried text against the
+    note's quoted region line by line and requires that the changed places are
+    exactly the manifest's, in order, with exactly the manifest's token counts;
+    then it rebuilds the carried text from the note by taking the unchanged
+    lines from the note and the changed ones from here, and requires the
+    rebuild to equal the carried text byte for byte. Outside these places the
+    two texts are the same bytes, which is the whole of the claim.
+    """
+    out: dict = {
+        "places": len(SUBSTITUTIONS),
+        "work_block_tokens": sum(p.tokens for p in SUBSTITUTIONS if p.kind == WORK_BLOCK),
+        "note_references": sum(
+            p.tokens for p in SUBSTITUTIONS if p.kind == NOTE_REFERENCE
+        ),
+        "work_block_places": sum(1 for p in SUBSTITUTIONS if p.kind == WORK_BLOCK),
+        "note_reference_places": sum(
+            1 for p in SUBSTITUTIONS if p.kind == NOTE_REFERENCE
+        ),
+    }
+    out["tokens"] = out["work_block_tokens"] + out["note_references"]
+    stray = [p.where for p in SUBSTITUTIONS if PREREGISTRATION.count(p.marker) != 1]
+    out["markers_found_once"] = not stray
+    out["stray_markers"] = stray
+    out["carried_is_clean"] = not (
+        WORK_BLOCK_TOKEN.search(PREREGISTRATION)
+        or NOTE_REFERENCE_TOKEN.search(PREREGISTRATION)
+    )
+
+    if not NOTE.exists():
+        out["note_checked"] = False
+        out["note_verdict"] = (
+            "not run: the note is not on this machine, so only the checks that"
+            " read the published text alone were made"
+        )
+        return out
+
+    raw = NOTE.read_bytes()
+    out["note_checked"] = True
+    out["note_sha256"] = hashlib.sha256(raw).hexdigest()
+    text = raw.decode("utf-8")
+    if NOTE_HEADING not in text:
+        out["note_verdict"] = f"the note carries no {NOTE_HEADING!r} heading"
+        return out
+    region = text[text.index(NOTE_HEADING) :]
+    a, b = region.split("\n"), PREREGISTRATION.split("\n")
+    opcodes = difflib.SequenceMatcher(None, a, b, autojunk=False).get_opcodes()
+    changed = [op for op in opcodes if op[0] != "equal"]
+    problems = []
+    if len(changed) != len(SUBSTITUTIONS):
+        problems.append(
+            f"{len(changed)} changed places against {len(SUBSTITUTIONS)} recorded"
+        )
+    else:
+        for place, (_, i1, i2, j1, j2) in zip(SUBSTITUTIONS, changed):
+            was, now = "\n".join(a[i1:i2]), "\n".join(b[j1:j2])
+            if place.marker not in now:
+                problems.append(
+                    f"{place.where}: the published side is not the recorded one"
+                )
+            pattern = (
+                WORK_BLOCK_TOKEN if place.kind == WORK_BLOCK else NOTE_REFERENCE_TOKEN
+            )
+            found = len(pattern.findall(was))
+            if found != place.tokens:
+                problems.append(
+                    f"{place.where}: {found} token(s) replaced against {place.tokens} recorded"
+                )
+    rebuilt = []
+    for tag, i1, i2, j1, j2 in opcodes:
+        rebuilt.extend(a[i1:i2] if tag == "equal" else b[j1:j2])
+    if "\n".join(rebuilt) != PREREGISTRATION:
+        problems.append("the note does not rebuild the carried text")
+    out["note_problems"] = problems
+    out["note_verdict"] = (
+        "the note rebuilds the carried text byte for byte with exactly these"
+        " places changed"
+        if not problems
+        else "; ".join(problems)
+    )
+    return out
 
 
 # --------------------------------------------------------------------------
@@ -946,6 +1219,20 @@ def step(arm: float, base: float) -> float:
     return arm - base
 
 
+def inside_floor(difference: float | None, floor: float) -> str:
+    """Whether a step is smaller than the floor of the leg it was taken on.
+
+    The floors in this run run from 0.19 s to 1.02 s and printed precision is
+    0.1 s, so a screen read at printed precision can fire on a step the same
+    run calls seed noise. Saying which is which is not a change to any rule:
+    every screen here is still decided at printed precision, and this column
+    only says what the step was.
+    """
+    if difference is None:
+        return "n/a"
+    return "inside it" if abs(difference) < floor else "outside it"
+
+
 def shown(value) -> str:
     return "n/a" if value is None else str(value)
 
@@ -1140,11 +1427,13 @@ def experiment_1(records: dict, kept: dict, checks: Checks) -> dict:
     """The ten singles, the two averages, October's floor, and the verdicts.
 
     The rule of 19 September reads December and July pooled, which
-    ``baseline.md`` already prints. What is computed here is the pair of
-    measurements it asks for before the average may ship, and the guard of
-    20 September over them: on the three and on October, is the average
-    better than every single, and is it worse than the ladder's seed by more
-    than that leg's floor.
+    ``baseline.md`` already prints and which ``RULE_LEGS`` quotes. What is
+    measured here is the pair of readings it asks for before the average may
+    ship, and the guard of 20 September over them: on the three and on
+    October, is the average better than every single, and is it worse than the
+    ladder's seed by more than that leg's floor. Both verdicts are written,
+    because the pre-registration asks Experiment 1 for both and the guard
+    alone is half of it.
     """
     july_names = [f"july_seed{i}" for i in range(SEEDS)]
     october_names = [f"october_seed{i}" for i in range(SEEDS)]
@@ -1190,6 +1479,43 @@ def experiment_1(records: dict, kept: dict, checks: Checks) -> dict:
             "guard_trips": bool(worse_by > floor),
         }
     tripped = [k for k, v in verdict.items() if v["guard_trips"]]
+
+    # The rule of 19 September, which reads the two forward legs. Its figures
+    # are ``baseline.md``'s, quoted as constants, so this is the rule applied
+    # rather than the rule recomputed; the pre-registration asks Experiment 1
+    # to write the verdict of the rule and the guard, and the guard alone is
+    # half of what it asks for.
+    rule = []
+    for leg in RULE_LEGS:
+        rule.append(
+            {
+                **leg,
+                "beats_every_single": bool(leg["average"] < leg["best_single"]),
+                "clears_floor": bool(leg["gain"] > leg["floor"]),
+            }
+        )
+    rule_holds = all(r["beats_every_single"] and r["clears_floor"] for r in rule)
+
+    checks.add(
+        "Experiment 1, the rule of 19 September",
+        "on both forward legs the average beats every single seed and its gain"
+        " clears that leg's floor",
+        (
+            "holds on both: "
+            + ", ".join(
+                f"{r['leg']} {r['gain']:.2f} s against {r['floor']:.2f}" for r in rule
+            )
+            if rule_holds
+            else "fails on "
+            + " and ".join(
+                r["leg"]
+                for r in rule
+                if not (r["beats_every_single"] and r["clears_floor"])
+            )
+        ),
+        True,  # the rule's verdict is a result, not a failed expectation
+        "baseline.md line 1023, quoted",
+    )
     checks.add(
         "Experiment 1, the guard of 20 September",
         "the average is not worse than the ladder's seed by more than the floor,"
@@ -1207,6 +1533,8 @@ def experiment_1(records: dict, kept: dict, checks: Checks) -> dict:
         "floors": {k: float(v) for k, v in floors.items()},
         "verdict": verdict,
         "guard_trips_on": tripped,
+        "rule": rule,
+        "rule_holds": bool(rule_holds),
     }
 
 
@@ -1572,7 +1900,17 @@ def run(frame: Frame) -> dict:
     # passes also say that nothing was lost on the way to disk.
     derived = Checks()
     got = derive(load_records(), derived)
-    return {"checks": derived.rows, "records": records, "fits": len(records), **got}
+    return {
+        "checks": derived.rows,
+        "records": records,
+        "fits": len(records),
+        # Summed from the per-fit walls, which is the figure the report's own
+        # table prints. The run's wall clock covers the scoring, the paired
+        # bootstraps and the reproduction joins as well, and the two are not
+        # the same number.
+        "fit_seconds": float(sum(r["wall_s"] for r in records.values())),
+        **got,
+    }
 
 
 # --------------------------------------------------------------------------
@@ -1630,12 +1968,18 @@ def section_fits(summary: dict) -> list[str]:
         for set_name, entry in record["sets"].items():
             rows.append(
                 [
-                    # The record's own name, in a code span and with its
-                    # underscores: written out with spaces instead, a name
-                    # like ``july_H12_seed0`` puts the bare token ``H12`` in
-                    # the report, and that is a stand identifier at one of the
-                    # ten airports. The guard below refuses the report over it,
-                    # which is the guard working and not a false alarm.
+                    # The record's own name, **with its underscores**. That is
+                    # what matters, and the code span is only for reading: a
+                    # name rendered with spaces instead puts the bare token
+                    # ``H12`` in the report, and that is a stand identifier at
+                    # one of the ten airports, so the guard below refuses the
+                    # whole report. The backtick does not help, because it is
+                    # not a word character and ``(?<![\w])H12(?![\w])`` matches
+                    # inside a code span; the underscore is a word character
+                    # and is what defeats the match. Any label of the form
+                    # letter plus digits can collide the same way, and the
+                    # answer to a refusal is always to rename the label, never
+                    # to loosen the guard.
                     f"`{name}`",
                     set_name,
                     record["schedule"],
@@ -1669,8 +2013,8 @@ def section_fits(summary: dict) -> list[str]:
                 "set",
                 "schedule",
                 "features",
-                "rows",
-                "flagged",
+                "scored rows",
+                "flagged scored rows",
                 "pooled ex-flagged (s)",
                 "the three (s)",
                 "the mix (s)",
@@ -1729,16 +2073,30 @@ def section_experiment_1(summary: dict) -> list[str]:
                 "**trips**" if got["guard_trips"] else "holds",
             ]
         )
+    rule_rows = [
+        [
+            r["leg"],
+            f"{r['ladder_seed']:.1f}",
+            f"{r['average']:.2f}",
+            f"{r['gain']:.2f}",
+            f"{r['floor']:.2f}",
+            "yes" if r["beats_every_single"] else "no",
+            "yes" if r["clears_floor"] else "no",
+            r["source"],
+        ]
+        for r in one["rule"]
+    ]
     return [
         "## What Experiment 1 measured: seed averaging on the three and on October",
         "",
         "The five July seeds and the five October seeds, singly and averaged."
         " The first July seed and the first December seed are the reproduction"
         " fits above, so the averages here are averages of fits that reproduce"
-        " the ladder's. October's floor and the gap's are measured from these"
-        " five singles by the rule `baseline.md`'s *The noise floor* states,"
-        " root two times the sample standard deviation; December's, July's and"
-        " the three's are the printed ones.",
+        " the ladder's. Two floors are measured here, each from its own five"
+        " singles by the rule `baseline.md`'s *The noise floor* states, root"
+        " two times the sample standard deviation: October's from the five"
+        " October fits, and the gap's from the five July fits scored on"
+        " December. December's, July's and the three's are the printed ones.",
         "",
         *singles,
         "",
@@ -1771,10 +2129,65 @@ def section_experiment_1(summary: dict) -> list[str]:
             "**The guard holds on both columns.**"
             if not one["guard_trips_on"]
             else "**The guard trips on " + " and on ".join(one["guard_trips_on"]) + ".**"
+        ),
+        "",
+        "**What the floor does on these two columns, and what it does not.** On"
+        " the three and on October the floor is here for the guard alone, and"
+        " the guard sizes a *regression*: it asks whether the average is worse"
+        " than the ladder's seed by more than the floor. No test on either"
+        " column asks the gain to clear anything, so a gain of 1.01 s beside a"
+        " floor of 1.02 s is not a gain that failed a test. The rule's"
+        " clears-the-floor test lives on the two forward legs below, and is"
+        " read against those legs' floors.",
+        "",
+        "**Changes are computed on the unrounded figures**, as the"
+        " pre-registration requires, while the columns beside them print to two"
+        " decimals. On the three that is visible: 237.80 less 236.80 reads as"
+        " 1.00 in the printed columns where the change is 1.01, because neither"
+        " figure is exactly what it prints.",
+        "",
+        "**The rule of 19 September, on the two forward legs it reads.** This"
+        " run does not fit them for the rule: December is one seed here, and"
+        " July's five are fitted for the columns above. The figures are"
+        " `baseline.md`'s, quoted as constants with their lines, and the rule is"
+        " applied to them rather than recomputed. July's are reproduced by this"
+        " run's own five seeds, which is what the reproduction checks above"
+        " establish; December's are not measured here at all.",
+        "",
+        *table(
+            [
+                "leg",
+                "the ladder's seed (s)",
+                "the 5 averaged (s)",
+                "gain (s)",
+                "floor (s)",
+                "beats every single",
+                "clears the floor",
+                "source",
+            ],
+            rule_rows,
+            "-rrrr---",
+        ),
+        "",
+        (
+            "**At the present parameters the rule holds on both forward legs and"
+            " the guard holds on both columns.**"
+            if one["rule_holds"] and not one["guard_trips_on"]
+            else "**The rule "
+            + ("holds" if one["rule_holds"] else "fails")
+            + " on the forward legs, and the guard "
+            + (
+                "holds on both columns.**"
+                if not one["guard_trips_on"]
+                else "trips on " + " and on ".join(one["guard_trips_on"]) + ".**"
+            )
         )
-        + " Nothing is adopted here and nothing ships from this run: the rule"
-        " is read for the submission from `baseline.md` once the ladder prints"
-        " these two measurements under the final parameters.",
+        + " The decision is still deferred and nothing ships from this run. The"
+        " parameters may move in the wider sweep, and the pre-registration fixes"
+        " that the generator's `SEED_AVERAGE_PENDING` is emptied after the"
+        " ladder run that follows the sweep and not before. Until then the"
+        " submission is fitted from a single seed and"
+        " `taxiout.models.SEED_AVERAGE_ADOPTED` stays `False`.",
         "",
     ]
 
@@ -1831,6 +2244,7 @@ def section_experiment_2(summary: dict) -> list[str]:
             "",
         ]
     reference = two["references"]
+    floors = summary["experiment_1"]["floors"]
     rows = []
     for h in HALF_LIVES:
         got = two["schedules"][f"H={h}"]
@@ -1839,9 +2253,13 @@ def section_experiment_2(summary: dict) -> list[str]:
                 f"H = {h}",
                 printed(got["october"]),
                 f"{got['october_step']:+.2f}",
+                f"{floors['October, all ten']:.2f}",
+                inside_floor(got["october_step"], floors["October, all ten"]),
                 "no worse" if got["october_passes"] else "**worse: stops**",
                 printed(got.get("gap")),
                 f"{got['gap_step']:+.2f}" if "gap_step" in got else "not fitted",
+                f"{floors['the gap']:.2f}",
+                inside_floor(got.get("gap_step"), floors["the gap"]),
                 (
                     "not reached"
                     if "gap_passes" not in got
@@ -1857,18 +2275,30 @@ def section_experiment_2(summary: dict) -> list[str]:
         " printed precision stops where it is worse and is not fitted"
         " further.",
         "",
+        "Each step is printed beside the floor of the leg it was taken on, both"
+        " of them measured in this run from that leg's own five single-seed"
+        " fits. The screen is fixed at printed precision and reads nothing"
+        " else; the floor column is there so that a stop can be read for what"
+        " it is, because printed precision is 0.1 s and every floor in this run"
+        " is larger than that. A step inside its leg's floor is a step the same"
+        " run calls seed noise.",
+        "",
         *table(
             [
                 "schedule",
                 "October (s)",
                 "step",
+                "October's floor",
+                "against it",
                 "the October screen",
                 "the gap (s)",
                 "step",
+                "the gap's floor",
+                "against it",
                 "the gap screen",
             ],
             rows,
-            "-rr-rr-",
+            "-rrr--rrr--",
         ),
         "",
     ]
@@ -1958,30 +2388,130 @@ def section_experiment_2(summary: dict) -> list[str]:
         + " Nothing in `taxiout.models` or `scripts/make_submission.py` is"
         " changed by this run either way.",
         "",
+        "**What stopped each schedule, read against the floors above.** The"
+        " strong schedule is worse on October by more than October's own floor,"
+        " so that stop is a regression the run can measure. The mild schedule"
+        " is a different case, and the two should not be read as one. It gains"
+        " on the July forward leg by more than that leg's floor and with an"
+        " interval clear of zero, and it moves nothing outside seed noise on"
+        " October or on the gap: both of those steps are smaller than their own"
+        " leg's floor and both intervals span zero. It is not adopted because"
+        " the screen is fixed at printed precision and, at that precision, the"
+        " gap reading is worse. **The stop is correct and the screen worked as"
+        " it was fixed. The reason is the screen, not a measured loss on the"
+        " gap.**",
+        "",
+        "That is what the gap leg can and cannot say here. It was built so that"
+        " the recent training months are the seasonally furthest from the month"
+        " being scored, which is the July 2026 geometry as nearly as one"
+        " training year permits, and on it the mild schedule did nothing"
+        " measurable in either direction. So this run does not separate recency"
+        " from season; it shows that the schedule which helps where the two"
+        " agree does not carry to the leg where they do not. The confound"
+        " stands as a limitation that no leg inside one training year can"
+        " resolve, which is what the pre-registration says of it, and no"
+        " recency term ships.",
+        "",
+        *section_experiment_2_correction(),
     ]
     return lines
+
+
+# The correction of 20 September, recorded in the file it corrects.
+#
+# The first published version of this report read the gap step as a loss. It
+# is not one, and a reader of the report alone should not have to diff the
+# history to find that out, because the paper's limitation section is written
+# from this file. The superseded phrase is quoted exactly so that the two can
+# be told apart, and the verdict is unchanged either way: neither schedule was
+# adopted then and neither is adopted now.
+SUPERSEDED_GAP_READING = (
+    "the mild schedule gains where recency and season agree and loses on the"
+    " one leg where they do not, which is the sign the gap leg was built to"
+    " expose"
+)
+CORRECTION_COMMIT = "16a4f03"
+
+
+def section_experiment_2_correction() -> list[str]:
+    return [
+        "### A correction to this section, 20 September",
+        "",
+        "The first published version of this file, committed as"
+        f" `{CORRECTION_COMMIT}`, read the gap step as a measured loss. That"
+        f' commit\'s message put it as: "{SUPERSEDED_GAP_READING}." It is'
+        " superseded by the reading above, and this paragraph is here because"
+        " the paper's limitation section is written from this report and a"
+        " reader of the report alone should not have to go to the history to"
+        " learn that the reading changed.",
+        "",
+        "What is wrong with it: the gap step is +0.10 s against that leg's own"
+        " floor of 0.40 s, measured in the same run from the same five July"
+        " fits, with a day-clustered interval of [-0.4, +0.6] that spans zero."
+        " A step a quarter of its leg's floor is not a loss the run can see."
+        " The superseded sentence also reads the July gains and the gap step as"
+        " one symmetric finding, and they are not: the July gains are outside"
+        " their floors and the gap step is inside its own.",
+        "",
+        "**No figure moved.** Every number in the first version is in this one"
+        " and unchanged, and the verdict is the same: neither schedule was"
+        " adopted then and neither is adopted now. What changed is the"
+        " description of why the mild schedule stopped, which is the screen"
+        " reading printed precision rather than a loss on the gap.",
+        "",
+    ]
 
 
 def section_experiment_2_intervals(summary: dict) -> list[str]:
     """The day-clustered interval on every step inside a second."""
     two = summary["experiment_2"]
+    floors = summary["experiment_1"]["floors"]
     rows = []
     for h in HALF_LIVES:
         got = two["schedules"][f"H={h}"]
         arms = [
-            ("October", f"october_H{h}_seed0", "october_seed0", "valid", False),
-            ("the gap", f"july_H{h}_seed0", "july_seed0", "gap", False),
+            (
+                "October",
+                f"october_H{h}_seed0",
+                "october_seed0",
+                "valid",
+                False,
+                floors["October, all ten"],
+            ),
+            (
+                "the gap",
+                f"july_H{h}_seed0",
+                "july_seed0",
+                "gap",
+                False,
+                floors["the gap"],
+            ),
             (
                 "December all ten",
                 f"december_H{h}_seed0",
                 "december_seed0",
                 "valid",
                 False,
+                FLOOR_DECEMBER_ALL,
             ),
-            ("July the three", f"july_H{h}_seed0", "july_seed0", "valid", True),
-            ("July all ten", f"july_H{h}_seed0", "july_seed0", "valid", False),
+            (
+                "July the three",
+                f"july_H{h}_seed0",
+                "july_seed0",
+                "valid",
+                True,
+                FLOOR_JULY_THREE,
+            ),
+            (
+                "July all ten",
+                f"july_H{h}_seed0",
+                "july_seed0",
+                "valid",
+                False,
+                FLOOR_JULY_ALL,
+            ),
         ]
-        for label, arm_name, base_name, set_name, three in arms:
+        for label, arm_name, base_name, set_name, three, floor in arms:
             if not (WORK / f"{arm_name}__{set_name}.parquet").exists():
                 continue
             arm = read_kept(arm_name, set_name)
@@ -1992,6 +2522,8 @@ def section_experiment_2_intervals(summary: dict) -> list[str]:
                     f"H = {h}",
                     label,
                     f"{difference:+.2f}",
+                    f"{floor:.2f}",
+                    inside_floor(difference, floor),
                     maybe_interval(arm, base, difference, three=three),
                 ]
             )
@@ -2002,23 +2534,46 @@ def section_experiment_2_intervals(summary: dict) -> list[str]:
             phrase = "not inside a second"
             if abs(difference) < INTERVAL_BELOW_S:
                 phrase = interval_phrase(mix_interval(arm, base))
-            rows.append([f"H = {h}", "the ranking mix", f"{difference:+.2f}", phrase])
+            rows.append(
+                [
+                    f"H = {h}",
+                    "the ranking mix",
+                    f"{difference:+.2f}",
+                    f"{FLOOR_DECEMBER_ALL:.2f}",
+                    inside_floor(difference, FLOOR_DECEMBER_ALL),
+                    phrase,
+                ]
+            )
     if not rows:
         return []
     return [
-        "**The interval on every step inside a second.** The day is the"
-        " cluster, and the two arms are the same rows of the same evaluation"
-        " set, so one draw of days resamples both and the contrast stays"
-        " paired. The mix's interval pools the resampled bucket figures at"
-        " `RANKING_MIX` under that same draw. A step of a second or more is"
-        " outside what the standing rule asks an interval for and none is"
-        " printed for it.",
+        "**The interval on every step inside a second, and the floor beside"
+        " it.** The day is the cluster, and the two arms are the same rows of"
+        " the same evaluation set, so one draw of days resamples both and the"
+        " contrast stays paired. The mix's interval pools the resampled bucket"
+        " figures at `RANKING_MIX` under that same draw. A step of a second or"
+        " more is outside what the standing rule asks an interval for and none"
+        " is printed for it. The floor column is the floor of the leg the step"
+        " was taken on, so that a step can be read against the two instruments"
+        " this repository has for the size of a difference.",
         "",
         *table(
-            ["schedule", "reading", "step (s)", "95% interval"],
+            [
+                "schedule",
+                "reading",
+                "step (s)",
+                "that leg's floor (s)",
+                "against it",
+                "95% interval",
+            ],
             rows,
-            "--rr",
+            "--rr--",
         ),
+        "",
+        "The ranking mix has no floor of its own, because nothing is refitted"
+        " five times at the mix. December's is printed beside it, that being"
+        " the leg the mix reweights, and the column says which floor it is"
+        " rather than implying the mix was measured five times.",
         "",
     ]
 
@@ -2026,7 +2581,8 @@ def section_experiment_2_intervals(summary: dict) -> list[str]:
 def section_experiment_3(summary: dict) -> list[str]:
     three = summary["experiment_3"]
     rows = []
-    for label, arm_name, base_name, set_name, is_three, reference in (
+    outside_floor = []
+    for label, arm_name, base_name, set_name, is_three, reference, floor in (
         (
             "December all ten",
             "december_noseason_seed0",
@@ -2034,6 +2590,7 @@ def section_experiment_3(summary: dict) -> list[str]:
             "valid",
             False,
             REF_DECEMBER_ALL,
+            FLOOR_DECEMBER_ALL,
         ),
         (
             "July the three",
@@ -2042,6 +2599,7 @@ def section_experiment_3(summary: dict) -> list[str]:
             "valid",
             True,
             REF_JULY_THREE,
+            FLOOR_JULY_THREE,
         ),
         (
             "July all ten",
@@ -2050,20 +2608,25 @@ def section_experiment_3(summary: dict) -> list[str]:
             "valid",
             False,
             REF_JULY_ALL,
+            FLOOR_JULY_ALL,
         ),
     ):
         arm = read_kept(arm_name, set_name)
         base = read_kept(base_name, set_name)
         value = score(arm, three=is_three)
+        difference = value - score(base, three=is_three)
+        phrase = maybe_interval(arm, base, difference, three=is_three)
+        if abs(value - reference) >= floor:
+            outside_floor.append(label)
         rows.append(
             [
                 label,
                 f"{reference:.1f}",
                 printed(value),
                 f"{value - reference:+.2f}",
-                maybe_interval(
-                    arm, base, value - score(base, three=is_three), three=is_three
-                ),
+                f"{floor:.2f}",
+                inside_floor(value - reference, floor),
+                phrase,
             ]
         )
     difference = three["ranking_mix"] - REF_RANKING_MIX
@@ -2075,21 +2638,28 @@ def section_experiment_3(summary: dict) -> list[str]:
                 read_kept("december_seed0", "valid"),
             )
         )
+    if abs(difference) >= FLOOR_DECEMBER_ALL:
+        outside_floor.append("the ranking mix")
     rows.append(
         [
             "the ranking mix",
             f"{REF_RANKING_MIX:.1f}",
             printed(three["ranking_mix"]),
             f"{difference:+.2f}",
+            f"{FLOOR_DECEMBER_ALL:.2f}",
+            inside_floor(difference, FLOOR_DECEMBER_ALL),
             phrase,
         ]
     )
+    printed_intervals = [r for r in rows if r[-1].startswith("[")]
+    crossing = [r for r in printed_intervals if r[-1].startswith("[-") and "+" in r[-1]]
     return [
         "## What Experiment 3 measured: the season columns",
         "",
         "The submission rung refitted on December and on July without"
         f" {', '.join('`' + c + '`' for c in SEASON_COLUMNS)}, first seed,"
-        " everything else unchanged. Positive is worse.",
+        " everything else unchanged. Positive is worse, as everywhere in this"
+        " report: the column is the arm minus the thing it is read against.",
         "",
         *table(
             [
@@ -2097,11 +2667,35 @@ def section_experiment_3(summary: dict) -> list[str]:
                 "the reference (s)",
                 "without the season columns (s)",
                 "step",
+                "that leg's floor (s)",
+                "against it",
                 "95% interval",
             ],
             rows,
-            "-rrrr",
+            "-rrrr--",
         ),
+        "",
+        "**The sign is not the same on the two legs.** Removing the columns"
+        " improves December and the mix and costs July, on both of July's"
+        " columns.",
+        "",
+        f"**The two instruments disagree here, and the report says so rather"
+        f" than leaving it to be noticed.** {len(outside_floor)} of the"
+        f" {len(rows)} steps are outside the floor of the leg they were taken"
+        f" on ({', '.join(outside_floor)}), while"
+        + (
+            f" every one of the {len(printed_intervals)} intervals that print spans zero."
+            if len(crossing) == len(printed_intervals)
+            else f" {len(crossing)} of the {len(printed_intervals)} intervals"
+            " that print span zero."
+        )
+        + " July on the three is outside a second and carries no"
+        " interval by the standing rule, and the ranking mix, read against"
+        " December's floor because it has none of its own, is the one step"
+        " inside it. So on three contrasts the floor calls the difference real"
+        " and the day-clustered interval does not. The paper's §7.1 will have"
+        " to state which of the two it is quoting; nothing here chooses between"
+        " them, and nothing needs to, because no adoption follows either way.",
         "",
         "**No adoption follows from this in either direction, whatever its"
         " sign.** Both forward legs validate on a month and a day-of-year"
@@ -2109,14 +2703,108 @@ def section_experiment_3(summary: dict) -> list[str]:
         " November, July after January to June. The ranking months do not."
         " January 2026 and July 2026 each have their twin in the training"
         " year, so the final fit interpolates on these columns where the legs"
-        " extrapolate. The measurement answers a question the ranking months"
-        " do not ask, and it is here for the paper's §7.1 as the validation"
-        " design's limitation. A held-out-month split would answer the"
-        " question the ranking months do ask, and it breaks the forward"
-        " discipline every leg here keeps; it is named in the pre-registration"
-        " above and is not run.",
+        " extrapolate. The measurement answers a question the ranking months do"
+        " not ask, and it is here for the paper's §7.1 as the validation"
+        " design's limitation. A held-out-month split would answer the question"
+        " the ranking months do ask, and it breaks the forward discipline every"
+        " leg here keeps; it is named in the pre-registration below and is not"
+        " run.",
         "",
     ]
+
+
+def section_substitutions() -> list[str]:
+    """What was changed when the pre-registration was copied in, and how much.
+
+    Every count here is summed from ``SUBSTITUTIONS`` and every verdict is
+    computed by ``substitution_audit``. There is no sentence in this section
+    that a reader could find disagreeing with the table beside it, because
+    both are the same object read twice.
+    """
+    audit = substitution_audit()
+    rows = [
+        [
+            place.where,
+            place.kind,
+            str(place.tokens),
+            place.widens
+            or (
+                "renders a name"
+                if place.kind == WORK_BLOCK
+                else "points at the repository's own file instead"
+            ),
+        ]
+        for place in SUBSTITUTIONS
+    ]
+    lines = [
+        "## What was changed when the pre-registration was copied in",
+        "",
+        "The pre-registration quoted below is a working note and is not"
+        " published. Two things in it cannot be carried into a public"
+        " repository: the numbered work blocks of the working program, which"
+        " name sessions, and the file names of other working notes. Every place"
+        " where the carried copy differs from the note is listed here, and the"
+        " list is the record of it. **No criterion, schedule, grid value,"
+        " reference, floor or reading rule differs**, which is the claim the"
+        " checks under the table make good.",
+        "",
+        f"**{audit['places']} places, {audit['tokens']} substitutions.**"
+        f" {audit['work_block_tokens']} work-block names across"
+        f" {audit['work_block_places']} places, and"
+        f" {audit['note_references']} note file names across"
+        f" {audit['note_reference_places']} places. The counts are summed from"
+        " the list below rather than written down, so a count and a list cannot"
+        " drift apart. A place can hold more than one name: the floor cells of"
+        " the legs table hold two and Experiment 1's outcome paragraph holds"
+        " five.",
+        "",
+        *table(
+            ["where", "what was replaced", "names", "what the change does"],
+            rows,
+            "--r-",
+        ),
+        "",
+        "Only the published side of each place is recorded, in"
+        " `scripts/preregistered.py`. Writing a work block's name into this"
+        " repository in order to record that one was taken out would defeat the"
+        " point of taking it out, so the note's own wording is not here and"
+        " the note is the record of it.",
+        "",
+    ]
+    checks = [
+        [
+            "every recorded place is in the carried text exactly once",
+            "yes"
+            if audit["markers_found_once"]
+            else "**no: " + ", ".join(audit["stray_markers"]) + "**",
+        ],
+        [
+            "the carried text carries no work-block name and no note file name",
+            "yes" if audit["carried_is_clean"] else "**no**",
+        ],
+        [
+            "the note, where it is on hand, rebuilds the carried text",
+            audit["note_verdict"],
+        ],
+    ]
+    if audit.get("note_checked"):
+        checks.append(["the note's sha256", f"`{audit['note_sha256']}`"])
+    lines += [
+        "The checks behind that paragraph, computed each time this report is built:",
+        "",
+        *table(["check", "verdict"], checks, "--"),
+        "",
+    ]
+    if not audit.get("note_checked"):
+        lines += [
+            "The note is not on this machine, so the byte-for-byte check was"
+            " **not run** and no digest is printed. The first two checks read"
+            " the published text alone and were made, which is what a clean"
+            " checkout can establish: that the list is complete against this"
+            " file and that nothing it was meant to remove is still here.",
+            "",
+        ]
+    return lines
 
 
 def section_fingerprint(summary: dict) -> list[str]:
@@ -2174,7 +2862,10 @@ def build_report(summary: dict, generated: str, environment: dict) -> str:
         " `scripts/preregistered.py`; every figure under them is computed by"
         " that script from the fits it made, and none is estimated. A dated"
         " entry in [`../docs/plan.md`](../docs/plan.md) carries the same"
-        " criteria and was committed ahead of this run.",
+        " criteria. That entry is older on disk than the earliest record this"
+        " run wrote, which is the relation the commit script checks and refuses"
+        " to run without, and it was committed first of the three, as"
+        f" `{PLAN_ENTRY_COMMIT}`.",
         "",
         "**Nothing is decided here and nothing ships from it.** No parameter,"
         " no feature and no rule in `taxiout.models` is changed by this run;"
@@ -2189,11 +2880,30 @@ def build_report(summary: dict, generated: str, environment: dict) -> str:
         f" {summary['fits']} fits of the submission rung"
         f" (`{SUBMISSION_KEY}`) on one feature frame, built in"
         f" {summary['frame']['build_seconds']:.0f} s, sequential, at the"
-        f" ladder's eight threads."
-        f" {summary['run']['wall_seconds']:.0f} s of fitting in total, and the"
-        f" run's own peak resident size was"
-        f" {summary['run']['peak_rss_kib'] / 1048576:.1f} GiB."
+        f" ladder's eight threads. The fitting run took"
+        f" {summary['run']['wall_seconds']:.0f} s of wall clock, of which"
+        f" {summary['fit_seconds']:.0f} s were the fits themselves, summed from"
+        " the per-fit walls in the table below; the rest is the scoring, the"
+        " paired bootstraps and the reproduction joins. The run's own peak"
+        f" resident size was {summary['run']['peak_rss_kib'] / 1048576:.1f} GiB."
         f" {environment['python']}, {environment['lightgbm']}.",
+        "",
+        "**Twenty fits were counted in advance and"
+        f" {summary['fits']} were made.** The pre-registration counts twenty for"
+        " the case where neither recency schedule stops early. Both stopped, so"
+        " three fits that only a surviving schedule would have needed were never"
+        " made: the strong schedule's July and December fits, and the mild"
+        " schedule's December fit. The sequence below says where each stopped.",
+        "",
+        "**The sign convention, once, for the whole report.** Every step and"
+        " every change below is the arm minus the thing it is read against, in"
+        " seconds of RMSE, so **positive is worse and negative is better**"
+        " throughout, including in the seed-averaging columns, where the arm is"
+        " the average and the thing it is read against is the ladder's own"
+        " seed. One column is the exception and is labelled for it: the rule of"
+        " 19 September is stated in terms of a *gain*, so the gain column in"
+        " Experiment 1's second table is the size of the improvement and"
+        " positive there means better, as `baseline.md` states the rule.",
         "",
     ]
     if stopped:
@@ -2206,7 +2916,7 @@ def build_report(summary: dict, generated: str, environment: dict) -> str:
             "",
         ]
     legs = table(
-        ["leg", "train", "validate", "fit rows", "flagged in training"],
+        ["leg", "train rows", "validate rows", "fit rows", "flagged training rows"],
         [
             [
                 name,
@@ -2229,7 +2939,12 @@ def build_report(summary: dict, generated: str, environment: dict) -> str:
             " through `Split.extra`, the mechanism the held-out-pair folds"
             " already use for a second evaluation set from one fit. December's"
             " flags there come from the July leg's record-quality model, as"
-            " they must, since that is the model the fit was made without.",
+            " they must, since that is the model the fit was made without. The"
+            " flagged column here counts training rows the record-quality term"
+            " covers, which are the rows the booster is not fitted on; the fit"
+            " table below counts flagged rows of the set being scored, which"
+            " are the rows the ex-flagged figures leave out. They are different"
+            " quantities and the headings say which.",
             "",
             *legs,
             "",
@@ -2243,21 +2958,18 @@ def build_report(summary: dict, generated: str, environment: dict) -> str:
             + section_experiment_3(summary)
         )
     body += section_fits(summary) + section_fingerprint(summary)
+    body += section_substitutions()
     body += [
         "## The pre-registration, as it was fixed on 20 September",
         "",
         "Quoted from the note it was written in, from its *Definitions, fixed"
         " here* heading onward, and carried as a constant in"
-        " `scripts/preregistered.py`. Two mechanical substitutions were made"
-        " when it was copied into this repository, because this file is"
-        " published and that note is not: its references to the working notes"
-        " were replaced by the repository's own files or dropped, and the"
-        " numbered work blocks of the working program were rendered as what"
-        " they denote. No criterion, schedule, grid value or reading rule"
-        " differs from the note. Experiments 4, 5 and 6 are quoted with the"
-        " rest because they are what was decided not to run, or to run later,"
-        " at the same time and on the same evidence; nothing in this run"
-        " touches them.",
+        " `scripts/preregistered.py`. The section above lists every place where"
+        " the carried copy differs from the note, with the counts computed from"
+        " that list; no criterion, schedule, grid value or reading rule differs."
+        " Experiments 4, 5 and 6 are quoted with the rest because they are what"
+        " was decided not to run, or to run later, at the same time and on the"
+        " same evidence; nothing in this run touches them.",
         "",
         PREREGISTRATION,
         "",
@@ -2369,6 +3081,7 @@ def main() -> int:
         records = load_records()
         summary["records"] = records
         summary["fits"] = len(records)
+        summary["fit_seconds"] = float(sum(r["wall_s"] for r in records.values()))
         derived = Checks()
         summary.update(derive(records, derived))
         summary["checks"] = derived.rows
