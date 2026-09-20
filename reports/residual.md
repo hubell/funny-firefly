@@ -208,9 +208,10 @@ so the two halves of each table are read down and not across.
 
 ### By plan-lag band
 
-The bands *The error by plan lag* uses. Two row sets that table leaves
-implicit are named here so the shares add up: a take-off with no estimate, and
-a take-off earlier than its own estimate (`before the estimate`).
+The bands *The error by plan lag* uses. One row set that table does not
+print is named here so the shares add up: a take-off earlier than its own
+estimate (`before the estimate`). A take-off with no estimate is already a
+row of that table (`no estimate`), and it is a row here too.
 
 | lag (min) | July rows | of rows | RMSE (s) | bias | of SSE | Dec rows | of rows | RMSE (s) | bias | of SSE |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |

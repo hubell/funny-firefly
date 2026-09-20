@@ -125,9 +125,10 @@ LARGEST_ROWS = 5
 # The share of |residual| that counts as "the worst one percent".
 WORST_QUANTILE = 0.99
 
-# The two rows the plan-lag table leaves implicit, named so that the shares of
-# the per-airport cut below add up: a take-off with no estimate at all, and a
-# take-off earlier than its own estimate.
+# The two row sets outside the lag bands. *The error by plan lag* prints
+# ``NO_ESTIMATE`` as a row of its own and stops there; the cut below adds
+# ``BEFORE_ESTIMATE``, which that table does not print, so that its shares add
+# up over the whole leg.
 NO_ESTIMATE = "no estimate"
 BEFORE_ESTIMATE = "before the estimate"
 
@@ -779,9 +780,10 @@ def section_heathrow(july, december) -> list[str]:
         "",
         "### By plan-lag band",
         "",
-        "The bands *The error by plan lag* uses. Two row sets that table leaves",
-        "implicit are named here so the shares add up: a take-off with no estimate, and",
-        f"a take-off earlier than its own estimate (`{BEFORE_ESTIMATE}`).",
+        "The bands *The error by plan lag* uses. One row set that table does not",
+        "print is named here so the shares add up: a take-off earlier than its own",
+        f"estimate (`{BEFORE_ESTIMATE}`). A take-off with no estimate is already a",
+        f"row of that table (`{NO_ESTIMATE}`), and it is a row here too.",
         "",
         *_cut(
             july,
