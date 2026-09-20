@@ -57,8 +57,8 @@ Read from `data/submissions/funny-firefly_v4.parquet` and the manifest written b
 | the manifest's sha256 agrees | yes |
 | template sha256, as read at the build | `241724d8c234d2c34c96519ef1b6891646e694b142bff2c3504e83a394ee8f73` |
 | the template on disk now agrees | yes |
-| git revision at the build | `9af7e2eaf0c66f538ce5dad4c44033f223dd0085` |
-| tree clean at the build | false |
+| git revision at the build | `ce78d8f4c8aa60ff11b78302245ba1f6fa16f6ec` |
+| tree clean at the build | true |
 | booster | lightgbm 4.7.0 |
 | seeds averaged | 1 |
 | rows fitted on | 2,083,555 |
@@ -74,7 +74,7 @@ Read from `data/submissions/funny-firefly_v4.parquet` and the manifest written b
 | within-variance length ratio, training encoding, `stand` | 1.48 (not material) |
 | within-variance length ratio, ranking encoding, `pair` | 1.60 (material: k moves with the route) |
 | within-variance length ratio, ranking encoding, `stand` | 1.48 (not material) |
-| written (UTC) | 2026-09-19T12:57:43+00:00 |
+| written (UTC) | 2026-09-19T21:18:35+00:00 |
 
 The parameters the booster was fitted with, as the manifest records them:
 
@@ -102,7 +102,7 @@ The parameters the booster was fitted with, as the manifest records them:
 | --- | --- | --- |
 | sha256 | `73cccbd64ae8976afa22f2856f21528b2c44fead1d76c743200592847b1df6ac` | `73cccbd64ae8976afa22f2856f21528b2c44fead1d76c743200592847b1df6ac` |
 | size (bytes) | 1,491,042 | 1,491,042 |
-| written (UTC) | 2026-09-19T12:54:35+00:00 | 2026-09-19T12:57:43+00:00 |
+| written (UTC) | 2026-09-19T21:15:37+00:00 | 2026-09-19T21:18:35+00:00 |
 
 Byte-identical: yes. Manifest fields that differ: `written_utc`.
 
