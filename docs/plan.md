@@ -638,6 +638,161 @@ README records the exclusion beside the sources that were taken.
 The submission rung is now `+ plan differences`, and the ladder's only rung
 above it is runway saturation, still out and still a measured negative.
 
+**The decisions of 19 September, and the experiments pre-registered on
+20 September.** Four decisions were taken on 19 September, each put with its
+evidence before any of the numbers it governs existed, and four experiments
+were pre-registered on 20 September, criteria first. Both are recorded here,
+and this entry is committed ahead of the run that measures them, so that the
+record precedes the numbers in the history as it does on disk.
+
+**The seed rule, re-fixed at the floors.** The one-second rule that governed
+seed averaging was retired on 19 September, before any measurement under the
+rule that replaced it existed. Its stated basis was the run-to-run variation
+the ladder showed before the booster was made repeatable; that basis no longer
+holds, because the booster now repeats to the bit and what is left is the
+seed's own spread, which *The noise floor* measures. The rule fixed in its
+place, in the words it was fixed in and as `reports/baseline.md` prints it:
+"Adopt it for the submission if, on both forward legs, the five-seed average
+beats every one of the five single seeds and its gain over the ladder's seed
+clears that leg's seed floor; before it ships it is also measured on the three
+July airports and on October, and both are printed."
+
+**The sweep, reopened once, on 19 September.** The "permitted once" clause
+above is reopened one time, before any new cell is fitted. The grid:
+`learning_rate` 0.015, 0.03 and 0.06; `num_leaves` 63, 127 and 255;
+`min_child_samples` 20, 50 and 200; and the trees read at 300, 600, 1,000,
+1,500, 2,000 and 3,000 from one 3,000-tree fit per cell, as the first sweep
+read its trees from one fit. Twenty-seven cells. The chosen cell (0.03, 127,
+50, 1,000) sat on the edge of the first grid on all four axes; on this one it
+is interior on three, and the trees axis extends past it. Each new value is
+one step past the old edge at the old grid's own spacing, and the far values
+of the old grid (0.1, 31, 500) are dropped.
+
+The fit rules are the current ones and not the first sweep's: the submission
+rung's features as they stand, the four-hour exclusion, the shrunk encoding on
+`fit_rows`, the record-quality model on the training months, and the recency
+schedule if one is adopted. Train January to September 2025 and score
+October 2025 over the rows the record-quality term leaves to the physical
+model, as the first sweep scored. The floor is measured in the same run, from
+five single-seed fits of the current cell at `random_state` + 0 to + 4, root
+two times their sample standard deviation. The reading: the best cell replaces
+`BOOSTER_PARAMS` only if its October figure is below the current cell's figure
+from the same run by more than that floor, and a difference inside the floor
+keeps the current cell. If the best cell lies on an edge of this grid, that is
+recorded and the grid is not extended again. **Nothing is chosen on December,
+July or the held-out pairs.** One ladder run follows, under the standing
+acceptance rules.
+
+**`AOBT_3_flt` stays excluded by decision, and unmeasured.** It is the third
+actual off-block time the challenge exposes, excluded in `taxiout.challenge`
+and never measured against the model. The paper says it is excluded and why,
+and does not claim to know what it would have been worth. Measuring it now
+would be choosing what to exclude by what the exclusion costs, which is the
+move this document exists to prevent.
+
+**The July column stays as the 9 September entry above records it.** The July
+leg of the acceptance rule reads the three-airport column from the next gate;
+nothing already decided is re-decided by it.
+
+**The experiments pre-registered on 20 September, criteria before numbers.**
+Every leg below is fitted exactly as the ladder fits the submission rung: the
+record-quality model on the leg's training months, `taxiout.models.fit_rows`,
+the shrunk encoding fitted on those rows, `BOOSTER_PARAMS` as
+`taxiout.models` carries them, and the first seed the ladder's. Scored
+ex-flagged, as `taxiout.validation.evaluate` scores. Four legs: December
+(train January to November, validate December), July (train January to June,
+validate July), October (train January to September, validate October) and
+the gap (the July leg's own fitted models scored on December, which is the one
+forward leg the data allows in which the recent training months are seasonally
+far from the validation month). "No worse" means not worse at the precision
+the reports print, one decimal of a second. "Clears the floor" means the gain
+on the unrounded figure exceeds that leg's floor, the floor being root two
+times the sample standard deviation of five single-seed ex-flagged RMSEs. The
+December, July and three-airport floors are 0.34, 0.23 and 1.02 s; October's
+and the gap's are measured in the same run. Any step inside a second carries
+the day-clustered interval `taxiout.validation.cluster_bootstrap` gives, with
+the same draw for both arms.
+
+**Experiment 1, seed averaging on the three and on October.** The five July
+seeds scored pooled and on the three, singly and averaged; five October seeds
+scored pooled, singly and averaged; October's floor from them. It serves the
+rule quoted above, and one guard added on 20 September before either
+measurement existed: the average is not adopted if, on the three or on
+October, it is worse than the ladder's seed by more than that leg's floor. The
+three is the column the July ranking month asks about and October is the one
+leg no report has read; a regression clear of noise on either is a reason not
+to ship, and the rule as fixed would not have read it. Nothing ships from the
+measurement: the rule is read for the submission once the ladder prints the
+two measurements under the final parameters.
+
+**Experiment 2, recency weighting.** The confound is stated first, because it
+decides what the experiment can show: on every 2025 leg the most recent
+training month is also the seasonally nearest to the validation month, so a
+gain there cannot separate recency from season. The gap leg is built to break
+it. Two schedules, fixed before any fit and no third: weight per training row
+`w = 0.5 ** (age / H)`, where `age` is the whole number of calendar months
+from the row's take-off month to the leg's last training month, and `H` is
+3 months (the strong schedule, which discards most of the year and makes the
+confound's sign visible) or 12 months (the mild schedule, where the oldest
+month of a full year keeps about half its weight). The weights enter the
+booster's fit only, as `sample_weight`; the record-quality model, `fit_rows`,
+the encoding and the scoring are unweighted and unchanged. Before any figure
+is read, the digest check: `deterministic` was measured without sample
+weights, so the mild schedule's October fit is made twice and the two
+prediction vectors and the two model dumps must be identical, a disagreement
+stopping the experiment. Then the sequence, fixed: each schedule is screened
+on October against the unweighted October first seed, and one worse at printed
+precision stops there and is fitted on nothing else; each survivor is fitted
+on the July leg and read on the gap first, and one worse at printed precision
+stops there, its July readings printed since they come from the same fit but
+no December fit made and no adoption possible; each survivor of that is fitted
+on December and read against 217.6 (December all ten), 237.8 (July the three)
+and 218.6 (the ranking mix). Adoption: "A schedule is adopted for the
+submission only if it is no worse at printed precision on all five readings
+(October, the gap, December all ten, July the three, the ranking mix) and its
+gain clears the floor on at least one of December all ten and July the three.
+A change to how the model is fitted that moves nothing outside seed noise is
+not adopted. If both schedules qualify, the mild one is adopted unless the
+strong one beats it on all five readings by more than the respective floors."
+A two-model submission, one fit per ranking month with its own weighting, is
+not opened whatever the readings: no leg in the data validates the July 2026
+geometry with its twin month present, the one-upload rule leaves it
+unmeasurable, and it doubles the reproduction the paper defends.
+
+**Experiment 3, the season columns.** The submission rung refitted on December
+and on July without `tko_month`, `tko_doy_sin` and `tko_doy_cos`, read against
+217.6, 237.8 and 218.6. It is for the paper and not for the model: both
+forward legs validate on a month and a day-of-year range the training side
+never held, and the ranking months do not, since January 2026 and July 2026
+have their twins in the training year. The measurement answers a question the
+ranking months do not ask, so **no adoption follows from it in either
+direction**, whatever its sign. Its sign and size go to the paper as the
+validation design's limitation.
+
+**Experiment 6, Heathrow: nothing is fitted.** The July afternoon and the
+no-record class that the residual report measures are structured at intervals
+clear of zero, in columns the submitted rung already reads, with no mechanism
+the frame lacks, and the oracle's ceiling for the same-runway sequence at EGLL
+on July is 9.9 s. They are paper paragraphs and not a feature.
+
+**Not run, and why.** Operator cells at LIRF: closed by the callsign-prefix
+section, where the note's test is the record-quality term's own first
+condition and a prefix split under the coverage rule opens one cell touching
+1 of that airport's 11,061 ranking rows. The January boundary: 839 of 152,719
+January 2026 rows carry `occ_truncated` against 853 of 153,706 in January
+2025, the training year's own first day; the flag is a column the booster
+reads, no forward leg validates a month that begins a block, so the change
+could not be measured, and it sits on the scored-file path. A held-out-month
+split for the season columns: it would answer the interpolation question the
+ranking months ask, and it breaks the forward discipline every validation leg
+here keeps; it is named so the paper can say what would have measured it. A
+per-day table of Heathrow's afternoons: a search for the days rather than a
+description, and the day-clustered interval already says the effect rests on
+few of them. The pooled record-quality rule for airports with no covered cell:
+recorded in the paper, no instrument in the data measures the alternative, and
+it is not reopened on stakes alone. SUMO and the OpenSky scientific datasets:
+diagnostics for the paper at most, and nothing in the model.
+
 **Gate 3 — the queueing layer, only if Gate 2's ablation says congestion is
 binding** (~20–30 h). This is the piece where the geometry stops being a side
 feature. *Revised 2 September:* the forward simulation as first written —
