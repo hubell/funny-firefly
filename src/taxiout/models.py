@@ -954,8 +954,25 @@ class Booster:
             out[c] = out[c].astype("category")
         return out
 
-    def fit(self, X: pd.DataFrame, y: pd.Series) -> "Booster":
+    def fit(self, X: pd.DataFrame, y: pd.Series, sample_weight=None) -> "Booster":
+        """Fit on ``X``, ``y``, optionally weighting the rows.
+
+        ``sample_weight`` is ``None`` for every fit this repository made before
+        it existed, and with ``None`` no weight argument reaches the backend at
+        all, so the unweighted fit is bit for bit the fit it was. With an array
+        it is passed straight through as the backend's own ``sample_weight``.
+        The array is not kept on the model: it belongs to one fitting sample,
+        and a model carrying it would invite a later fit to reuse weights
+        computed for other rows.
+        """
         design = self._design(X)
+        weight = None
+        if sample_weight is not None:
+            weight = np.asarray(sample_weight, dtype=float)
+            if weight.shape != (len(design),):
+                raise ValueError(
+                    f"sample_weight has {weight.shape} for {len(design)} rows"
+                )
         for c in self.pooled:
             values = design[c].astype(str)
             self._kept[c] = frequent_levels(values)
@@ -970,10 +987,12 @@ class Booster:
             import lightgbm as lgb
 
             self.model = lgb.LGBMRegressor(**self.params)
+            extra = {} if weight is None else {"sample_weight": weight}
             self.model.fit(
                 design,
                 np.asarray(y, dtype=float),
                 categorical_feature=list(self.categorical),
+                **extra,
             )
         elif self.backend == "catboost":
             from catboost import CatBoostRegressor
@@ -988,8 +1007,12 @@ class Booster:
             )
             for c in self.categorical:
                 design[c] = design[c].astype(str)
+            extra = {} if weight is None else {"sample_weight": weight}
             cb.fit(
-                design, np.asarray(y, dtype=float), cat_features=list(self.categorical)
+                design,
+                np.asarray(y, dtype=float),
+                cat_features=list(self.categorical),
+                **extra,
             )
             self.model = cb
         else:
@@ -1055,13 +1078,22 @@ class SeedAverage:
         self.seeds = int(seeds)
         self.models: list[Booster] = []
 
-    def fit(self, X: pd.DataFrame, y: pd.Series) -> "SeedAverage":
+    def fit(self, X: pd.DataFrame, y: pd.Series, sample_weight=None) -> "SeedAverage":
+        """Every member fitted on the same rows, under the same weights.
+
+        ``sample_weight`` is handed to each member unchanged, so the average is
+        an average of the fit the caller asked for rather than of a different
+        one; ``None`` reaches the backend as no weight at all, as it does in
+        ``Booster.fit``.
+        """
         base = int(self.params["random_state"])
         self.models = []
         for i in range(self.seeds):
             params = dict(self.params)
             params["random_state"] = base + i
-            self.models.append(Booster(self.features, params).fit(X, y))
+            self.models.append(
+                Booster(self.features, params).fit(X, y, sample_weight=sample_weight)
+            )
         return self
 
     def predict(self, X: pd.DataFrame) -> pd.Series:

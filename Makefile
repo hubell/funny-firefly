@@ -6,8 +6,8 @@
 PYTHON ?= python3
 
 .PHONY: all data metar ourairports reports crosscheck data-review synthetic tails \
-        geometry-gaps congestion occupancy residual baseline transfer sweep submission test \
-        lint licence-check clean help
+        geometry-gaps congestion occupancy residual baseline transfer sweep preregistered \
+        submission test lint licence-check clean help
 
 help:
 	@echo "make data     fetch and cache OSM geometry      -> data/raw/<ICAO>.json.gz"
@@ -24,6 +24,7 @@ help:
 	@echo "make baseline     run the ablation ladder      -> reports/baseline.md"
 	@echo "make transfer     leave one airport out, ten times -> reports/transfer.md"
 	@echo "make sweep        the one parameter sweep, October 2025 -> data/processed/sweep_october.csv"
+	@echo "make preregistered  the pre-registered experiments -> reports/preregistered-<date>.md"
 	@echo "make submission TEAM=<name>  fit and write     -> data/submissions/<name>_v<n>.parquet"
 	@echo "make test     run the unit tests                (no network, no challenge data)"
 	@echo "make lint     ruff check and format check"
@@ -133,6 +134,16 @@ transfer:
 # October number that chose them. Takes half an hour or more.
 sweep:
 	$(PYTHON) scripts/sweep_params.py
+
+# Reads data/challenge/ and the matrices from 'make reports'. Fits the
+# submission rung twenty times under criteria fixed in writing before any of
+# them ran, and writes what each criterion's own rule decides. Adopts nothing
+# and changes no parameter, feature or rule; writes its records under
+# data/processed/preregistered/ (gitignored) and one report. About an hour on
+# eight cores, with the same 8 GiB peak 'make baseline' has. --report
+# regenerates the report from the records without refitting.
+preregistered:
+	$(PYTHON) scripts/preregistered.py
 
 # Reads data/challenge/ and the matrices; writes a submission file and its
 # manifest to data/submissions/, which is gitignored and which the script
