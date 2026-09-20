@@ -107,7 +107,10 @@ re-fetchable by a scripted, cached client — the prize rules require
 additional datasets to be "openly available under an open source license",
 and a dataset a reader cannot re-fetch fails the reproduction clause.
 OpenSky historical surface tracks were considered and ruled out for the
-model: research-use access is not an open-source license.
+model: research-use access is not an open-source license. OpenSky's ten published scientific datasets were reviewed on 20 September
+2026 against the same test plus two more, 2025 ground coverage at the ten
+airports and a mechanism the exposed fields lack; none passes all three, and
+the README records each verdict.
 
 Source: `docs/prior_art.md`, *External data: licence positions*; README.
 

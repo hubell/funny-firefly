@@ -327,6 +327,19 @@ an open source license" — the same reading that excluded OPDI in
 2025) clears the rule and was not pursued: the nearest test, the METAR's own
 wind, ceiling, temperature and thunderstorm fields, bought nothing.
 
+OpenSky's published scientific datasets, ten of them as listed on 20 September
+2026, were reviewed against the same three tests every external source meets
+here, in order: an open licence; 2025 ground-phase coverage at the ten
+airports; and a mechanism the exposed fields lack, which
+[`reports/residual.md`](reports/residual.md) narrows to separating a gate
+delay from a hold. None passes all three. The weekly Monday state-vector
+snapshots are the only set with surface positions and carry the network's
+data terms, which this entry reads as research use, the same reading that
+keeps the historical database to diagnostics; the 2024 challenge dataset
+holds 2022 taxi-out times with no stand or runway; the rest carry no ground
+operations. The row-by-row reading is in
+[`docs/prior_art.md`](docs/prior_art.md).
+
 ODbL sorts derived artefacts into two kinds, and the difference decides what
 ships. A **Derivative Database** carries share-alike; a **Produced Work** — a
 report, an image, an analysis in another medium — needs attribution only.
