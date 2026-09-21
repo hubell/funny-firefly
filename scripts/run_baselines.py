@@ -113,6 +113,7 @@ from taxiout.validation import (  # noqa: E402
     evaluate,
     evaluate_by_bucket,
     fold_rmses,
+    forward_split,
     gap,
     held_out_pair_splits,
     july_split,
@@ -3978,9 +3979,33 @@ SEED_AVERAGE_RULE = (
     " seed clears that leg's seed floor; before it ships it is also measured on"
     " the three July airports and on October, and both are printed."
 )
-# The measurements that rule asks for before the average ships and that nothing
-# has made yet. Emptied when they are made and printed, and not before.
-SEED_AVERAGE_PENDING: tuple[str, ...] = ("the three July airports", "October")
+# The measurements that rule asks for before the average ships. It held
+# ("the three July airports", "October") from 19 September, when nothing had
+# made them, until 21 September, when this section began making them itself:
+# the three come from the July leg's own five fits and October is fitted below,
+# both are printed, and the guard of 20 September is applied to them in the
+# same run that makes them. Emptied when they were made and printed, and not
+# before. What stands in its place is ``seed_average_guard``, which is computed
+# from the figures rather than asserted, so an October leg that did not fit
+# blocks adoption exactly as the unmade measurement did.
+SEED_AVERAGE_PENDING: tuple[str, ...] = ()
+
+# The guard of 20 September, in the words it was fixed in, before either
+# measurement existed.
+SEED_AVERAGE_GUARD = (
+    "the average is not adopted if, on the three or on October, it is worse than"
+    " the ladder's seed by more than that leg's floor"
+)
+
+# October is the one forward leg no rung of the ladder scores, and the rule of
+# 19 September asks for it before the average ships. The seed section fits it
+# here and nowhere else. It is deliberately not a member of ``splits``: putting
+# it there would add a column to every table in this report and move what
+# ``forward[1]`` means, which is July in every section that reads it.
+SEED_AVERAGE_EXTRA_LEG = "october"
+SEED_AVERAGE_EXTRA_LABEL = "October, all ten"
+OCTOBER_TRAIN = tuple(f"2025-{m:02d}" for m in range(1, 10))
+OCTOBER_VALID = ("2025-10",)
 
 # The same measurement on this rung before the recorded-taxi tail came out of
 # the fit, when it cleared the threshold and was adopted. Quoted and not
@@ -4000,7 +4025,9 @@ BAGGING_BEFORE_TAIL_GAINS_S: tuple[float, float] = (1.10, 1.37)
 BAGGING_EARLIER_GAINS_S: tuple[float, float] = (0.78, 0.98)
 
 
-def seed_average(features, y, splits, results, tails: Tails, key: str) -> dict:
+def seed_average(
+    features, y, dep, month, splits, results, tails: Tails, key: str
+) -> dict:
     """The submission rung refitted under ``BAGGING_SEEDS`` seeds and averaged.
 
     One fit per seed per forward split, on the same rows the ladder fitted, with
@@ -4063,8 +4090,85 @@ def seed_average(features, y, splits, results, tails: Tails, key: str) -> dict:
             "reproduced": float(np.max(np.abs(preds[0] - base["pred"]))),
             "seeds": [_ex_flagged({"eval": e}) for e in singles],
             "seeds_three": [_three_ex_flagged({"eval": e}) for e in singles],
+            # The same two figures on the three airports July 2026 contains,
+            # which is one of the two columns the rule of 19 September asks
+            # for before the average ships. NaN on a leg whose validation set
+            # does not hold all three, which December's does and the ladder's
+            # other legs need not.
+            "three": _three_ex_flagged({"eval": ev}),
+            "single_three": _three_ex_flagged(base),
         }
+    extra = _october_seed_average(features, y, dep, month, tails, rung)
+    if extra is not None:
+        out[SEED_AVERAGE_EXTRA_LEG] = extra
     return out
+
+
+def _october_seed_average(features, y, dep, month, tails: Tails, rung) -> dict | None:
+    """The same measurement on October, the one leg no rung of the ladder scores.
+
+    Fitted exactly as the two forward legs above are, and as
+    ``run`` fits a split: the record-quality model on this leg's training
+    months, ``fit_rows`` over train, unflagged and the four-hour exclusion, the
+    shrunk encoding recomputed from those rows and overlaid, and the same
+    parameters with only the seed moving. There is no ladder fit to reproduce
+    here, so the first seed is what the other four are read against, which is
+    the convention the pre-registered run used on this leg.
+    """
+    split = forward_split(
+        month,
+        OCTOBER_TRAIN,
+        OCTOBER_VALID,
+        name=SEED_AVERAGE_EXTRA_LEG,
+        description=(
+            "train January-September 2025, validate October, all ten airports "
+            "-- read for the seed rule and for nothing else"
+        ),
+    )
+    if not int(split.train.sum()) or not int(split.valid.sum()):
+        return None
+    tail_model = tails.fit(dep.loc[split.train]) if tails.available else None
+    flagged = (
+        tail_model.predict(dep).notna()
+        if tail_model is not None
+        else pd.Series(False, index=dep.index)
+    ).astype(bool)
+    fit_rows = fitting_rows(split.train, flagged, y)
+    frame = with_encoding(features, encode_split(features, y, fit_rows))
+    preds = []
+    for i in range(BAGGING_SEEDS):
+        t0 = time.time()
+        params = dict(BOOSTER_PARAMS)
+        params["random_state"] = int(BOOSTER_PARAMS["random_state"]) + i
+        model = Booster(rung.features, params).fit(frame.loc[fit_rows], y[fit_rows])
+        preds.append(model.predict(frame.loc[split.valid]))
+        print(f"  {split.name:>10s} {'seed ' + str(i):<22s} ({time.time() - t0:.0f} s)")
+    mean = sum(preds) / float(len(preds))
+
+    def scored(values):
+        return evaluate(
+            y[split.valid],
+            values,
+            icao=features.loc[split.valid, "icao"],
+            flagged=flagged[split.valid],
+        )
+
+    singles = [scored(p) for p in preds]
+    seeds = [_ex_flagged({"eval": e}) for e in singles]
+    return {
+        "rmse_ex_flagged": _ex_flagged({"eval": scored(mean)}),
+        # No ladder fit scores October, so the leg's own first seed is the one
+        # the average is read against. It is the same seed the ladder fits
+        # with, on a leg the ladder does not reach.
+        "single": seeds[0],
+        "reproduced": float("nan"),
+        "seeds": seeds,
+        "seeds_three": [float("nan")] * len(singles),
+        "three": float("nan"),
+        "single_three": float("nan"),
+        "rows": int(split.valid.sum()),
+        "fit_rows": int(fit_rows.sum()),
+    }
 
 
 # --------------------------------------------------------------------------
@@ -4356,6 +4460,70 @@ def section_tail_exclusion(
     ]
 
 
+def seed_average_guard(bagging: dict, splits, floors: dict) -> list[dict]:
+    """The guard of 20 September, on the two columns the rule asks for.
+
+    "the average is not adopted if, on the three or on October, it is worse
+    than the ladder's seed by more than that leg's floor."
+
+    The guard sizes a regression and asks nothing of a gain: no test on either
+    column asks the change to clear anything, so a change that is better by
+    less than the floor is not a gain that failed a test. Positive is worse,
+    as everywhere in this report. A column whose figures are not there is
+    returned with ``holds`` unset rather than passed over, so that a
+    measurement the rule asks for and this run did not make cannot read as a
+    measurement that held.
+    """
+    forward = [s for s in splits if not s.name.startswith("pairs-")]
+    columns = []
+    if len(forward) > 1 and forward[1].name in bagging:
+        entry = bagging[forward[1].name]
+        columns.append(
+            (
+                "the three",
+                entry.get("single_three"),
+                entry.get("three"),
+                floors.get(f"{forward[1].name.title()}, the three"),
+            )
+        )
+    extra = bagging.get(SEED_AVERAGE_EXTRA_LEG)
+    if extra is not None:
+        columns.append(
+            (
+                SEED_AVERAGE_EXTRA_LABEL,
+                extra.get("single"),
+                extra.get("rmse_ex_flagged"),
+                floors.get(SEED_AVERAGE_EXTRA_LABEL),
+            )
+        )
+    out = []
+    for label, single, averaged, floor in columns:
+        known = (
+            single is not None
+            and averaged is not None
+            and floor is not None
+            and np.isfinite(single)
+            and np.isfinite(averaged)
+            and np.isfinite(floor)
+        )
+        change = float(averaged) - float(single) if known else float("nan")
+        out.append(
+            {
+                "column": label,
+                # Always a float, so that the table's formatter reads "n/a"
+                # from a figure that is not there rather than raising on it.
+                "single": float("nan") if single is None else float(single),
+                "averaged": float("nan") if averaged is None else float(averaged),
+                "change": change,
+                "floor": floor,
+                # Worse by more than the floor is the only thing that trips it.
+                "holds": (change <= floor) if known else None,
+                "known": bool(known),
+            }
+        )
+    return out
+
+
 def section_bagging(bagging: dict, splits, key: str, floors=None) -> list[str]:
     """What averaging five seeds is worth, and whether it was adopted."""
     floors = floors or {}
@@ -4382,7 +4550,19 @@ def section_bagging(bagging: dict, splits, key: str, floors=None) -> list[str]:
             floor,
         )
     both = len(got) == len(forward) and all(b and c for b, c, _, _ in legs.values())
-    adopt = both and not SEED_AVERAGE_PENDING
+    # The guard of 20 September. Both columns have to be measured in this run
+    # and neither may regress past its own floor; a column this run did not
+    # make blocks adoption, which is what the pending tuple did before this
+    # section made them itself.
+    guard = seed_average_guard(bagging, splits, floors)
+    guard_columns = {"the three", SEED_AVERAGE_EXTRA_LABEL}
+    guard_holds = (
+        bool(guard)
+        and {g["column"] for g in guard} == guard_columns
+        and all(g["holds"] for g in guard)
+    )
+    guard_missing = sorted(guard_columns - {g["column"] for g in guard if g["known"]})
+    adopt = both and guard_holds and not SEED_AVERAGE_PENDING
     fails = [
         f"on {name.title()} "
         + " and ".join(
@@ -4498,18 +4678,67 @@ def section_bagging(bagging: dict, splits, key: str, floors=None) -> list[str]:
             for name, (beats, clears, best, floor) in legs.items()
         ),
         "",
+        "**The two further measurements the rule asks for, and the guard on them.**"
+        " Before the average ships the rule of 19 September asks for it on the three"
+        " airports July 2026 contains and on October, and both are printed here. The"
+        " three come from the July leg's own five fits above. October is a leg no"
+        f" rung of this ladder scores, so `{LADDER_BY_KEY[key].label}` is fitted on"
+        f" it {BAGGING_SEEDS} times for this table and for nothing else, under the"
+        " same rules: the record-quality model on January to September, the"
+        " four-hour exclusion, the shrunk encoding on the fitting rows, and only the"
+        " seed moving. Nothing is chosen on this table; the guard of 20 September,"
+        f' fixed before either measurement existed, is that "{SEED_AVERAGE_GUARD}".'
+        " It sizes a regression and asks nothing of a gain, so a column that is"
+        " better by less than its floor is not a gain that failed a test.",
+        "",
+        *table(
+            [
+                "column",
+                "the ladder's seed (s)",
+                f"{BAGGING_SEEDS} seeds averaged (s)",
+                "change",
+                "floor (s)",
+                "the guard",
+            ],
+            [
+                [
+                    g["column"],
+                    num(g["single"], 2),
+                    num(g["averaged"], 2),
+                    f"{g['change']:+,.2f}" if g["known"] else "n/a",
+                    f"{g['floor']:.2f}" if g["floor"] is not None else "n/a",
+                    "holds"
+                    if g["holds"]
+                    else ("not measured" if g["holds"] is None else "trips"),
+                ]
+                for g in guard
+            ],
+            "-rrrr-",
+        ),
+        "",
         (
-            "**Adopted:** both forward legs meet the rule and its further"
-            " measurements are printed, so the submission is fitted as the mean of"
-            f" {BAGGING_SEEDS} seeds and `taxiout.models` records it beside the"
-            " parameters."
+            "**Adopted:** both forward legs meet the rule, both further measurements"
+            " are printed, and the guard holds on each, so the submission is fitted"
+            f" as the mean of {BAGGING_SEEDS} seeds and `taxiout.models` records it"
+            " beside the parameters."
             if adopt
             else "**Not yet adopted.** Both forward legs meet the rule. What it asks"
             " for before the average ships, the measurement on "
-            + " and on ".join(SEED_AVERAGE_PENDING)
+            + " and on ".join(guard_missing or SEED_AVERAGE_PENDING)
             + ", has not been made, so the submission is fitted from a single seed"
             " until it is."
-            if both
+            if both and (guard_missing or SEED_AVERAGE_PENDING)
+            else "**Not adopted: the guard of 20 September trips.** Both forward legs"
+            " meet the rule, but "
+            + " and ".join(
+                f"on {g['column']} the average is worse than the ladder's seed by"
+                f" {g['change']:+,.2f} s against a floor of {g['floor']:.2f} s"
+                for g in guard
+                if g["holds"] is False
+            )
+            + ". A regression clear of noise on either column is a reason not to"
+            " ship, and the submission is fitted from a single seed."
+            if both and not guard_holds
             else "**Not adopted:** "
             + "; ".join(fails)
             + ". The submission is fitted from a single seed, and this"
@@ -4604,6 +4833,11 @@ def _noise_floors(bagging: dict, splits) -> dict[str, float]:
         )
         if len(seeds) > 1:
             out[label] = NOISE_FLOOR_FACTOR * float(np.std(seeds, ddof=1))
+    extra = bagging.get(SEED_AVERAGE_EXTRA_LEG)
+    if extra is not None and len(extra["seeds"]) > 1:
+        out[SEED_AVERAGE_EXTRA_LABEL] = NOISE_FLOOR_FACTOR * float(
+            np.std(np.asarray(extra["seeds"], dtype=float), ddof=1)
+        )
     return out
 
 
@@ -4632,6 +4866,23 @@ def section_noise_floor(results, bagging: dict, tail_arms: dict, splits) -> list
                 f"{seeds.min():,.2f} to {seeds.max():,.2f}",
                 f"{sd:.2f}",
                 f"{floors[label]:.2f}",
+            ]
+        )
+    # October, which the seed-averaging section fits for the rule of 19
+    # September and no rung of this ladder scores. Its floor is measured the
+    # same way and belongs in this table, because the guard above reads it.
+    # It is not given a comparison column below: the comparisons are rung
+    # against rung on legs the ladder fits, and that column would be all n/a.
+    extra = bagging.get(SEED_AVERAGE_EXTRA_LEG)
+    if extra is not None and len(extra["seeds"]) > 1:
+        october = np.asarray(extra["seeds"], dtype=float)
+        october_sd = float(np.std(october, ddof=1))
+        spread.append(
+            [
+                SEED_AVERAGE_EXTRA_LABEL,
+                f"{october.min():,.2f} to {october.max():,.2f}",
+                f"{october_sd:.2f}",
+                f"{NOISE_FLOOR_FACTOR * october_sd:.2f}",
             ]
         )
 
@@ -4718,7 +4969,11 @@ def section_noise_floor(results, bagging: dict, tail_arms: dict, splits) -> list
         " so where one of them is on a side the floor overstates the seed's share;"
         " they are listed by the same rule. And the held-out-pair folds have no seed"
         " refits, so their contrasts are not covered here; their own intervals are"
-        " in their section.",
+        " in their section. The last row is October, which the seed-averaging"
+        " section fits for the rule of 19 September and no rung of this ladder"
+        " scores: its floor is measured the same way and it carries no comparison"
+        " column, because there is no rung-against-rung difference on that leg to"
+        " read against it.",
         "",
         "The comparisons the floor was fixed to cover are each rung against the rung"
         " it is read against and each tail-exclusion arm against the fit with nothing"
@@ -5050,7 +5305,9 @@ def main() -> int:
     # estimator choice rather than a rung, so it is measured after the ladder
     # and never inside it.
     print("averaging seeds on the submission rung ...")
-    bagging = seed_average(features, y, splits, results, tails, SUBMISSION_KEY)
+    bagging = seed_average(
+        features, y, dep, month, splits, results, tails, SUBMISSION_KEY
+    )
     floors = _noise_floors(bagging, splits)
 
     # The recorded-taxi tail, as a fit-side exclusion, on the submission rung
