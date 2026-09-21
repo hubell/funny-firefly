@@ -793,6 +793,85 @@ recorded in the paper, no instrument in the data measures the alternative, and
 it is not reopened on stakes alone. SUMO and the OpenSky scientific datasets:
 diagnostics for the paper at most, and nothing in the model.
 
+**The pooled record-quality rule, reopened and measured, 21 September.** The
+entry above closes this question under *Not run, and why*, and one of the
+grounds it gives is that no instrument in the data measures the alternative.
+That ground does not hold. An instrument exists, it is already printed in
+`reports/tails.md`, and it bears directly on the premise pooling rests on. So
+the question is reopened: adoptive, with its criteria fixed here before any of
+the numbers they govern exist, and measured before the wider sweep, because
+the record-quality term sets `fit_rows` and the rows every report scores
+ex-flagged.
+
+**The question.** `taxiout.tails` predicts for rows in covered cells, a cell
+being (airport, record, lag band) and covered at five rows or more with a
+defaulted block share of 5% or more. An airport with no covered cell is left
+entirely to the physical model. Should such an airport instead inherit a cell
+pooled across airports? The case that raises it is EHAM, where the ranking set
+lists six consecutive days in January 2026 with the flagged pattern and the
+training year holds no such day at that airport at all.
+
+**The instrument.** The per-airport defaulted block share, by cell, over the
+training year. `taxiout.tails.TailModel.fit` already measures it for every
+(airport, bucket) cell it sees, as `n`, `share`, `mean`, `rest_mean` and
+`covered`, and `reports/tails.md` already prints the whole table. Pooling
+rests on one premise: that a bucket's defaulted share is a property of the
+defaulting mechanism and not of the airport, so a cell learned where the
+mechanism is visible may be carried to an airport where it is not. That
+premise is directly measurable, per airport, per bucket, on training rows,
+with no fit and no booster, and it needs neither the 2026 rows nor a
+validation leg.
+
+**What is a reading here, and what is pre-registered.** The share table was
+printed in this repository before the question was reopened, so a criterion
+written now against those numbers is a reading and not a pre-registration, and
+calling it one would make the word worthless. Everything taken from the
+printed table is a reading and is labelled as one. What follows is
+pre-registered, because the numbers it reads do not exist yet, and it is fixed
+here before the measurement runs:
+
+> 1. **The premise test.** For each bucket a pooled cell would serve, the
+>    block prints every airport's `n` and `share` from the leg's own fit, and
+>    the pooled `n` and `share`. **The premise holds for a bucket only if
+>    every airport with at least five rows in it has a share within two
+>    standard errors of the pooled share, given that airport's own `n`.** Two
+>    standard errors of a proportion is fixed arithmetic, not a chosen
+>    threshold.
+> 2. **The stake.** The count of ranking rows a pooled cell would cover, by
+>    airport, month and bucket, from `taxiout.tails.flag` and the fitted cell
+>    table alone, reading no hidden field. **If the count is zero there is
+>    nothing to adopt and the block stops there.**
+> 3. **The arm.** The adopted mixture, current coverage, plus a pooled cell
+>    only where an airport has no covered cell in that bucket, scored on the
+>    same three columns as the six designs already in `reports/tails.md`:
+>    December 2025, July 2025 all, July 2025 at EDDF, EGLL and EHAM.
+> 4. **Adoption.** The pooled fallback is adopted only if **all** of: the
+>    premise holds by test 1 for every bucket it would serve; the stake by
+>    test 2 is nonzero; the arm is better than the adopted mixture at printed
+>    precision on the three July airports, which is the uncovered population
+>    the 2025 legs can read, **with a day-clustered interval on the difference
+>    clear of zero**; it is no worse at printed precision on December 2025 and
+>    on July 2025 pooled; and no airport regresses by an amount whose own
+>    day-clustered interval clears zero. That last condition is the second
+>    half of the tail-exclusion rule of `reports/baseline.md` line 1039,
+>    reused rather than invented.
+> 5. **The instrument that decides is the interval, not a floor.** The term
+>    draws no seed and is deterministic, so it has no seed floor. Where this
+>    arm is called real or called noise, the sentence says the day-clustered
+>    interval said so. That is §7.1's rule applied.
+> 6. **Order.** Tests 1 and 2 are screens and run first. **If the premise
+>    fails for every bucket the pooled cell would serve, the block stops
+>    before fitting the arm** and records that it stopped there. Fitting an
+>    arm whose premise has been refuted would be measuring something already
+>    answered.
+
+**The arm is not fitted if the premise screen fails.** On the reading of the
+printed table the screen is expected to fail, since LIRF's 84.7% and EHAM's
+0.0% in a cell of 77 rows are not two estimates of one share. That expectation
+is written down in advance so that a pass is as visible as a failure: a pass
+would disagree with the table this repository already prints, and it would be
+a stop rather than a green light.
+
 **Gate 3 — the queueing layer, only if Gate 2's ablation says congestion is
 binding** (~20–30 h). This is the piece where the geometry stops being a side
 feature. *Revised 2 September:* the forward simulation as first written —
