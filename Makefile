@@ -83,9 +83,14 @@ data-review:
 	$(PYTHON) scripts/review_challenge_data.py
 
 # Reads data/challenge/. Writes the record-quality term's own report; carries
-# aggregates only and refuses to write a challenge identifier.
+# aggregates only and refuses to write a challenge identifier. Two generators,
+# in this order: the first writes the report from end to end, the second
+# measures the pooled rule and writes its one section into the file the first
+# produced. Running only the first would drop that section, so a test fails if
+# the committed report has lost it.
 tails:
 	$(PYTHON) scripts/report_tails.py
+	$(PYTHON) scripts/pooled_tails.py --report
 
 # Reads data/challenge/, the matrices from 'make reports' and the OSM cache
 # under data/raw/. Writes the diagnostics of the unimpeded term against the
