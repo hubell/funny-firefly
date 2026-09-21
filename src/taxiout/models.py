@@ -146,27 +146,58 @@ TRANSFERABLE_EXCLUDED: tuple[str, ...] = ("icao", "stand", "designator", "pair")
 
 # Fixed once, for a compute budget, before any RMSE existed. L2 because the
 # metric is RMSE. No early stopping: see the module docstring.
-# Chosen once by the one permitted sweep (scripts/sweep_params.py): fit
-# January to September 2025, score October 2025 -- a month the ladder never
-# reads -- over a grid of trees (300, 600, 1000), learning rate (0.03, 0.06,
-# 0.1), leaves (31, 63, 127) and minimum child samples (50, 200, 500), on
-# the saturation rung's features -- the top rung when the sweep ran, before
-# that block was dropped from the submission -- with the RMSE taken over the
-# rows the record-quality term leaves to the physical model.
-# ``scripts/sweep_params.py`` pins that rung by name so the numbers below stay
-# reproducible now that ``TOP_RUNG`` has moved. The cell below scored 235.0 s on
-# October; the grid ran from 235.0 to 244.8 s and its top eight cells
-# lie within 0.8 s of each other. The parameters that stood before it
-# (500 trees, 0.06, 63 leaves, 200) sit between the 238.2 s of their
-# 300-tree and the 236.8 s of their 600-tree neighbours in the grid.
-# The grid's numbers stay under data/processed/, gitignored, and are not
+# Chosen by the two permitted sweeps (scripts/sweep_params.py), both of which
+# fit January to September 2025 and score October 2025 -- a month the ladder
+# never reads -- over the rows the record-quality term leaves to the physical
+# model. THE TWO SWEEPS' OCTOBER FIGURES ARE NOT COMPARABLE WITH EACH OTHER,
+# and the paragraph after next says why.
+#
+# The first sweep, 3 September 2026: trees (300, 600, 1000), learning rate
+# (0.03, 0.06, 0.1), leaves (31, 63, 127) and minimum child samples
+# (50, 200, 500), on the saturation rung's features -- the top rung when that
+# sweep ran, before that block was dropped from the submission -- fitted on
+# the unflagged training rows, with no four-hour exclusion and no shrunk
+# encoding, because that is how the ladder fitted then. The cell it chose,
+# (1000 trees, 0.03, 127 leaves, 50), scored 235.0 s on October; that grid ran
+# from 235.0 to 244.8 s and its top eight cells lie within 0.8 s of each other.
+# The parameters that stood before it (500 trees, 0.06, 63 leaves, 200) sit
+# between the 238.2 s of their 300-tree and the 236.8 s of their 600-tree
+# neighbours in that grid. Its terms are kept in the sweep script under
+# FIRST_SWEEP, which no longer runs them.
+#
+# The second sweep, 21 September 2026, pre-registered on 20 September and
+# permitted once: learning rate (0.015, 0.03, 0.06), leaves (63, 127, 255) and
+# minimum child samples (20, 50, 200), twenty-seven cells, each fitted once at
+# 3,000 trees and read at (300, 600, 1000, 1500, 2000, 3000), on the SUBMISSION
+# rung's features under the fit rules that stand: fit_rows with the four-hour
+# exclusion, the shrunk encoding on those rows, the record-quality model on the
+# training months, and no recency schedule. The cell below is that sweep's, and
+# it scored 214.90 s on October; that grid ran from 214.90 to 235.44 s. The
+# cell that stood before it, (1000 trees, 0.03, 127 leaves, 50), scores 217.28 s
+# under the same rules in the same run, so the move is worth 2.38 s against a
+# seed floor of 0.19 s measured from five single-seed fits of that cell in that
+# run. Its day-clustered interval against the cell it replaced is
+# [-2.89, -1.89] s, printed because the sweep could have chosen a cell whose
+# interval spanned zero; the rule that chose it reads the floor and nothing
+# else. The chosen cell sits on an edge of this grid on all four axes, which is
+# recorded here because the pre-registration fixes that the grid is not
+# extended again whatever it shows.
+#
+# WHY 235.0 AND 214.9 CANNOT BE SUBTRACTED. The first figure is the saturation
+# rung with no shrunk encoding and no four-hour exclusion; the second is the
+# submission rung with both. The same parameter cell moves from 235.0 s to
+# 217.28 s on the rules alone, before any parameter changes. What the second
+# sweep bought is 217.28 to 214.90, and nothing else here is a difference
+# between two comparable numbers.
+#
+# Both grids' numbers stay under data/processed/, gitignored, and are not
 # reported anywhere else.
 BOOSTER_PARAMS: dict[str, object] = {
     "objective": "regression",
-    "n_estimators": 1000,
-    "learning_rate": 0.03,
-    "num_leaves": 127,
-    "min_child_samples": 50,
+    "n_estimators": 3000,
+    "learning_rate": 0.015,
+    "num_leaves": 255,
+    "min_child_samples": 20,
     "colsample_bytree": 0.9,
     "subsample": 0.8,
     "subsample_freq": 1,

@@ -23,7 +23,7 @@ help:
 	@echo "make residual     what the model's remaining error is -> reports/residual.md"
 	@echo "make baseline     run the ablation ladder      -> reports/baseline.md"
 	@echo "make transfer     leave one airport out, ten times -> reports/transfer.md"
-	@echo "make sweep        the one parameter sweep, October 2025 -> data/processed/sweep_october.csv"
+	@echo "make sweep        the parameter sweep, October 2025 -> data/processed/sweep_october.csv"
 	@echo "make preregistered  the pre-registered experiments -> reports/preregistered-<date>.md"
 	@echo "make submission TEAM=<name>  fit and write     -> data/submissions/<name>_v<n>.parquet"
 	@echo "make test     run the unit tests                (no network, no challenge data)"
@@ -39,9 +39,16 @@ help:
 	@echo "challenge data under data/challenge/, which is never committed."
 	@echo ""
 	@echo "Measured on the reference machine, eight cores: 'make baseline' takes"
-	@echo "about two hours and peaks at 8 GiB of memory, 'make transfer' about a"
-	@echo "quarter of an hour, 'make congestion' two minutes, and 'make residual'"
-	@echo "and 'make occupancy' under a minute each."
+	@echo "seven and a quarter hours and peaks at 8.2 GiB of memory, 'make sweep'"
+	@echo "an hour and a half at 6.7 GiB, 'make congestion' two minutes, and"
+	@echo "'make residual' and 'make occupancy' under a minute each. 'make"
+	@echo "transfer' took a quarter of an hour under the booster's earlier"
+	@echo "parameters and has not been re-timed under these."
+	@echo ""
+	@echo "'make baseline' took about two hours until 21 September 2026, when the"
+	@echo "one permitted wider sweep moved the booster to 3,000 trees and 255"
+	@echo "leaves. That is 3.2 times the work per fit, and every target that fits"
+	@echo "the submission rung scales with it."
 
 all: data reports test licence-check
 
@@ -133,10 +140,16 @@ baseline:
 transfer:
 	$(PYTHON) scripts/report_transfer.py
 
-# The one parameter sweep: fit January to September 2025, score October, on
-# the saturation rung's features, the top rung when it ran. Its numbers stay under data/processed/, gitignored;
-# the chosen parameters are written into taxiout.models by hand with the
-# October number that chose them. Takes half an hour or more.
+# The parameter sweeps: fit January to September 2025, score October. The
+# first ran on the saturation rung, the top rung at the time; the second, the
+# one this target runs, is pre-registered on the submission rung under the fit
+# rules that stand, and their October figures are not comparable. Twenty-seven
+# cells, one 3,000-tree fit each, read at six tree counts, after a gate that
+# reproduces the five October single-seed fits on record. Its numbers stay
+# under data/processed/, gitignored; the chosen parameters are written into
+# taxiout.models by hand with the October number that chose them. --largest
+# times the costliest cell alone, --read applies the reading rule without
+# fitting anything.
 sweep:
 	$(PYTHON) scripts/sweep_params.py
 
