@@ -81,6 +81,7 @@ from taxiout.destination import DESTINATION_FEATURES, destination_features  # no
 from taxiout.features import CATEGORICAL_FEATURES, FEATURE_COLUMNS  # noqa: E402
 from taxiout.models import BOOSTER_PARAMS, Booster, booster_backend  # noqa: E402
 from taxiout.occupancy import OCCUPANCY_FEATURES, occupancy_features  # noqa: E402
+from taxiout.provenance import challenge_inputs, report_inputs_footer  # noqa: E402
 from taxiout.occupancy import MOVEMENT_COLUMNS as OCCUPANCY_MOVEMENT_COLUMNS  # noqa: E402
 from taxiout.planlags import PLAN_DIFF_FEATURES, plandiff_features  # noqa: E402
 from taxiout.validation import JULY_AIRPORTS, rmse  # noqa: E402
@@ -102,10 +103,11 @@ RESIDUAL_RUNG = "encoding-for-stand"
 #
 # ``docs/review_headroom.md`` line 11 says "a small booster" and says nothing
 # else, so every figure in §2 is a figure about a capacity nobody wrote down.
-# It is NOT ``taxiout.models.BOOSTER_PARAMS``: the ladder's cell is a model
-# fitted on 1.9 million training rows to predict a taxi-out, and a cell that
-# size turned loose on 166 thousand rows of a frozen model's residual overfits
-# inside its own folds and reads a SMALLER headroom than a smaller cell does.
+# It is NOT ``taxiout.models.BOOSTER_PARAMS``: the ladder's cell is sized for
+# the whole training year, and a cell that size turned loose on one validation
+# month of a frozen model's residual overfits inside its own folds and reads a
+# SMALLER headroom than a smaller cell does. The report computes both row
+# counts rather than naming either here.
 # *The Capacity* below measures that, and it is why this constant exists rather
 # than an import.
 #
@@ -535,8 +537,15 @@ def section_method(joined: dict) -> list[str]:
     ]
 
 
-def section_capacity(capacity: list[list[str]]) -> list[str]:
-    """The capacity constant, written out, and what it is worth."""
+def section_capacity(capacity: list[list[str]], rows: int) -> list[str]:
+    """The capacity constant, written out, and what it is worth.
+
+    ``rows`` is the residual rows the fits were made on, computed by the caller
+    and formatted here rather than written into the prose: the sentence below
+    is about the contrast between a training year and one month of residual,
+    and a figure in it that no run produced is exactly what this repository's
+    provenance gate refuses.
+    """
     written = [
         [f"`{k}`", str(HEADROOM_BOOSTER_PARAMS[k])]
         for k in (
@@ -617,8 +626,8 @@ def section_capacity(capacity: list[list[str]]) -> list[str]:
         "",
         "**The ladder's own cell reads the smallest headroom of the three.** That is",
         "the direction to expect and the reason this constant is not an import: a cell",
-        "fitted on 1.9 million training rows to predict a taxi-out, turned loose on a",
-        "few hundred thousand rows of a frozen model's residual, has capacity to spend",
+        "sized for the ladder's whole training year, turned loose on the",
+        f"{num(rows)} rows of a frozen model's residual, has capacity to spend",
         "inside its own folds and spends it. A residual fit at that size would not",
         "reproduce §2's numbers even in principle, and it would not be the instrument",
         "§2 used.",
@@ -1055,13 +1064,23 @@ def main() -> int:
         ]
         + section_method(joined)
         + [""]
-        + section_capacity(capacity)
+        + section_capacity(capacity, sum(len(g) for g in joined.values()))
         + [""]
         + section_table(results)
         + [""]
         + section_audit(results, step)
         + [""]
         + section_inputs()
+        + [""]
+        + report_inputs_footer(
+            REPO,
+            challenge_inputs(DATA)
+            + [
+                RESIDUALS / f"{split}_{RESIDUAL_RUNG}.parquet"
+                for split in dict.fromkeys(s for s, _i, _l, _x in LEGS)
+            ]
+            + [REPO / "data" / "raw" / "ourairports_airports.csv"],
+        )
         + [
             "",
             "Distance matrices derived from OpenStreetMap: data (c) "

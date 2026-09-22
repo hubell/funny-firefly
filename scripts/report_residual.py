@@ -75,6 +75,7 @@ from run_baselines import (  # noqa: E402
     pct,
     table,
 )
+from taxiout.provenance import challenge_inputs, report_inputs_footer  # noqa: E402
 from taxiout.callsign import callsign_features  # noqa: E402
 from taxiout.challenge import load_movements, to_pandas  # noqa: E402
 from taxiout.features import TARGET  # noqa: E402
@@ -91,6 +92,22 @@ from taxiout.validation import (  # noqa: E402
 
 DATA = REPO / "data" / "challenge"
 RESIDUALS = REPO / "data" / "processed" / "residuals"
+
+
+def _inputs() -> list:
+    """Every path this run read, for the provenance footer.
+
+    Named individually rather than as a directory: a directory has no
+    digest, and "the data under `data/challenge/`" is exactly the
+    declaration `scripts/check_provenance.py` check 8 exists to replace.
+    """
+    return challenge_inputs(DATA) + [
+        RESIDUALS / f"{split}_{RUNG}.parquet"
+        for split, _i, _l in LEGS
+        if (RESIDUALS / f"{split}_{RUNG}.parquet").exists()
+    ]
+
+
 METAR = REPO / "data" / "raw" / "metar"
 OUT = REPO / "reports" / "residual.md"
 
@@ -1151,6 +1168,8 @@ def main() -> int:
             "queue, a runway inspection -- which the challenge data does not carry,",
             "and the open dataset that might, EUROCONTROL's own daily ATFM delay by",
             "airport and cause, is excluded on its licence.",
+            "",
+            *report_inputs_footer(REPO, _inputs()),
             "",
             "Distance matrices derived from OpenStreetMap: data (c) "
             "OpenStreetMap contributors, ODbL 1.0. Movement and flight data",

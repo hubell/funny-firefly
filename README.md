@@ -225,6 +225,7 @@ make baseline     # needs the challenge data; writes reports/baseline.md
 make transfer     # needs the challenge data; writes reports/transfer.md
 make submission TEAM=<name>   # needs the challenge data; writes a submission
 make licence-check  # verify no OSM-derived or challenge content is tracked
+make provenance     # verify every number is categorised; writes docs/provenance.md
 ```
 
 `make test` works on a clean checkout with nothing installed but `pytest`
@@ -249,6 +250,7 @@ data review and everything after it need `pip install -e ".[modelling]"`.
 | `scripts/report_congestion.py` | `data/challenge/`, `data/processed/taxi_distance/`, `data/raw/metar/`, `data/processed/residuals/` | `reports/congestion.md` |
 | `scripts/report_occupancy.py` | `data/challenge/`, `data/processed/taxi_distance/`, `data/processed/residuals/` | `reports/occupancy.md` |
 | `scripts/report_headroom.py` | `data/challenge/`, `data/raw/ourairports_airports.csv`, `data/processed/residuals/` | `reports/headroom.md` |
+| `scripts/check_provenance.py` | the tracked tree, and `taxiout.provenance` | `docs/provenance.md` (with `--write-doc`); otherwise a verdict and a non-zero exit |
 | `scripts/run_baselines.py` | `data/challenge/`, `data/processed/taxi_distance/`, `data/raw/metar/`, `data/raw/ourairports_airports.csv` | `reports/baseline.md`, `data/processed/residuals/` (gitignored) |
 | `scripts/report_transfer.py` | `data/challenge/`, `data/processed/taxi_distance/`, `data/raw/metar/` | `reports/transfer.md` |
 | `scripts/sweep_params.py` | `data/challenge/`, `data/processed/taxi_distance/`, `data/raw/metar/` | `data/processed/sweep_october.csv` (gitignored) |
@@ -434,6 +436,7 @@ scripts/
   sweep_params.py              the one parameter sweep, on October 2025
   make_submission.py           a submission file (needs challenge data)
   check_licence_hygiene.py     verifies no OSM or challenge content is tracked
+  check_provenance.py          verifies every number is categorised (+ docs/provenance.md)
   commit_geometry.sh           one-shot commit batch (geometry stage)
   commit_gate0.sh              one-shot commit batch (data review stage)
   commit_tails.sh              one-shot commit batch (record-quality term)
@@ -441,6 +444,7 @@ scripts/
   commit_gate1.sh              one-shot commit batch (modelling stage)
   commit_geometry_gaps.sh      one-shot commit batch (unimpeded-term diagnostics)
 docs/
+  provenance.md       generated; where every number comes from, and what is open
   modelling_notes.md  decisions, caveats, open questions, leakage rules
   prior_art.md        literature, external data licences, benchmarks
   plan.md             gated plan to the 11 October deadline

@@ -78,6 +78,7 @@ from run_baselines import (  # noqa: E402
 )
 from taxiout.challenge import load_movements, load_ranking, to_pandas  # noqa: E402
 from taxiout.features import TARGET  # noqa: E402
+from taxiout.provenance import challenge_inputs, report_inputs_footer  # noqa: E402
 from taxiout.occupancy import (  # noqa: E402
     MOVEMENT_COLUMNS,
     occupancy_features,
@@ -778,6 +779,17 @@ def main() -> int:
             "field links an inbound leg to its outbound. Rotation linkage by flight",
             "number was considered and left out for that reason: the same-type,",
             "same-operator match on the stand already carries most of it.",
+            "",
+            *report_inputs_footer(
+                REPO,
+                challenge_inputs(DATA)
+                + [
+                    RESIDUALS / f"{split}_{rung}.parquet"
+                    for split, _t, _r in SPLITS
+                    for rung in (BOUND_RUNG, GAIN_RUNG)
+                    if (RESIDUALS / f"{split}_{rung}.parquet").exists()
+                ],
+            ),
             "",
             "Distance matrices derived from OpenStreetMap: data (c) "
             "OpenStreetMap contributors, ODbL 1.0. Movement and flight data",
