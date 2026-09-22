@@ -6,8 +6,8 @@
 PYTHON ?= python3
 
 .PHONY: all data metar ourairports reports crosscheck data-review synthetic tails \
-        geometry-gaps congestion occupancy residual baseline transfer sweep preregistered \
-        submission test lint licence-check clean help
+        geometry-gaps congestion occupancy residual headroom baseline transfer sweep \
+        preregistered submission test lint licence-check clean help
 
 help:
 	@echo "make data     fetch and cache OSM geometry      -> data/raw/<ICAO>.json.gz"
@@ -21,6 +21,7 @@ help:
 	@echo "make congestion   how the excess term was built -> reports/congestion.md"
 	@echo "make occupancy    the stand as a shared resource -> reports/occupancy.md"
 	@echo "make residual     what the model's remaining error is -> reports/residual.md"
+	@echo "make headroom     the residual-fit headroom, recomputed -> reports/headroom.md"
 	@echo "make baseline     run the ablation ladder      -> reports/baseline.md"
 	@echo "make transfer     leave one airport out, ten times -> reports/transfer.md"
 	@echo "make sweep        the parameter sweep, October 2025 -> data/processed/sweep_october.csv"
@@ -41,10 +42,10 @@ help:
 	@echo "Measured on the reference machine, eight cores: 'make baseline' takes"
 	@echo "seven and a quarter hours and peaks at 8.2 GiB of memory, 'make sweep'"
 	@echo "an hour and a half at 6.7 GiB, 'make congestion' two minutes, and"
-	@echo "'make residual' and 'make occupancy' under a minute each. 'make"
-	@echo "transfer' takes forty minutes at 7.1 GiB, re-timed under these"
-	@echo "parameters on 21 September 2026; it took a quarter of an hour under"
-	@echo "the earlier ones."
+	@echo "'make residual' and 'make occupancy' under a minute each, and 'make"
+	@echo "headroom' three minutes at 3.7 GiB. 'make transfer' takes forty"
+	@echo "minutes at 7.1 GiB, re-timed under these parameters on 21 September"
+	@echo "2026; it took a quarter of an hour under the earlier ones."
 	@echo ""
 	@echo "'make baseline' took about two hours until 21 September 2026, when the"
 	@echo "one permitted wider sweep moved the booster to 3,000 trees and 255"
@@ -126,6 +127,17 @@ occupancy:
 # and the largest rows. Fits no model. Under a minute.
 residual:
 	$(PYTHON) scripts/report_residual.py
+
+# Reads data/challenge/ and the validation residuals 'make baseline' writes
+# under data/processed/residuals/, at the rung docs/review_headroom.md line 12
+# names. Recomputes that review's §2 headroom estimates for the four Gate 2c
+# blocks by the method its line 11 states, at a capacity this script names, and
+# writes them BESIDE the quoted EXPECTED_HEADROOM_S rather than in place of it.
+# Moves no threshold, no constant and no verdict: the leakage audit in
+# reports/baseline.md goes on reading the quoted figure. Fits forty small
+# boosters and nothing of the ladder; about three minutes.
+headroom:
+	$(PYTHON) scripts/report_headroom.py
 
 # Reads data/challenge/ and the matrices from 'make reports'. Writes the
 # ablation ladder. Needs the modelling extras; about two hours on eight cores,

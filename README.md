@@ -220,6 +220,7 @@ make geometry-gaps  # needs the challenge data and the OSM cache; writes reports
 make congestion   # needs the challenge data; writes reports/congestion.md
 make occupancy    # needs the challenge data and the residuals; writes reports/occupancy.md
 make residual     # needs the challenge data and the residuals; writes reports/residual.md
+make headroom     # needs the challenge data and the residuals; writes reports/headroom.md
 make baseline     # needs the challenge data; writes reports/baseline.md
 make transfer     # needs the challenge data; writes reports/transfer.md
 make submission TEAM=<name>   # needs the challenge data; writes a submission
@@ -242,10 +243,12 @@ data review and everything after it need `pip install -e ".[modelling]"`.
 | `scripts/check_runways_ourairports.py` | `data/raw/`, OurAirports | `reports/runway_crosscheck.md` |
 | `scripts/report_synthetic_airport.py` | nothing — the field is authored in `taxiout.synthetic` | `reports/synthetic_airport.md`, `reports/synthetic_airport.svg` |
 | `scripts/review_challenge_data.py` | `data/challenge/`, `data/processed/taxi_distance/` | `reports/data_review.md` |
-| `scripts/report_tails.py` | `data/challenge/` | `reports/tails.md` |
+| `scripts/report_tails.py` | `data/challenge/` | `reports/tails.md`, end to end |
+| `scripts/pooled_tails.py` | `data/challenge/` | one section of `reports/tails.md`, written into the file above (`--report`) |
 | `scripts/report_geometry_gaps.py` | `data/challenge/`, `data/processed/taxi_distance/`, `data/raw/` | `reports/geometry_gaps.md` |
 | `scripts/report_congestion.py` | `data/challenge/`, `data/processed/taxi_distance/`, `data/raw/metar/`, `data/processed/residuals/` | `reports/congestion.md` |
 | `scripts/report_occupancy.py` | `data/challenge/`, `data/processed/taxi_distance/`, `data/processed/residuals/` | `reports/occupancy.md` |
+| `scripts/report_headroom.py` | `data/challenge/`, `data/raw/ourairports_airports.csv`, `data/processed/residuals/` | `reports/headroom.md` |
 | `scripts/run_baselines.py` | `data/challenge/`, `data/processed/taxi_distance/`, `data/raw/metar/`, `data/raw/ourairports_airports.csv` | `reports/baseline.md`, `data/processed/residuals/` (gitignored) |
 | `scripts/report_transfer.py` | `data/challenge/`, `data/processed/taxi_distance/`, `data/raw/metar/` | `reports/transfer.md` |
 | `scripts/sweep_params.py` | `data/challenge/`, `data/processed/taxi_distance/`, `data/raw/metar/` | `data/processed/sweep_october.csv` (gitignored) |
@@ -425,6 +428,7 @@ scripts/
   report_geometry_gaps.py      reports/geometry_gaps.md (needs challenge data + OSM cache)
   report_congestion.py         reports/congestion.md (needs challenge data)
   report_occupancy.py          reports/occupancy.md (needs challenge data + residuals)
+  report_headroom.py           reports/headroom.md (needs challenge data + residuals)
   run_baselines.py             reports/baseline.md (needs challenge data)
   report_transfer.py           reports/transfer.md (needs challenge data)
   sweep_params.py              the one parameter sweep, on October 2025
