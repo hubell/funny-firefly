@@ -72,6 +72,16 @@ CLASSES: tuple[str, ...] = (MECHANISM, CHOSEN, DERIVED, QUOTED)
 NO_BASIS = "NOT RECORDED"
 
 
+# This module. Its own aggregate assignments -- ``CONSTANTS`` and the two lists
+# spliced into it -- carry every registered literal in the repository between
+# them, so an entry for them would be a copy of the whole register inside
+# itself, and it would drift the moment any other entry changed. **The register
+# cannot be an entry in itself**, which is a different exclusion from the
+# authored artifact's and is stated separately for that reason. Excluded by name
+# so the exclusion is one module and not a pattern, and recorded in ``SCOPE``.
+REGISTER_MODULE = "src/taxiout/provenance.py"
+
+
 class Constant(NamedTuple):
     """One module-level numeric assignment, classified.
 
@@ -104,6 +114,7 @@ def _mod(module: str, *rows: tuple) -> tuple[Constant, ...]:
 # is a person's judgement stated once and not a class the scanner guessed.
 _REPO_ROOT_MODULES: tuple[str, ...] = (
     "scripts/build_taxi_graph.py",
+    "scripts/check_provenance.py",
     "scripts/check_determinism.py",
     "scripts/check_licence_hygiene.py",
     "scripts/check_penalty_sensitivity.py",
@@ -1821,6 +1832,27 @@ SCOPE: tuple[tuple[str, str], ...] = (
         " but they are parameters of a call and not constants of a module, and"
         " every one that matters is bound to a module constant at the call site."
         " Stated here so the silence is not read as a pass",
+    ),
+    (
+        f"`{REGISTER_MODULE}`",
+        "NOT covered, and it cannot be: its aggregate assignments hold every"
+        " registered literal in the repository, so an entry for them would be a"
+        " copy of the register inside itself and would drift whenever any other"
+        " entry changed. Its own prose figures are the bases, each of which"
+        " names its source, and check 7 excludes it for that reason",
+    ),
+    (
+        "`scripts/check_provenance.py`",
+        "its `REPO` is registered like every other script's; its prose figures"
+        " are the exemption table's own data, which is a list of figures by"
+        " construction, so check 7 excludes it. It writes no report",
+    ),
+    (
+        "which generators check 9 sees",
+        "those whose output path carries an `.md` string literal. Two build a"
+        " dated filename with a format field -- `scripts/report_submission.py`"
+        " and `scripts/preregistered.py` -- and are outside it. Both write a"
+        " frozen dated record, which check 5 covers instead",
     ),
     (
         "`src/taxiout/synthetic.py`",

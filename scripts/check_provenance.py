@@ -91,6 +91,7 @@ sys.path.insert(0, str(REPO / "src"))
 
 from taxiout.provenance import (  # noqa: E402
     AUTHORED_ARTIFACTS,
+    REGISTER_MODULE,
     CHOSEN,
     DERIVED,
     MECHANISM,
@@ -113,6 +114,14 @@ SCANNED_ROOTS: tuple[str, ...] = ("src/", "scripts/")
 
 # The one module registered whole rather than constant by constant.
 AUTHORED_MODULES: frozenset[str] = frozenset(a.module for a in AUTHORED_ARTIFACTS)
+
+# Modules check 1 does not require an entry for, and the two reasons are
+# different. The authored artifact is registered whole because there is no
+# provenance question to answer about an invented stand's coordinates. The
+# register is excluded because it cannot be an entry in itself: its aggregate
+# assignments hold every registered literal in the repository. Both are named in
+# ``SCOPE`` and check 0 prints them.
+UNREGISTERED_MODULES: frozenset[str] = AUTHORED_MODULES | {REGISTER_MODULE}
 
 # A decimal figure in prose: a digit, a point, a digit. Deliberately not bare
 # integers -- a report says "the three airports" and "five folds" in words a
@@ -151,6 +160,23 @@ PROSE_EXEMPT: tuple[tuple[str, str, str], ...] = (
         " `preregistered.substitution_audit` aligns the carried text against the"
         " dated note line by line and rebuilds it byte for byte, which is a"
         " stronger instrument than this check",
+    ),
+    (
+        "src/taxiout/provenance.py",
+        "*",
+        "the register. Every figure in it is a basis, and a basis names its"
+        ' source: "scored 214.90 s on October against 217.28 s" IS the'
+        " provenance of `BOOSTER_PARAMS`, not an unsourced figure in a report."
+        " The module writes no report, so no figure in it can reach one, which"
+        " is the same reason docstrings and comments are out of this check",
+    ),
+    (
+        "scripts/check_provenance.py",
+        "*",
+        "this gate. Its prose figures are the entries of the exemption table"
+        " below, which is a list of figures by construction, and the two"
+        " PENDING reasons that quote the prose they are about. It writes no"
+        " report either",
     ),
     # Single figures, each a definition rather than a measurement.
     (
@@ -474,7 +500,8 @@ def check_categorised(found: tuple[Assignment, ...]) -> tuple[bool, list[str]]:
     missing = [
         a
         for a in found
-        if a.module not in AUTHORED_MODULES and _key(a.module, a.name) not in registered
+        if a.module not in UNREGISTERED_MODULES
+        and _key(a.module, a.name) not in registered
     ]
     scanned = {_key(a.module, a.name) for a in found}
     stale = sorted(k for k in registered - scanned)
@@ -483,6 +510,8 @@ def check_categorised(found: tuple[Assignment, ...]) -> tuple[bool, list[str]]:
         f"      {len(found)} assignments found, "
         f"{len([a for a in found if a.module in AUTHORED_MODULES])} in the authored"
         " artifact, "
+        f"{len([a for a in found if a.module == REGISTER_MODULE])} in the register"
+        " itself, "
         f"{len(CONSTANTS)} registered",
         "      by class: " + ", ".join(f"{cls} {counts.get(cls, 0)}" for cls in CLASSES),
     ]
@@ -1066,7 +1095,24 @@ def main() -> int:
             "9 -- one report, every generator that writes it",
             check_one_generator_per_claim(),
         ),
+        ("10 -- the generated document matches the manifests", check_document()),
     )
+    # Every check this module defines has to be in the tuple above. A check that
+    # is written and not wired in is worse than no check: its silence reads as a
+    # pass. That happened to check 10 in this file's first version, so it is
+    # asserted here as well as in tests/test_provenance.py.
+    wired = {title.split(" -- ")[0] for title, _ in checks}
+    defined = {
+        name
+        for name in globals()
+        if name.startswith("check_") and callable(globals()[name])
+    } - {"check_scope"}
+    if len(defined) != len(wired):
+        raise SystemExit(
+            f"{len(defined)} checks defined and {len(wired)} wired into the run:"
+            " a check that is not called cannot fail, and its silence reads as a"
+            " pass"
+        )
 
     failures = []
     for title, (ok, lines) in checks:

@@ -15,6 +15,7 @@ verified only against a tree that passes is a check nobody has seen fail.
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -27,6 +28,8 @@ sys.path.insert(0, str(REPO / "scripts"))
 import check_provenance as cp  # noqa: E402
 from taxiout.provenance import (  # noqa: E402
     CHOSEN,
+    REGISTER_MODULE,
+    SCOPE,
     CLASSES,
     CONSTANTS,
     FROZEN_DOCUMENTS,
@@ -151,8 +154,35 @@ def test_an_untracked_file_is_not_scanned(tree):
 def test_the_scanner_is_the_one_instrument_both_callers_use():
     """One implementation, so two counts of one quantity cannot disagree."""
     found = cp.module_constants()
-    authored = [a for a in found if a.module in cp.AUTHORED_MODULES]
-    assert len(found) - len(authored) == len(CONSTANTS)
+    unregistered = [a for a in found if a.module in cp.UNREGISTERED_MODULES]
+    assert len(found) - len(unregistered) == len(CONSTANTS)
+
+
+def test_the_gate_and_the_register_are_in_their_own_scope():
+    """The failure this test exists for, and it happened.
+
+    The register and the gate were validated while both were still untracked,
+    so the scanner -- which reads ``git ls-files`` and is right to -- had never
+    seen either of them. Committing them put four assignments and twenty-nine
+    prose figures in scope at once and the commit's own tree failed its tests.
+    Nothing about that was subtle; it was simply never checked. So it is checked.
+    """
+    modules = cp.scanned_modules()
+    assert "scripts/check_provenance.py" in modules, "the gate must scan itself"
+    assert REGISTER_MODULE in modules, "the register must be scanned too"
+    # And being in scope, each is in exactly one state: the gate's own constant
+    # is registered like every other script's, and the register is excluded by
+    # name with its reason in SCOPE.
+    assert any(c.module == "scripts/check_provenance.py" for c in CONSTANTS), (
+        "the gate's own constants are registered"
+    )
+    assert not any(c.module == REGISTER_MODULE for c in CONSTANTS), (
+        "the register cannot be an entry in itself"
+    )
+    assert REGISTER_MODULE in cp.UNREGISTERED_MODULES
+    assert any(REGISTER_MODULE in what for what, _why in SCOPE)
+    ok, lines = cp.check_categorised(cp.module_constants())
+    assert ok, lines
 
 
 # --------------------------------------------------------------------------
@@ -463,6 +493,31 @@ def test_a_manifest_entry_drifted_from_the_document_is_caught(monkeypatch):
     ok, lines = cp.check_document()
     assert not ok
     assert any("differs from the manifests" in line for line in lines)
+
+
+def test_every_check_the_gate_defines_is_wired_into_its_run():
+    """The other defect this block made, and the reason it is worth a test.
+
+    ``check_document`` was written, tested directly, and never added to the
+    tuple ``main`` iterates, so the gate reported nine checks and called itself
+    clean. A check that is not called cannot fail, and its silence reads as a
+    pass -- which is the precise failure this whole block exists to remove, made
+    by the block itself. ``main`` now refuses to run if the two disagree, and
+    this holds the count from the outside.
+    """
+    import inspect
+
+    source = inspect.getsource(cp.main)
+    defined = {
+        name
+        for name in dir(cp)
+        if name.startswith("check_") and callable(getattr(cp, name))
+    } - {"check_scope"}
+    for name in defined:
+        assert f"{name}(" in source, f"{name} is defined but never called by main"
+    # And the run prints one line per check, numbered from 1 with no gaps.
+    numbers = sorted(int(n) for n in re.findall(r'"(\d+) -- ', source))
+    assert numbers == list(range(1, len(defined) + 1)), numbers
 
 
 def test_the_classes_are_the_four_and_no_fifth():

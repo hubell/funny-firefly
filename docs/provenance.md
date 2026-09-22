@@ -25,15 +25,15 @@ the gate's job is to prove there is no fifth.
 
 ## The constants
 
-`taxiout.provenance.CONSTANTS` carries **225** entries, one
+`taxiout.provenance.CONSTANTS` carries **226** entries, one
 per module-level numeric assignment the scanner finds outside the
-authored artifact. The scanner finds **275** in all, of which
+authored artifact. The scanner finds **279** in all, of which
 **50** are in `src/taxiout/synthetic.py` and are covered by
 `AUTHORED_ARTIFACTS` as a module rather than one by one.
 
 | class | entries | what it means |
 | --- | ---: | --- |
-| `mechanism` | 88 | definitional or a unit conversion; nobody chose it |
+| `mechanism` | 89 | definitional or a unit conversion; nobody chose it |
 | `chosen` | 106 | somebody picked it, and the basis says what against |
 | `derived` | 1 | computed from the data and frozen into the source |
 | `quoted` | 30 | a measurement from a named run or document |
@@ -134,6 +134,9 @@ Stated so its silence is not read as a pass.
 | --- | --- |
 | module-level numeric assignments in `src/` and `scripts/` | covered by `CONSTANTS`, one entry each, and check 1 fails on any the scanner finds and the register does not carry |
 | numeric defaults in function signatures | NOT covered. The scanner counts them and the census prints the count, but they are parameters of a call and not constants of a module, and every one that matters is bound to a module constant at the call site. Stated here so the silence is not read as a pass |
+| `src/taxiout/provenance.py` | NOT covered, and it cannot be: its aggregate assignments hold every registered literal in the repository, so an entry for them would be a copy of the register inside itself and would drift whenever any other entry changed. Its own prose figures are the bases, each of which names its source, and check 7 excludes it for that reason |
+| `scripts/check_provenance.py` | its `REPO` is registered like every other script's; its prose figures are the exemption table's own data, which is a list of figures by construction, so check 7 excludes it. It writes no report |
+| which generators check 9 sees | those whose output path carries an `.md` string literal. Two build a dated filename with a format field -- `scripts/report_submission.py` and `scripts/preregistered.py` -- and are outside it. Both write a frozen dated record, which check 5 covers instead |
 | `src/taxiout/synthetic.py` | covered once by `AUTHORED_ARTIFACTS` rather than constant by constant, with the condition that makes it safe proved by check 4 |
 | decimal figures in generator prose strings | covered by check 7: each is computed from the data or registered as deliberate prose |
 | decimal figures in code comments | NOT covered by an automated check. A comment is not read by any run and cannot reach a report, so a stale figure in one misleads a reader of the source and nothing else. The census counts them |
