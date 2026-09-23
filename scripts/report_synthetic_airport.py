@@ -29,6 +29,7 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
 
 from taxiout import synthetic as syn  # noqa: E402
+from taxiout.provenance import report_inputs_footer  # noqa: E402
 from taxiout.routing import RUNWAY_PENALTY  # noqa: E402
 
 OUT_MD = REPO / "reports" / "synthetic_airport.md"
@@ -755,6 +756,12 @@ def main() -> int:
             "report; the field is authored. The repository's distance matrices",
             "elsewhere are derived from OpenStreetMap",
             "(data (c) OpenStreetMap contributors, ODbL 1.0).",
+            "",
+            *report_inputs_footer(REPO, [REPO / "src" / "taxiout" / "synthetic.py"]),
+            "",
+            "This report reads no data file at all: the field is authored in",
+            "`taxiout.synthetic`, so the module that defines it is the input,",
+            "and its digest is what says the report describes this field.",
         ]
     )
     OUT_SVG.write_text(draw_svg(built), encoding="utf-8")

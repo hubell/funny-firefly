@@ -25,61 +25,103 @@ the gate's job is to prove there is no fifth.
 
 ## The constants
 
-`taxiout.provenance.CONSTANTS` carries **226** entries, one
+`taxiout.provenance.CONSTANTS` carries **225** entries, one
 per module-level numeric assignment the scanner finds outside the
-authored artifact. The scanner finds **279** in all, of which
+authored artifact. The scanner finds **278** in all, of which
 **50** are in `src/taxiout/synthetic.py` and are covered by
 `AUTHORED_ARTIFACTS` as a module rather than one by one.
 
 | class | entries | what it means |
 | --- | ---: | --- |
 | `mechanism` | 89 | definitional or a unit conversion; nobody chose it |
-| `chosen` | 106 | somebody picked it, and the basis says what against |
+| `chosen` | 105 | somebody picked it, and the basis says what against |
 | `derived` | 1 | computed from the data and frozen into the source |
 | `quoted` | 30 | a measurement from a named run or document |
 
-**Of the 106 chosen constants, 31 have
-no basis recorded anywhere in the code.** That is the finding this register
-was built to produce, and it is the half that failed: `HEADROOM_TRIGGER_S`
-was chosen with a stated reason and no recorded basis, and turned out to be
-an absolute line on a quantity `docs/review_headroom.md` §7 had already
-characterised as a floor a refit exceeds. Each is marked in its own entry,
-the count above is summed from those marks, and `PROVENANCE_PENDING` owns
-the class.
+**Of the 105 chosen constants, 14 record
+no reason at all, and a further
+10 record the method, the convention or a neighbouring
+use and not the value.** That is the finding this register was built to
+produce: `HEADROOM_TRIGGER_S` was chosen with a stated reason and no
+recorded basis, and turned out to be an absolute line on a quantity
+`docs/review_headroom.md` §7 had already characterised as a floor a refit
+exceeds. Each is marked in its own entry and the counts are summed from
+those marks.
 
-| module | constant |
-| --- | --- |
-| `src/taxiout/ceiling.py` | `GAP_BUCKETS_MIN` |
-| `src/taxiout/ceiling.py` | `HALF_WINDOW_S` |
-| `src/taxiout/ceiling.py` | `MIN_ROWS` |
-| `src/taxiout/congestion.py` | `CONFIGURATION_MAX_SINCE_S` |
-| `src/taxiout/corridor.py` | `CORRIDOR_WINDOWS_MIN` |
-| `src/taxiout/exposure.py` | `LAG_LO_S` |
-| `src/taxiout/exposure.py` | `LAG_HI_S` |
-| `src/taxiout/exposure.py` | `TAXI_IN_LO_S` |
-| `src/taxiout/exposure.py` | `TAXI_IN_HI_S` |
-| `src/taxiout/exposure.py` | `ARRIVAL_LATE_S` |
-| `src/taxiout/planlags.py` | `HALF_WINDOW_MIN` |
-| `src/taxiout/runways.py` | `DISPLACED_JOIN_M` |
-| `src/taxiout/saturation.py` | `WINDOWS_MIN` |
-| `src/taxiout/saturation.py` | `MIN_GAP_WINDOW_MIN` |
-| `src/taxiout/saturation.py` | `SPAN_GAPS` |
-| `src/taxiout/saturation.py` | `SPAN_CAP_S` |
-| `src/taxiout/validation.py` | `PAIR_FOLDS` |
-| `src/taxiout/validation.py` | `SEEN_FRACTION` |
-| `src/taxiout/validation.py` | `BOOTSTRAP_LEVEL` |
-| `scripts/fetch_metar.py` | `PAUSE_S` |
-| `scripts/fetch_metar.py` | `RETRIES` |
-| `scripts/fetch_metar.py` | `TIMEOUT_S` |
-| `scripts/fetch_ourairports.py` | `PAUSE_S` |
-| `scripts/fetch_ourairports.py` | `RETRIES` |
-| `scripts/fetch_ourairports.py` | `TIMEOUT_S` |
-| `scripts/report_geometry_gaps.py` | `MIN_DESIGNATOR_PAIRS` |
-| `scripts/report_geometry_gaps.py` | `DIRECT_SNAP_M` |
-| `scripts/report_residual.py` | `PEAK_HOURS` |
-| `scripts/report_residual.py` | `NAMED_PREFIXES` |
-| `scripts/report_tails.py` | `STAND_IN_MIN_PAIR` |
-| `scripts/run_baselines.py` | `K_SENSITIVITY_SCALES` |
+**The first count is meant to be non-zero, and 14 is the
+finished state, not a backlog.** A constant whose basis says what it does
+and says plainly that its reason was never written down is *registered*,
+which is one of the four states above. Driving the count to zero would
+mean writing a plausible reason after the fact for a threshold nobody
+argued, which is undetectable afterwards and is precisely the failure this
+register exists to prevent. Check 3 prints the count so it cannot drift in
+either direction without somebody seeing it.
+
+| module | constant | state |
+| --- | --- | --- |
+| `src/taxiout/ceiling.py` | `GAP_BUCKETS_MIN` | no reason recorded |
+| `src/taxiout/ceiling.py` | `MIN_ROWS` | no reason recorded |
+| `src/taxiout/congestion.py` | `CONFIGURATION_MAX_SINCE_S` | no reason recorded |
+| `src/taxiout/exposure.py` | `LAG_LO_S` | no reason recorded |
+| `src/taxiout/exposure.py` | `TAXI_IN_LO_S` | no reason recorded |
+| `src/taxiout/exposure.py` | `TAXI_IN_HI_S` | no reason recorded |
+| `src/taxiout/planlags.py` | `HALF_WINDOW_MIN` | no reason recorded |
+| `src/taxiout/runways.py` | `DISPLACED_JOIN_M` | no reason recorded |
+| `src/taxiout/saturation.py` | `MIN_GAP_WINDOW_MIN` | no reason recorded |
+| `src/taxiout/saturation.py` | `SPAN_GAPS` | no reason recorded |
+| `src/taxiout/saturation.py` | `SPAN_CAP_S` | no reason recorded |
+| `scripts/report_geometry_gaps.py` | `MIN_DESIGNATOR_PAIRS` | no reason recorded |
+| `scripts/report_tails.py` | `STAND_IN_MIN_PAIR` | no reason recorded |
+| `scripts/run_baselines.py` | `K_SENSITIVITY_SCALES` | no reason recorded |
+| `src/taxiout/ceiling.py` | `HALF_WINDOW_S` | method recorded, value not argued |
+| `src/taxiout/corridor.py` | `CORRIDOR_WINDOWS_MIN` | method recorded, value not argued |
+| `src/taxiout/exposure.py` | `LAG_HI_S` | method recorded, value not argued |
+| `src/taxiout/exposure.py` | `ARRIVAL_LATE_S` | method recorded, value not argued |
+| `src/taxiout/saturation.py` | `WINDOWS_MIN` | method recorded, value not argued |
+| `src/taxiout/validation.py` | `PAIR_FOLDS` | method recorded, value not argued |
+| `src/taxiout/validation.py` | `SEEN_FRACTION` | method recorded, value not argued |
+| `src/taxiout/validation.py` | `BOOTSTRAP_LEVEL` | method recorded, value not argued |
+| `scripts/report_residual.py` | `PEAK_HOURS` | method recorded, value not argued |
+| `scripts/report_residual.py` | `NAMED_PREFIXES` | method recorded, value not argued |
+
+## What a report declares it was generated from
+
+**9** generators write a footer naming every
+path the run read, with a sha256 each; check 8 recomputes them and calls
+the report verified, stale or unverifiable. The rule for who carries one
+is the Makefile's own measured time: under five minutes and the generator
+writes a footer.
+
+**6** reports carry none, and are listed here
+rather than skipped: check 8 fails on a report with no footer that is on
+no list, so the remainder is a decision and not an oversight.
+
+| report | what it costs to rebuild | owner |
+| --- | --- | --- |
+| `reports/baseline.md` | seven and a quarter hours at 8.2 GiB | the next block that spends a ladder run |
+| `reports/transfer.md` | forty minutes at 7.1 GiB, re-timed 21 September 2026 | the next block that spends a ladder run |
+| `reports/penalty_sensitivity.md` | the better part of an hour by its own docstring, which is longer than the whole of `make reports` as the Makefile's note times it | the run that regenerates it |
+| `reports/taxi_routing.md` | not timed here: it rewrites every distance matrix under `data/processed/taxi_distance/`, which is an input to most of the other reports, so it is not run inside a block that fits nothing | the run that regenerates it |
+| `reports/geometry_gaps.md` | 37.5 s, so cheap enough -- but the committed report does not reproduce: three cells that print `-0` come back `+0`, with every magnitude and count unchanged. A footer records the inputs of the run that wrote the file, and this file was not written by a run this tree can reproduce | the run that regenerates it |
+| `reports/determinism.md` | 1.0 s for `report`, and the committed report does not reproduce either: it compares against runs labelled *the Mac run* and *run 1 on this machine*, and today the same command compares against `data/processed/residuals`, which the ladder of 21 September rewrote. Four measured rows move with the reference | the run that regenerates it |
+
+## What a report quotes from another report
+
+Check 11 reads every citation of a report by filename and requires every
+decimal figure in the citation's own sentence to appear in the cited file.
+The scope is the sentence: a paragraph drags in figures that belong to
+other sentences, and a checker that flags what nobody claimed is a checker
+that gets turned off.
+
+**6** figures are
+exempt, each with a reason, and check 11 fails on an exemption it cannot
+reach as well as on a figure it cannot find.
+
+| in | citing | figures | why |
+| --- | --- | --- | --- |
+| `reports/baseline.md` | `reports/geometry_gaps.md` | 0.29, 0.64, 7.88, 91.19 | the sentence quotes the ranking set's bucket mix from `geometry_gaps.md` -- 0.52 / 1.36 / 7.95 / 90.17, all four of which the cited file carries -- and sets it against December's own mix, which is this report's own figure and is not in the cited file by construction |
+| `reports/headroom.md` | `reports/baseline.md` | 17.6011 | the sentence prints this report's own recomputation of the ladder's step from the stored residuals *against* the +17.60 s `baseline.md` prints, which the cited file does carry. The point of the sentence is that the two agree, so the recomputed figure cannot be in the cited file |
+| `reports/synthetic_airport.md` | `reports/tails.md` | 6.0 | the 6.0 m/s is the authored field's own taxi speed, stated in `taxiout.synthetic`; the citation of `tails.md` sits in the same long sentence and is about where the record-quality term is documented, not about this number |
 
 ## Authored artifacts
 
@@ -110,21 +152,19 @@ demand destroying the record.
 
 ## What is still open
 
-**8** items. `--strict` fails while this is not
+**6** items. `--strict` fails while this is not
 empty and is the freeze condition; the ordinary run prints it and passes,
 because a gate that fails today cannot be wired into a commit path. Emptied
 by the work and never by editing the tuple.
 
 | what | owner |
 | --- | --- |
-| chosen constants whose basis is recorded nowhere in the code | a basis pass before the freeze |
 | `docs/paper.md`'s figures match no report in the repository | Block 10, the figure pass, building the paper's own checker as part of it |
 | a five-seed submission has never been timed under the current cell | a timing run before the freeze |
 | `HEADROOM_READINGS` is missing its fourth reading | the next block that spends a ladder run, which Block 11's pinned rebuild does anyway |
 | `reports/baseline.md`'s section still carries the name *The leakage audit, applied* | the next block that spends a ladder run |
-| reports with no declared inputs | Block 11's pinned rebuild, which regenerates every report |
-| cross-report citation is unchecked | `code_09e` |
-| external snapshots and their pinning are unscanned | Block 11's pinned rebuild |
+| six reports still have no declared inputs | the runs that regenerate them: two at Block 09f, four at Block 11 |
+| the OSM cache is eleven snapshots and not one, and no pin is recorded | the owner, then Block 11: whether a pinned rebuild uses eleven per-airport dates or one date and accepts a different OSM state for ten of the eleven airports is a decision about the freeze and not a transcription |
 
 ## What this does not reach
 
@@ -141,5 +181,8 @@ Stated so its silence is not read as a pass.
 | decimal figures in generator prose strings | covered by check 7: each is computed from the data or registered as deliberate prose |
 | decimal figures in code comments | NOT covered by an automated check. A comment is not read by any run and cannot reach a report, so a stale figure in one misleads a reader of the source and nothing else. The census counts them |
 | `docs/` and `README.md` | the two frozen documents are covered by check 5, which is an immutability digest and not a currency check. `docs/paper.md` is Block 10's and is on the pending list; the rest carries no model figure |
-| cross-report citation | NOT covered. On the pending list, owned by `code_09e` |
+| cross-report citation | covered by check 11, scoped to the citation's own sentence and to decimal figures. Bare integers are out: a report says *the three airports* and *5 folds* in words a gate cannot tell from a measurement. A frozen dated record is out as a citing document, because its figures were true on its date and the file it cites has moved since, which is what makes it a record; check 5 holds it to a digest instead |
+| `docs/paper.md` as a citing document | NOT covered by check 11, and deliberately: it is stale by its own pending entry, so running the check over it would print a wall of findings that are all one fact. Block 10 builds the paper's own checker as part of the figure pass |
+| the line numbers a basis cites | covered by check 12. A basis that names a line is a citation and drifts the moment anything above it is edited: the commit that created this register edited two of the generators it registers and left sixteen of its own citations pointing at blank lines and unrelated code. The cost is that an edit above a cited constant now fails the gate until the citation is moved, which is the intended trade -- a citation that fails loudly beats one that drifts quietly |
+| a line citation into another file | checked only for existing and for not being blank, which is all a line number in prose can be checked for. Where the cited file is regenerable the citation is pointed at a frozen dated record instead, which cannot move under it |
 | the notes and prompts outside the repository | unreachable by any gate here. The discipline there is that a number is never invented to stand in for one not yet measured |

@@ -229,18 +229,28 @@ def test_an_empty_basis_on_a_chosen_constant_fails_check_3(monkeypatch):
     assert any("BARE" in line for line in lines)
 
 
-def test_an_unrecorded_basis_passes_only_while_the_class_is_pending(monkeypatch):
-    """The arrangement: say the basis is unrecorded, and own it on the list."""
-    ok, _lines = cp.check_basis()
-    assert ok, "the tree's unrecorded bases are covered by the pending entry"
+def test_an_unrecorded_basis_is_registered_and_an_empty_one_is_not(monkeypatch):
+    """The arrangement after the basis pass, and it changed.
+
+    While the basis pass was outstanding, an unrecorded basis passed check 3
+    only because ``PROVENANCE_PENDING`` owned the class. The pass is done: a
+    constant whose basis says what it does and says its reason was never
+    written down is **registered**, one of the four states, and needs no
+    pending entry. What still fails is a basis that says nothing at all, which
+    is the difference between a recorded absence and an omission.
+    """
+    ok, lines = cp.check_basis()
+    assert ok, lines
+    assert any("meant to be non-zero" in line for line in lines)
+
     monkeypatch.setattr(
         cp,
-        "PROVENANCE_PENDING",
-        tuple(p for p in PROVENANCE_PENDING if "basis is recorded nowhere" not in p.what),
+        "CONSTANTS",
+        (Constant("SOMETHING_S", "src/m.py", (5.0,), CHOSEN, "   "),),
     )
     ok, lines = cp.check_basis()
     assert not ok
-    assert any("NOT on the pending list" in line for line in lines)
+    assert any("EMPTY" in line for line in lines)
 
 
 def test_every_chosen_constant_says_what_it_was_picked_against():
@@ -333,8 +343,11 @@ def test_strict_fails_on_a_non_empty_pending_list_and_passes_on_an_empty_one(
 def test_every_pending_item_has_a_reason_and_an_owner():
     for p in PROVENANCE_PENDING:
         assert p.what.strip() and p.why.strip() and p.owner.strip()
-    assert any("code_09e" in p.owner for p in PROVENANCE_PENDING), (
-        "cross-report citation is deferred, and the deferral is on the list"
+    assert not any("code_09e" in p.owner for p in PROVENANCE_PENDING), (
+        "cross-report citation is checked now; nothing is owed to this block"
+    )
+    assert not any("basis is recorded nowhere" in p.what for p in PROVENANCE_PENDING), (
+        "the basis pass is done, and its entry is emptied by the work"
     )
 
 
@@ -363,6 +376,15 @@ def test_a_report_whose_declared_input_changed_fails_check_8(monkeypatch, tmp_pa
     (tmp_path / "reports" / "r.md").write_text("\n".join(footer), encoding="utf-8")
     monkeypatch.setattr(cp, "REPO", tmp_path)
     monkeypatch.setattr(cp, "REPORT_INPUTS_DECLARED", (("scripts/g.py", "reports/r.md"),))
+    # check 8 also lists the reports carrying no footer, which reads the tracked
+    # tree; this constructed one is not a repository, so the listing is empty.
+    monkeypatch.setattr(cp, "report_writers", lambda: {"reports/r.md": {"scripts/g.py"}})
+    # check 8 also lists the reports carrying no footer, which reads the tracked
+    # tree; this constructed one is not a repository, so the listing is empty.
+    monkeypatch.setattr(cp, "report_writers", lambda: {"reports/r.md": {"scripts/g.py"}})
+    # check 8 also lists the reports carrying no footer, which reads the tracked
+    # tree; this constructed one is not a repository, so the listing is empty.
+    monkeypatch.setattr(cp, "report_writers", lambda: {"reports/r.md": {"scripts/g.py"}})
 
     ok, lines = cp.check_report_inputs(strict=False)
     assert ok, lines
@@ -386,6 +408,9 @@ def test_an_absent_input_reads_unverifiable_and_never_verified(monkeypatch, tmp_
     residual.unlink()
     monkeypatch.setattr(cp, "REPO", tmp_path)
     monkeypatch.setattr(cp, "REPORT_INPUTS_DECLARED", (("scripts/g.py", "reports/r.md"),))
+    # check 8 also lists the reports carrying no footer, which reads the
+    # tracked tree; this constructed one is not a repository.
+    monkeypatch.setattr(cp, "report_writers", lambda: {"reports/r.md": {"scripts/g.py"}})
 
     ok, lines = cp.check_report_inputs(strict=False)
     assert ok, "unverifiable is not a failure outside --strict"
@@ -402,6 +427,9 @@ def test_a_report_declaring_no_inputs_fails_check_8(monkeypatch, tmp_path):
     (tmp_path / "reports" / "r.md").write_text("# a report\n", encoding="utf-8")
     monkeypatch.setattr(cp, "REPO", tmp_path)
     monkeypatch.setattr(cp, "REPORT_INPUTS_DECLARED", (("scripts/g.py", "reports/r.md"),))
+    # check 8 also lists the reports carrying no footer, which reads the
+    # tracked tree; this constructed one is not a repository.
+    monkeypatch.setattr(cp, "report_writers", lambda: {"reports/r.md": {"scripts/g.py"}})
     ok, lines = cp.check_report_inputs(strict=False)
     assert not ok
     assert any("declares no inputs" in line for line in lines)
@@ -479,7 +507,8 @@ def test_the_generated_document_carries_counts_summed_from_the_manifests():
     text = cp.DOC.read_text(encoding="utf-8")
     assert f"**{len(CONSTANTS)}** entries" in text
     unrecorded = sum(1 for c in CONSTANTS if c.basis.startswith(NO_BASIS))
-    assert f"{unrecorded} have" in text
+    assert f"{unrecorded} record" in text
+    assert f"{unrecorded} is the" in text, "the document says the count is finished"
     for cls in CLASSES:
         assert f"| `{cls}` |" in text
 
@@ -523,3 +552,304 @@ def test_every_check_the_gate_defines_is_wired_into_its_run():
 def test_the_classes_are_the_four_and_no_fifth():
     assert set(c.cls for c in CONSTANTS) <= set(CLASSES)
     assert len(CLASSES) == 4
+
+
+# --------------------------------------------------------------------------
+# the bases, the citation checker and the footers: Block 09e
+
+
+def test_the_geometry_report_cannot_disagree_with_the_graph_about_a_snap():
+    """The one constant the basis pass removed instead of annotating.
+
+    ``scripts/report_geometry_gaps.py`` carried its own ``DIRECT_SNAP_M =
+    60.0``, a copy of ``taxiout.graph.DIRECT_SNAP_M``, which is the one with a
+    recorded reason. A copy cannot be given a basis; it can only be removed, so
+    it was, and this is the assertion that keeps it removed. **Identity and not
+    equality**: two modules agreeing on 60.0 today is what the copy already
+    did.
+    """
+    import report_geometry_gaps as rgg
+    from taxiout import graph
+
+    assert rgg.DIRECT_SNAP_M is graph.DIRECT_SNAP_M
+    source = (REPO / "scripts" / "report_geometry_gaps.py").read_text(encoding="utf-8")
+    assert not re.search(r"^DIRECT_SNAP_M\s*=", source, re.M), (
+        "the copy is back; it must be imported from taxiout.graph"
+    )
+    assert not any(
+        c.module == "scripts/report_geometry_gaps.py" and c.name == "DIRECT_SNAP_M"
+        for c in CONSTANTS
+    ), "an imported name is not a module constant and needs no entry"
+
+
+def test_no_generator_of_a_report_imports_a_fetcher():
+    """The six fetcher constants' basis, as an assertion rather than a promise.
+
+    Their basis is that no reported figure depends on their values, only on
+    whether the fetch succeeded. That is a claim about the import graph, so the
+    gate proves it. Five reports name a fetcher in a sentence -- "run `python
+    scripts/fetch_metar.py`" is how they tell a reader what is missing -- and a
+    sentence is not a data path.
+    """
+    ok, lines = cp.check_fetchers_reach_no_report()
+    assert ok, lines
+    assert any("0 import(s) of a fetcher" in line for line in lines)
+
+
+def test_a_generator_that_imports_a_fetcher_fails_check_13(monkeypatch, tmp_path):
+    (tmp_path / "scripts").mkdir()
+    (tmp_path / "reports").mkdir()
+    (tmp_path / "scripts" / "g.py").write_text(
+        "from pathlib import Path\n"
+        "import fetch_metar\n"
+        'OUT = Path("reports") / "r.md"\n'
+        'OUT.write_text("x")\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(cp, "REPO", tmp_path)
+    monkeypatch.setattr(cp, "report_writers", lambda: {"reports/r.md": {"scripts/g.py"}})
+    ok, lines = cp.check_fetchers_reach_no_report()
+    assert not ok
+    assert any("imports fetch_metar" in line for line in lines)
+
+
+def test_the_count_of_constants_with_no_recorded_reason_is_pinned():
+    """Fourteen, and the number is pinned from the outside in both directions.
+
+    **This is the assertion most easily got wrong either way.** A constant
+    whose basis says what it does and says its reason was never written down is
+    *registered*, so the pending entry that owned the class is resolved -- at
+    fourteen and not at zero. Driving it to zero would mean writing plausible
+    reasons after the fact for thresholds nobody argued, which is undetectable
+    afterwards; letting it grow would mean a new constant arrived unargued. So
+    the test fails on a change in either direction and the number is written
+    here, deliberately, in the one place a written-down count belongs.
+    """
+    unrecorded = [
+        c for c in CONSTANTS if c.cls == CHOSEN and c.basis.startswith(NO_BASIS)
+    ]
+    assert len(unrecorded) == 14, sorted(f"{c.module} {c.name}" for c in unrecorded)
+    assert {c.module for c in unrecorded} == {
+        "src/taxiout/ceiling.py",
+        "src/taxiout/congestion.py",
+        "src/taxiout/exposure.py",
+        "src/taxiout/planlags.py",
+        "src/taxiout/runways.py",
+        "src/taxiout/saturation.py",
+        "scripts/report_geometry_gaps.py",
+        "scripts/report_tails.py",
+        "scripts/run_baselines.py",
+    }
+    # And every one says what the constant does, not merely that nothing is known.
+    for c in unrecorded:
+        assert len(c.basis) > len(NO_BASIS) + 30, f"{c.name}'s basis says too little"
+
+
+def test_a_marked_basis_is_one_of_the_two_states_and_never_both():
+    from taxiout.provenance import VALUE_NOT_JUSTIFIED
+
+    for c in CONSTANTS:
+        assert not (c.basis.startswith(NO_BASIS) and VALUE_NOT_JUSTIFIED in c.basis), (
+            f"{c.name} is marked as both states"
+        )
+    unjustified = [c for c in CONSTANTS if c.basis.startswith(VALUE_NOT_JUSTIFIED)]
+    assert unjustified, "the second marker is defined and used by nothing"
+    assert all(c.cls == CHOSEN for c in unjustified)
+
+
+def test_a_figure_quoted_beside_a_report_that_lacks_it_fails_check_11(
+    monkeypatch, tmp_path
+):
+    """The class that bit, constructed: 9.9 became 9.5 under a regeneration."""
+    (tmp_path / "reports").mkdir()
+    (tmp_path / "reports" / "congestion.md").write_text(
+        "# Congestion\n\nThe oracle ceiling at Heathrow on July is 9.9 s.\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "reports" / "paper_draft.md").write_text(
+        "# Draft\n\nThe ceiling is 9.9 s, from `congestion.md`.\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "README.md").write_text("# nothing\n", encoding="utf-8")
+    monkeypatch.setattr(cp, "REPO", tmp_path)
+    monkeypatch.setattr(cp, "FROZEN_DOCUMENTS", ())
+    monkeypatch.setattr(cp, "REPORT_CITATION_EXEMPTIONS", ())
+
+    ok, lines = cp.check_report_citations()
+    assert ok, lines
+
+    # The ladder regenerates congestion.md and the ceiling moves.
+    (tmp_path / "reports" / "congestion.md").write_text(
+        "# Congestion\n\nThe oracle ceiling at Heathrow on July is 9.5 s.\n",
+        encoding="utf-8",
+    )
+    ok, lines = cp.check_report_citations()
+    assert not ok
+    assert any("STALE" in line and "9.9" in line for line in lines)
+
+
+def test_an_exemption_no_citation_reaches_fails_check_11(monkeypatch, tmp_path):
+    """An exemption is a record, and a record nothing reaches is stale too."""
+    from taxiout.provenance import Uncited
+
+    (tmp_path / "reports").mkdir()
+    (tmp_path / "reports" / "a.md").write_text("# A\n\nnothing cites b here.\n", "utf-8")
+    (tmp_path / "reports" / "b.md").write_text("# B\n", "utf-8")
+    (tmp_path / "README.md").write_text("# nothing\n", encoding="utf-8")
+    monkeypatch.setattr(cp, "REPO", tmp_path)
+    monkeypatch.setattr(cp, "FROZEN_DOCUMENTS", ())
+    monkeypatch.setattr(
+        cp,
+        "REPORT_CITATION_EXEMPTIONS",
+        (Uncited("reports/a.md", "reports/b.md", ("1.5",), "a reason"),),
+    )
+    ok, lines = cp.check_report_citations()
+    assert not ok
+    assert any("UNREACHED exemption" in line for line in lines)
+
+
+def test_the_citation_is_scoped_to_its_sentence_and_not_its_paragraph(
+    monkeypatch, tmp_path
+):
+    """The scope is the whole difference between a useful check and noise.
+
+    A figure two sentences away from the citation was never claimed to come
+    from the cited file, and flagging it is the failure check 9's first
+    instrument made in the other direction.
+    """
+    (tmp_path / "reports").mkdir()
+    (tmp_path / "reports" / "b.md").write_text("# B\n", "utf-8")
+    (tmp_path / "reports" / "a.md").write_text(
+        "# A\n\nThis paragraph measures 3.75 s here. The method is in `b.md`.\n",
+        "utf-8",
+    )
+    (tmp_path / "README.md").write_text("# nothing\n", encoding="utf-8")
+    monkeypatch.setattr(cp, "REPO", tmp_path)
+    monkeypatch.setattr(cp, "FROZEN_DOCUMENTS", ())
+    monkeypatch.setattr(cp, "REPORT_CITATION_EXEMPTIONS", ())
+    ok, lines = cp.check_report_citations()
+    assert ok, lines
+    assert any("0 carrying a decimal figure" in line for line in lines)
+
+
+def test_a_frozen_record_is_not_read_as_a_stale_citation(monkeypatch, tmp_path):
+    """A dated record's figures were true on its date; that is what it is for."""
+    (tmp_path / "reports").mkdir()
+    (tmp_path / "reports" / "b.md").write_text("# B\n\nnow 9.5 s.\n", "utf-8")
+    (tmp_path / "reports" / "old-2026-01-01.md").write_text(
+        "# Old\n\nIt was 9.9 s, from `b.md`.\n", "utf-8"
+    )
+    (tmp_path / "README.md").write_text("# nothing\n", encoding="utf-8")
+    monkeypatch.setattr(cp, "REPO", tmp_path)
+    monkeypatch.setattr(cp, "REPORT_CITATION_EXEMPTIONS", ())
+    monkeypatch.setattr(
+        cp, "FROZEN_DOCUMENTS", (Frozen("reports/old-2026-01-01.md", "x" * 64, "dated"),)
+    )
+    ok, lines = cp.check_report_citations()
+    assert ok, lines
+    assert "reports/old-2026-01-01.md" not in cp.citing_documents()
+
+
+def test_a_basis_citing_the_wrong_line_fails_check_12(monkeypatch, tmp_path):
+    """09d's own defect, constructed: it edited a generator and left the line.
+
+    The commit that created this register moved ``report_residual.py`` down by
+    eighteen lines and left six of its own citations pointing at what used to
+    be there. Nothing noticed, because nothing looked.
+    """
+    (tmp_path / "src").mkdir()
+    module = tmp_path / "src" / "m.py"
+    module.write_text(
+        "# A comment that is the basis.\nTHRESHOLD = 30\n", encoding="utf-8"
+    )
+    monkeypatch.setattr(cp, "REPO", tmp_path)
+    monkeypatch.setattr(
+        cp,
+        "CONSTANTS",
+        (Constant("THRESHOLD", "src/m.py", (30,), CHOSEN, "line 1: because"),),
+    )
+    ok, lines = cp.check_register_citations()
+    assert ok, lines
+
+    # Something is inserted above it, as 09d inserted an import.
+    module.write_text(
+        "import os\n\n# A comment that is the basis.\nTHRESHOLD = 30\n", encoding="utf-8"
+    )
+    ok, lines = cp.check_register_citations()
+    assert not ok
+    assert any("BROKEN" in line and "not a comment" in line for line in lines)
+
+
+def test_a_group_comment_covering_two_constants_is_not_a_broken_citation(
+    monkeypatch, tmp_path
+):
+    """The convention the register uses, held so check 12 cannot over-flag."""
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "m.py").write_text(
+        "# One comment covering both of the two below.\nA_S = 60.0\nB_S = 90.0\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(cp, "REPO", tmp_path)
+    monkeypatch.setattr(
+        cp,
+        "CONSTANTS",
+        (
+            Constant("A_S", "src/m.py", (60.0,), CHOSEN, "line 1: the reason"),
+            Constant("B_S", "src/m.py", (90.0,), CHOSEN, "line 1, covering this too"),
+        ),
+    )
+    ok, lines = cp.check_register_citations()
+    assert ok, lines
+
+
+def test_the_tree_has_no_broken_line_citation_left():
+    ok, lines = cp.check_register_citations()
+    assert ok, lines
+
+
+def test_a_report_with_no_footer_is_listed_and_never_silently_skipped(
+    monkeypatch, tmp_path
+):
+    """A report skipped without a reason reads exactly like one forgotten."""
+    from taxiout.provenance import Unfootered
+
+    (tmp_path / "reports").mkdir()
+    (tmp_path / "scripts").mkdir()
+    (tmp_path / "reports" / "r.md").write_text("# R\n\nno footer here.\n", "utf-8")
+    (tmp_path / "scripts" / "g.py").write_text(
+        'from pathlib import Path\nOUT = Path("reports") / "r.md"\nOUT.write_text("x")\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(cp, "REPO", tmp_path)
+    monkeypatch.setattr(cp, "REPORT_INPUTS_DECLARED", ())
+    monkeypatch.setattr(cp, "REPORTS_WITHOUT_FOOTER", ())
+    monkeypatch.setattr(cp, "FROZEN_DOCUMENTS", ())
+    monkeypatch.setattr(cp, "report_writers", lambda: {"reports/r.md": {"scripts/g.py"}})
+
+    ok, lines = cp.check_report_inputs(strict=False)
+    assert not ok
+    assert any("SILENT" in line and "reports/r.md" in line for line in lines)
+
+    # Listed with a cost and an owner, it passes -- and the listing is printed.
+    monkeypatch.setattr(
+        cp,
+        "REPORTS_WITHOUT_FOOTER",
+        (
+            Unfootered(
+                "reports/r.md", "scripts/g.py", "seven hours", "the next ladder run"
+            ),
+        ),
+    )
+    ok, lines = cp.check_report_inputs(strict=False)
+    assert ok, lines
+    assert any("no footer -- seven hours" in line for line in lines)
+
+
+def test_every_unfootered_report_names_a_cost_and_an_owner():
+    from taxiout.provenance import REPORTS_WITHOUT_FOOTER, REPORT_INPUTS_DECLARED
+
+    declared = {r for _g, r in REPORT_INPUTS_DECLARED}
+    for u in REPORTS_WITHOUT_FOOTER:
+        assert (REPO / u.report).exists(), u.report
+        assert u.report not in declared, f"{u.report} both declares and does not"
+        assert len(u.cost) > 10 and len(u.owner) > 10, u.report

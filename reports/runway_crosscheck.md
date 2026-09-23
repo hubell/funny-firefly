@@ -27,5 +27,29 @@ as `08H/26H`, which `parse_designators` rejects because they are not
 runway designators. That is intended: routing a departure to a helipad
 would be worse than not routing it.
 
+
+## What this report was generated from
+
+Every path this run read, with the sha256 of each as it was read.
+`scripts/check_provenance.py` recomputes them and reports this report as
+verified, stale or unverifiable; a digest reading `absent` is the
+ordinary case on a clean checkout, where the data this repository does
+not redistribute is not present.
+
+| input | sha256 |
+| --- | --- |
+| `data/raw/ourairports_runways.csv` | `62bb547d5c0ee19edc9b855b8dade5366f51f75e7db8a1e322ffec584b05df6c` |
+| `data/raw/EDDF.json.gz` | `e0070be4e51a3fbd6116b953f08cf65b3d9ae8f33552f96b1beeb8dab8e5eff6` |
+| `data/raw/EDDM.json.gz` | `ce07a6e30c2b9b8ee3915eda4776e6110daade41877a0dfd37199605a011ce52` |
+| `data/raw/EGLL.json.gz` | `b6b54e09cbbae2c9e61edc3b7c36b1a5dd0d3cf5e4970d9107a71b7ee8c0d8a8` |
+| `data/raw/EHAM.json.gz` | `03defc366b5d87dc336e63200ada21279b121b8e034baf257c33862f02f289fd` |
+| `data/raw/LEBL.json.gz` | `c28792b221c6d69c8609404ee68accf96be974a95397d34b95e0cde23c3aec01` |
+| `data/raw/LEMD.json.gz` | `a83c7c0c88afa734a26e1fc7f7b0ec637edcb50f54a010770613628f78d90e7f` |
+| `data/raw/LFPG.json.gz` | `c6a2d0343287265610468d36d13622826155b65556901e145881dc26344df964` |
+| `data/raw/LIRF.json.gz` | `1bb59d3a0cc8b08b74dbf5c2643c74fc308f43052d76400f2dab5773f7e1383c` |
+| `data/raw/LTAI.json.gz` | `3795f3cafe2e7565e9aed1e3b9723ede0793958973de1b082c5195ba9729a9d4` |
+| `data/raw/LTFM.json.gz` | `41d7c80ec533a2c63c7f2ebd7abac21becc10cc83d1103884349e70d87c63ff5` |
+| `data/raw/LSZH.json.gz` | `638fd31135e66d3327baf89e07a1b1c7bb55daf80ed7f0d03c3d35e8585fe09d` |
+
 OSM data (c) OpenStreetMap contributors, ODbL 1.0.
 OurAirports data released to the public domain.

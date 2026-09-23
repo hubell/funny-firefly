@@ -125,10 +125,12 @@ from taxiout.exposure import (  # noqa: E402
     window_losses,
     worst_case,
 )
+from taxiout.provenance import challenge_inputs, report_inputs_footer  # noqa: E402
 from taxiout.validation import month_of  # noqa: E402
 
 DATA = REPO / "data" / "challenge"
 METAR = REPO / "data" / "raw" / "metar"
+MATRICES = REPO / "data" / "processed" / "taxi_distance"
 RESIDUALS = REPO / "data" / "processed" / "residuals"
 OUT = REPO / "reports" / "congestion.md"
 
@@ -896,6 +898,29 @@ def section_weather(hourly: pd.DataFrame | None) -> list[str]:
     ]
 
 
+def _inputs() -> list:
+    """Every path this run read, for the provenance footer.
+
+    Named individually rather than as a directory: a directory has no digest,
+    and "the data under `data/challenge/`" is the declaration check 8 exists to
+    replace. The three groups are the challenge frames, the matrices and edge
+    sets the corridor and routing blocks read, and the METAR archive the
+    weather regime reads; the residual files are the rungs the ceiling section
+    actually opens.
+    """
+    return (
+        challenge_inputs(DATA)
+        + sorted(p for p in MATRICES.glob("*.csv") if "_features" not in p.name)
+        + sorted(METAR.glob("*.csv"))
+        + [
+            RESIDUALS / f"{split}_{rung}.parquet"
+            for split in FORWARD_SPLITS
+            for rung in CEILING_RUNGS
+            if (RESIDUALS / f"{split}_{rung}.parquet").exists()
+        ]
+    )
+
+
 def load_residuals(split: str, rung: str) -> pd.DataFrame | None:
     f = RESIDUALS / f"{split}_{rung}.parquet"
     if not f.exists():
@@ -1151,6 +1176,8 @@ def main() -> int:
         + [""]
         + section_ceiling()
         + [
+            "",
+            *report_inputs_footer(REPO, _inputs()),
             "",
             "Distance matrices and edge sets derived from OpenStreetMap: data (c)",
             "OpenStreetMap contributors, ODbL 1.0. Movement and flight data supplied",

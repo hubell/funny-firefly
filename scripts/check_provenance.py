@@ -102,8 +102,11 @@ from taxiout.provenance import (  # noqa: E402
     MODEL_FIGURE_GENERATORS,
     NO_BASIS,
     PROVENANCE_PENDING,
+    REPORT_CITATION_EXEMPTIONS,
     REPORT_INPUTS_DECLARED,
+    REPORTS_WITHOUT_FOOTER,
     SCOPE,
+    VALUE_NOT_JUSTIFIED,
     digest,
     parse_report_inputs,
 )
@@ -549,21 +552,28 @@ def check_basis() -> tuple[bool, list[str]]:
     chosen = [c for c in CONSTANTS if c.cls == CHOSEN]
     empty = [c for c in chosen if not c.basis.strip()]
     unrecorded = [c for c in chosen if c.basis.startswith(NO_BASIS)]
-    covered = any("basis is recorded nowhere" in p.what for p in PROVENANCE_PENDING)
+    unjustified = [c for c in chosen if c.basis.startswith(VALUE_NOT_JUSTIFIED)]
     lines = [
-        f"      {len(chosen)} chosen constants, {len(empty)} with an empty basis,"
-        f" {len(unrecorded)} whose basis the code does not record",
+        f"      {len(chosen)} chosen constants, {len(empty)} with an empty basis",
+        f"      {len(unrecorded)} record no reason at all,"
+        f" {len(unjustified)} record the method or a neighbouring use and not"
+        f" the value, {len(chosen) - len(unrecorded) - len(unjustified)} carry"
+        " an ordinary basis",
     ]
     for c in empty:
         lines.append(f"        EMPTY  {c.module} {c.name}")
     if unrecorded:
         lines.append(
-            "      not recorded in the code, and on the pending list as a class:"
-            if covered
-            else "      not recorded in the code, and NOT on the pending list:"
+            "      no reason recorded anywhere in the code, the docs, the"
+            " reports or the notes. **This count is meant to be non-zero.** A"
+            " constant whose basis says what it does and that its reason was"
+            " never written down is registered, which is one of the four"
+            " states; driving it to zero would mean writing plausible reasons"
+            " after the fact for thresholds nobody argued, which is the failure"
+            " this register exists to prevent:"
         )
         lines += [f"        {c.module} {c.name}" for c in unrecorded]
-    return (not empty and (covered or not unrecorded)), lines
+    return (not empty), lines
 
 
 def check_authored() -> tuple[bool, list[str]]:
@@ -680,6 +690,10 @@ def check_report_inputs(strict: bool) -> tuple[bool, list[str]]:
     lines = []
     stale: list[str] = []
     unverifiable: list[str] = []
+    declared_reports = {r for _g, r in REPORT_INPUTS_DECLARED}
+    listed = {u.report for u in REPORTS_WITHOUT_FOOTER}
+    frozen = {f.path for f in FROZEN_DOCUMENTS}
+    silent = sorted(set(report_writers()) - declared_reports - listed - frozen)
     for generator, report in REPORT_INPUTS_DECLARED:
         path = REPO / report
         if not path.exists():
@@ -713,12 +727,26 @@ def check_report_inputs(strict: bool) -> tuple[bool, list[str]]:
         )
     lines += [f"        STALE  {s}" for s in stale]
     lines += [f"        unverifiable: {u}" for u in unverifiable]
+    lines.append(
+        f"      {len(declared_reports)} report(s) declare their inputs,"
+        f" {len(listed)} are listed as carrying no footer with a cost and an"
+        f" owner, {len(silent)} are neither"
+    )
+    lines += [
+        f"        {u.report}: no footer -- {u.cost} ({u.owner})"
+        for u in REPORTS_WITHOUT_FOOTER
+    ]
+    lines += [
+        f"        SILENT  {s} has no footer and is on no list: a report skipped"
+        " without a reason is indistinguishable from one that was forgotten"
+        for s in silent
+    ]
     if unverifiable and not strict:
         lines.append(
             "      unverifiable is not a failure outside --strict: data/ is"
             " gitignored, so a clean checkout cannot verify a data digest"
         )
-    return (not stale and not (strict and unverifiable)), lines
+    return (not stale and not silent and not (strict and unverifiable)), lines
 
 
 def report_writers() -> dict[str, set[str]]:
@@ -795,6 +823,265 @@ def check_one_generator_per_claim() -> tuple[bool, list[str]]:
 
 
 # --------------------------------------------------------------------------
+# checks 11, 12 and 13
+
+
+# A report cites another by filename. The citation is scoped to the sentence it
+# sits in, because a paragraph drags in figures that belong to other sentences
+# and a whole file drags in everything: the first instrument written for check 9
+# in this file's own history flagged eight reports and meant nothing, and the
+# lesson was that the scope has to be the unit a person would call the claim.
+_SENTENCE = re.compile(r'(?<=[.!?])\s+(?=[A-Z*`"\[(])')
+_LIST_ITEM = re.compile(r"^(?:[-*+]|\d+\.)\s")
+# A decimal figure, and only a decimal figure. An integer in prose is a year, a
+# count, a section number or an airport's runway far more often than it is a
+# measurement, and the class this check exists for is the one that bit: the
+# oracle ceiling at Heathrow on July moved 9.9 to 9.5 under a regeneration.
+_DECIMAL = re.compile(r"(?<![\w.])(\d{1,3}(?:,\d{3})*\.\d+|\d+\.\d+)(?![\w.])")
+
+
+def _units(text: str):
+    """(line number, text) for every unit a citation can be scoped to.
+
+    A table row scopes to its own cell, a heading and a list item to
+    themselves, and ordinary prose to the sentence. Anything coarser makes the
+    check flag figures no one claimed came from the cited file.
+    """
+    para: list[str] = []
+    start = 0
+
+    def flush():
+        nonlocal para
+        if not para:
+            return []
+        out = [(start, s) for s in _SENTENCE.split(" ".join(para))]
+        para = []
+        return out
+
+    for i, line in enumerate(text.splitlines(), 1):
+        s = line.strip()
+        if not s or s.startswith("|") or s.startswith("#") or _LIST_ITEM.match(s):
+            yield from flush()
+            if s.startswith("|"):
+                for cell in s.strip("|").split("|"):
+                    yield i, cell.strip()
+            elif s.startswith("#"):
+                yield i, s
+            elif _LIST_ITEM.match(s):
+                start = i
+                para = [s]
+            continue
+        if not para:
+            start = i
+        para.append(s)
+    yield from flush()
+
+
+def citing_documents() -> list[str]:
+    """The documents whose citations of a report are checked.
+
+    Every report that is not a frozen dated record, and ``README.md``. **A
+    frozen record is excluded and the exclusion is the point**: its figures were
+    true on its own date and the file it cites has moved on since, which is what
+    makes it a record rather than a claim about the tree, and check 5 holds it
+    to its digest instead. ``docs/paper.md`` is not here either: it is stale by
+    its own pending entry and Block 10 builds its checker as part of the pass.
+    """
+    frozen = {f.path for f in FROZEN_DOCUMENTS}
+    reports = sorted(
+        p.as_posix()
+        for p in (REPO / "reports").glob("*.md")
+        if f"reports/{p.name}" not in frozen
+    )
+    return [Path(p).relative_to(REPO).as_posix() for p in reports] + ["README.md"]
+
+
+def check_report_citations() -> tuple[bool, list[str]]:
+    """Check 11: a figure quoted beside a report's name is in that report.
+
+    Where a document cites a report by filename, every decimal figure in the
+    citation's own sentence must appear in the cited file. Exemptions are in
+    ``REPORT_CITATION_EXEMPTIONS`` with a reason each and are counted, never
+    skipped silently.
+    """
+    names = sorted(p.name for p in (REPO / "reports").glob("*.md"))
+    cite = re.compile(rf"(?:reports/)?({'|'.join(re.escape(n) for n in names)})")
+    exempt = {
+        (e.source, e.cited, f): e.why
+        for e in REPORT_CITATION_EXEMPTIONS
+        for f in e.figures
+    }
+    citations = with_figure = verified = 0
+    reached: set[tuple[str, str, str]] = set()
+    stale: list[str] = []
+    for doc in citing_documents():
+        path = REPO / doc
+        own = Path(doc).name
+        for lineno, unit in _units(path.read_text(encoding="utf-8")):
+            cited = sorted({m.group(1) for m in cite.finditer(unit)} - {own})
+            if not cited:
+                continue
+            citations += 1
+            figures = _DECIMAL.findall(unit)
+            if not figures:
+                continue
+            with_figure += 1
+            for target in cited:
+                body = (REPO / "reports" / target).read_text(encoding="utf-8")
+                for fig in figures:
+                    key = (doc, f"reports/{target}", fig)
+                    if re.search(rf"(?<![\w.]){re.escape(fig)}(?![\w.])", body):
+                        verified += 1
+                    elif key in exempt:
+                        reached.add(key)
+                    else:
+                        stale.append(
+                            f"{doc}:{lineno} quotes {fig} beside"
+                            f" `{target}`, which does not carry it"
+                        )
+    unused = sorted(f"{s} -> {c} {g}" for (s, c, g) in set(exempt) - reached)
+    lines = [
+        f"      {len(citing_documents())} citing documents,"
+        f" {citations} citations of a report by name,"
+        f" {with_figure} carrying a decimal figure",
+        f"      {verified} figure(s) found in the cited report,"
+        f" {len(reached)} exempt with a reason, {len(stale)} unresolved",
+    ]
+    lines += [f"        STALE  {s}" for s in stale]
+    lines += [
+        f"        UNREACHED exemption  {u}: an exemption for a citation that no"
+        " longer exists is a stale record of its own"
+        for u in unused
+    ]
+    return (not stale and not unused), lines
+
+
+def check_register_citations() -> tuple[bool, list[str]]:
+    """Check 12: every line a basis cites says what the basis says it says.
+
+    A basis that names a line is a citation, and a citation drifts the moment
+    anything above it is edited. **This is not hypothetical**: the commit that
+    created this register edited two of the generators it registers and left
+    sixteen of its own line citations behind, pointing at blank lines and at
+    unrelated code, and nothing noticed because nothing looked.
+
+    The rule: the cited span either covers the assignment, or is a comment whose
+    block reaches the assignment with no nearer comment block in between. A
+    citation into another file is checked for existing and for not being blank,
+    which is all a line number in prose can be checked for.
+    """
+    cite = re.compile(r"\blines? (\d+)(?: to (\d+))?")
+    fileref = re.compile(r"`([^`]+\.(?:py|md))`")
+    same = cross = 0
+    broken: list[str] = []
+    cache: dict[str, list[str]] = {}
+
+    def lines_of(rel: str) -> list[str] | None:
+        if rel not in cache:
+            p = REPO / rel
+            if not p.exists():
+                return None
+            cache[rel] = p.read_text(encoding="utf-8").splitlines()
+        return cache[rel]
+
+    def is_comment(ls: list[str], n: int) -> bool:
+        return 1 <= n <= len(ls) and ls[n - 1].lstrip().startswith("#")
+
+    for c in CONSTANTS:
+        for m in cite.finditer(c.basis):
+            lo = int(m.group(1))
+            hi = int(m.group(2)) if m.group(2) else lo
+            refs = fileref.findall(c.basis[: m.start()])
+            target = refs[-1] if refs else c.module
+            if target.startswith("taxiout."):
+                target = "src/" + target.replace(".", "/") + ".py"
+            ls = lines_of(target)
+            if ls is None:
+                broken.append(f"{c.module} {c.name}: cites {target}, which is not a file")
+                continue
+            if hi > len(ls):
+                broken.append(
+                    f"{c.module} {c.name}: cites {target} line {hi}, past its"
+                    f" {len(ls)} lines"
+                )
+                continue
+            if target != c.module:
+                cross += 1
+                if not any(ls[n - 1].strip() for n in range(lo, hi + 1)):
+                    broken.append(
+                        f"{c.module} {c.name}: cites {target} line {lo}, which is blank"
+                    )
+                continue
+            same += 1
+            assign = re.compile(rf"^{re.escape(c.name)}\s*[:=]")
+            at = next((k for k, s in enumerate(ls, 1) if assign.match(s)), None)
+            if at is None:
+                broken.append(
+                    f"{c.module} {c.name}: no assignment found to anchor the citation"
+                )
+                continue
+            if lo <= at <= hi:
+                continue
+            if not is_comment(ls, lo):
+                broken.append(
+                    f"{c.module} {c.name}: cites line {lo}, which is not a comment"
+                    f" ({ls[lo - 1].strip()[:44]!r}); the assignment is at line {at}"
+                )
+                continue
+            end = hi
+            while is_comment(ls, end + 1):
+                end += 1
+            if end >= at or any(is_comment(ls, n) for n in range(end + 1, at)):
+                broken.append(
+                    f"{c.module} {c.name}: cites lines {lo}-{end}, but that is not"
+                    f" the comment block attached to the assignment at line {at}"
+                )
+    lines = [
+        f"      {same} citations into the constant's own module, {cross} into"
+        f" another file, {len(broken)} broken"
+    ]
+    lines += [f"        BROKEN  {b}" for b in broken]
+    return (not broken), lines
+
+
+def check_fetchers_reach_no_report() -> tuple[bool, list[str]]:
+    """Check 13: no generator of a report imports a fetcher.
+
+    The six constants in ``scripts/fetch_metar.py`` and
+    ``scripts/fetch_ourairports.py`` are registered on the ground that no
+    reported figure depends on their values, only on whether the fetch
+    succeeded. **That is a claim about the import graph, so it is proved here
+    rather than asserted in the basis.** Naming a fetcher in a sentence -- "run
+    `python scripts/fetch_metar.py`" is how five reports tell a reader what is
+    missing -- is not a data path and does not fail this.
+    """
+    fetchers = ("fetch_metar", "fetch_ourairports")
+    writers = report_writers()
+    generators = sorted({g for gs in writers.values() for g in gs})
+    offending: list[str] = []
+    for gen in generators:
+        tree = ast.parse((REPO / gen).read_text(encoding="utf-8"), filename=gen)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                hit = [a.name for a in node.names if a.name.split(".")[0] in fetchers]
+            elif isinstance(node, ast.ImportFrom):
+                hit = (
+                    [node.module] if (node.module or "").split(".")[0] in fetchers else []
+                )
+            else:
+                continue
+            offending += [f"{gen} imports {h}" for h in hit]
+    lines = [
+        f"      {len(generators)} report generators, {len(fetchers)} fetchers,"
+        f" {len(offending)} import(s) of a fetcher by a generator",
+        "      so the six pacing and robustness constants reach no reported"
+        " figure, which is what their basis claims",
+    ]
+    lines += [f"        {o}" for o in offending]
+    return (not offending), lines
+
+
+# --------------------------------------------------------------------------
 # the generated document
 
 DOC = REPO / "docs" / "provenance.md"
@@ -812,6 +1099,7 @@ def document() -> str:
     """
     counts = Counter(c.cls for c in CONSTANTS)
     unrecorded = [c for c in CONSTANTS if c.basis.startswith(NO_BASIS)]
+    unjustified = [c for c in CONSTANTS if c.basis.startswith(VALUE_NOT_JUSTIFIED)]
     found = module_constants()
     authored = [a for a in found if a.module in AUTHORED_MODULES]
     lines = [
@@ -875,19 +1163,75 @@ def document() -> str:
             "-r-",
         ),
         "",
-        f"**Of the {counts.get(CHOSEN, 0)} chosen constants, {len(unrecorded)} have",
-        "no basis recorded anywhere in the code.** That is the finding this register",
-        "was built to produce, and it is the half that failed: `HEADROOM_TRIGGER_S`",
-        "was chosen with a stated reason and no recorded basis, and turned out to be",
-        "an absolute line on a quantity `docs/review_headroom.md` §7 had already",
-        "characterised as a floor a refit exceeds. Each is marked in its own entry,",
-        "the count above is summed from those marks, and `PROVENANCE_PENDING` owns",
-        "the class.",
+        f"**Of the {counts.get(CHOSEN, 0)} chosen constants, {len(unrecorded)} record",
+        "no reason at all, and a further",
+        f"{len(unjustified)} record the method, the convention or a neighbouring",
+        "use and not the value.** That is the finding this register was built to",
+        "produce: `HEADROOM_TRIGGER_S` was chosen with a stated reason and no",
+        "recorded basis, and turned out to be an absolute line on a quantity",
+        "`docs/review_headroom.md` §7 had already characterised as a floor a refit",
+        "exceeds. Each is marked in its own entry and the counts are summed from",
+        "those marks.",
+        "",
+        f"**The first count is meant to be non-zero, and {len(unrecorded)} is the",
+        "finished state, not a backlog.** A constant whose basis says what it does",
+        "and says plainly that its reason was never written down is *registered*,",
+        "which is one of the four states above. Driving the count to zero would",
+        "mean writing a plausible reason after the fact for a threshold nobody",
+        "argued, which is undetectable afterwards and is precisely the failure this",
+        "register exists to prevent. Check 3 prints the count so it cannot drift in",
+        "either direction without somebody seeing it.",
         "",
         *table(
-            ["module", "constant"],
-            [[f"`{c.module}`", f"`{c.name}`"] for c in unrecorded],
-            "--",
+            ["module", "constant", "state"],
+            [
+                [f"`{c.module}`", f"`{c.name}`", state]
+                for group, state in (
+                    (unrecorded, "no reason recorded"),
+                    (unjustified, "method recorded, value not argued"),
+                )
+                for c in group
+            ],
+            "---",
+        ),
+        "",
+        "## What a report declares it was generated from",
+        "",
+        f"**{len(REPORT_INPUTS_DECLARED)}** generators write a footer naming every",
+        "path the run read, with a sha256 each; check 8 recomputes them and calls",
+        "the report verified, stale or unverifiable. The rule for who carries one",
+        "is the Makefile's own measured time: under five minutes and the generator",
+        "writes a footer.",
+        "",
+        f"**{len(REPORTS_WITHOUT_FOOTER)}** reports carry none, and are listed here",
+        "rather than skipped: check 8 fails on a report with no footer that is on",
+        "no list, so the remainder is a decision and not an oversight.",
+        "",
+        *table(
+            ["report", "what it costs to rebuild", "owner"],
+            [[f"`{u.report}`", u.cost, u.owner] for u in REPORTS_WITHOUT_FOOTER],
+            "---",
+        ),
+        "",
+        "## What a report quotes from another report",
+        "",
+        "Check 11 reads every citation of a report by filename and requires every",
+        "decimal figure in the citation's own sentence to appear in the cited file.",
+        "The scope is the sentence: a paragraph drags in figures that belong to",
+        "other sentences, and a checker that flags what nobody claimed is a checker",
+        "that gets turned off.",
+        "",
+        f"**{sum(len(e.figures) for e in REPORT_CITATION_EXEMPTIONS)}** figures are",
+        "exempt, each with a reason, and check 11 fails on an exemption it cannot",
+        "reach as well as on a figure it cannot find.",
+        "",
+        *table(
+            ["in", "citing", "figures", "why"],
+            [
+                [f"`{e.source}`", f"`{e.cited}`", ", ".join(e.figures), e.why]
+                for e in REPORT_CITATION_EXEMPTIONS
+            ],
+            "----",
         ),
         "",
         "## Authored artifacts",
@@ -1096,6 +1440,18 @@ def main() -> int:
             check_one_generator_per_claim(),
         ),
         ("10 -- the generated document matches the manifests", check_document()),
+        (
+            "11 -- a figure quoted beside a report's name is in that report",
+            check_report_citations(),
+        ),
+        (
+            "12 -- every line a basis cites says what the basis says",
+            check_register_citations(),
+        ),
+        (
+            "13 -- no generator of a report imports a fetcher",
+            check_fetchers_reach_no_report(),
+        ),
     )
     # Every check this module defines has to be in the tuple above. A check that
     # is written and not wired in is worse than no check: its silence reads as a

@@ -18,6 +18,7 @@ sys.path.insert(0, str(REPO / "src"))
 from taxiout.airports import AIRPORTS  # noqa: E402
 from taxiout.coverage import shape_histogram, summarise  # noqa: E402
 from taxiout.osm import cache_path  # noqa: E402
+from taxiout.provenance import report_inputs_footer  # noqa: E402
 
 CACHE = REPO / "data" / "raw"
 OUT = REPO / "reports" / "stand_coverage.md"
@@ -87,6 +88,9 @@ def main() -> int:
         "ships GPLv3 with none in it.",
         "",
         *details,
+        "",
+        "",
+        *report_inputs_footer(REPO, [cache_path(CACHE, ap.icao) for ap in AIRPORTS]),
         "",
         "Data (c) OpenStreetMap contributors, ODbL 1.0.",
     ]

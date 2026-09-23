@@ -57,7 +57,7 @@ from taxiout.challenge import load_movements, load_ranking, to_pandas  # noqa: E
 from taxiout.coverage import identifier_shape  # noqa: E402
 from taxiout.encoding import geometric_prior  # noqa: E402
 from taxiout.features import AGGREGATED_FIELDS, airport_fallback  # noqa: E402
-from taxiout.graph import attach_stands, build_graph  # noqa: E402
+from taxiout.graph import DIRECT_SNAP_M, attach_stands, build_graph  # noqa: E402
 from taxiout.join import UNMATCHED, join_stands  # noqa: E402
 from taxiout.routing import label_runway_edges, runway_entries, runway_membership  # noqa: E402
 from taxiout.runways import build_runways  # noqa: E402
@@ -72,7 +72,6 @@ OUT = REPO / "reports" / "geometry_gaps.md"
 MIN_PAIR_ROWS = 30  # the PRU reference's own floor for a pair
 MIN_CLASS_ROWS = 20  # per (pair, wake class) for the paired gap
 MIN_DESIGNATOR_PAIRS = 5
-DIRECT_SNAP_M = 60.0
 USABLE_ENTRY_SHARE = 0.6  # a junction in the first 60% of the runway is a usable entry
 MIN_ENTRY_OFFSET_M = 50.0  # nearer than this to the threshold is the threshold
 HOUR = 3600.0

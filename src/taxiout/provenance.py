@@ -71,6 +71,28 @@ CLASSES: tuple[str, ...] = (MECHANISM, CHOSEN, DERIVED, QUOTED)
 # number, so the count cannot drift from the register.
 NO_BASIS = "NOT RECORDED"
 
+# What a basis says when the record holds the method and not the value: the
+# design is written down and prints this number, or the same number carries a
+# recorded reason in a neighbouring use, and **no reason for this value rather
+# than a neighbouring one is recorded anywhere**. A different fact from
+# ``NO_BASIS`` and counted separately, because "nothing is written down" and
+# "the method is written down and the value is not argued for" are different
+# states, and collapsing them would either overstate the hole or hide it.
+VALUE_NOT_JUSTIFIED = "VALUE NOT JUSTIFIED"
+
+# The half of the two fetchers' bases that is the same for all six of their
+# constants, and the half that is checkable. A pacing or robustness value is a
+# choice, so these are ``chosen`` and not ``mechanism``; what makes the choice
+# unimportant is that nothing measured depends on it, and that is asserted
+# where it can be proved rather than promised.
+FETCH_BASIS = (
+    " No measurement lies behind the value and no reported figure depends on"
+    " it, only on whether the fetch succeeded: the script writes nothing"
+    " outside `data/raw/`, and check 13 proves that no generator of a report"
+    " imports it. What is not recorded is why this value rather than a"
+    " neighbouring one, and nothing rests on the answer."
+)
+
 
 # This module. Its own aggregate assignments -- ``CONSTANTS`` and the two lists
 # spliced into it -- carry every registered literal in the repository between
@@ -191,7 +213,7 @@ _SCRIPTS: tuple[Constant, ...] = (
             "LENGTH_TOL",
             (0.1,),
             CHOSEN,
-            "line 49: OSM ways are traced to the marked ends and OurAirports"
+            "line 50: OSM ways are traced to the marked ends and OurAirports"
             " publishes the declared distance, so a few percent is normal and"
             " ten is not",
         ),
@@ -199,7 +221,7 @@ _SCRIPTS: tuple[Constant, ...] = (
             "HEADING_TOL_DEG",
             (15.0,),
             CHOSEN,
-            "line 52: magnetic variation across these airports reaches about"
+            "line 53: magnetic variation across these airports reaches about"
             " seven degrees and designators quantise to ten, so fifteen is"
             " generous without being useless",
         ),
@@ -229,12 +251,25 @@ _SCRIPTS: tuple[Constant, ...] = (
             "PAUSE_S",
             (2.0,),
             CHOSEN,
-            NO_BASIS + ": politeness delay between archive requests. Nothing"
-            " records why two seconds, where `taxiout.osm.POLITE_DELAY_S` does"
-            " for its own",
+            "politeness toward a public archive: the delay between requests"
+            " to the Iowa State Mesonet, paced so a year of stations is not"
+            " fetched as fast as the client can ask." + FETCH_BASIS,
         ),
-        ("RETRIES", (4,), CHOSEN, NO_BASIS + ": how many times a request is retried"),
-        ("TIMEOUT_S", (120,), CHOSEN, NO_BASIS + ": the request timeout"),
+        (
+            "RETRIES",
+            (4,),
+            CHOSEN,
+            "robustness against a public archive's transient failures: how many"
+            " times one request is retried before the station-period is"
+            " reported as unfetched." + FETCH_BASIS,
+        ),
+        (
+            "TIMEOUT_S",
+            (120,),
+            CHOSEN,
+            "robustness: the socket timeout on one archive request, above the"
+            " time a year of one station takes to serve and below a hang." + FETCH_BASIS,
+        ),
     ),
     *_mod(
         "scripts/fetch_ourairports.py",
@@ -242,10 +277,21 @@ _SCRIPTS: tuple[Constant, ...] = (
             "PAUSE_S",
             (2.0,),
             CHOSEN,
-            NO_BASIS + ": politeness delay between requests, as in `fetch_metar.py`",
+            "politeness toward a public dataset's host, as in"
+            " `fetch_metar.py`." + FETCH_BASIS,
         ),
-        ("RETRIES", (3,), CHOSEN, NO_BASIS + ": how many times a request is retried"),
-        ("TIMEOUT_S", (120,), CHOSEN, NO_BASIS + ": the request timeout"),
+        (
+            "RETRIES",
+            (3,),
+            CHOSEN,
+            "robustness: how many times the one table request is retried." + FETCH_BASIS,
+        ),
+        (
+            "TIMEOUT_S",
+            (120,),
+            CHOSEN,
+            "robustness: the socket timeout on that request." + FETCH_BASIS,
+        ),
     ),
     *_mod(
         "scripts/pooled_tails.py",
@@ -273,65 +319,94 @@ _SCRIPTS: tuple[Constant, ...] = (
             "REF_DECEMBER_ALL",
             (217.6,),
             QUOTED,
-            "`reports/baseline.md` line 234, quoted in the pre-registration of"
+            "`reports/preregistered-2026-09-20.md` line 32, the digest"
+            " table, which records it as read from `reports/baseline.md`"
+            " *The ladder* as that file then stood. **The citation was moved"
+            " here because the original no longer holds it**: the wider sweep"
+            " of 21 September regenerated `baseline.md` and this figure is now"
+            " nowhere in it. Quoted in the pre-registration of"
             " 20 September 2026. Regenerable only by the ladder",
         ),
         (
             "REF_JULY_THREE",
             (237.8,),
             QUOTED,
-            "`reports/baseline.md` line 894, same pre-registration",
+            "`reports/preregistered-2026-09-20.md` line 35, the digest table,"
+            " which records it as read from `reports/baseline.md` before the"
+            " sweep of 21 September; same pre-registration, and the figure is"
+            " no longer in `baseline.md`",
         ),
         (
             "REF_RANKING_MIX",
             (218.6,),
             QUOTED,
-            "`reports/baseline.md` line 481, same pre-registration",
+            "`reports/preregistered-2026-09-20.md` line 33, the digest table,"
+            " as for `REF_DECEMBER_ALL`; no longer in `baseline.md`",
         ),
         (
             "REF_JULY_ALL",
             (325.8,),
             QUOTED,
-            "`reports/baseline.md` line 270, same pre-registration",
+            "`reports/preregistered-2026-09-20.md` line 34, the digest table,"
+            " as for `REF_DECEMBER_ALL`; no longer in `baseline.md`",
         ),
         (
             "FLOOR_DECEMBER_ALL",
             (0.34,),
             QUOTED,
-            "`reports/baseline.md` line 1061, the seed floor on that leg",
+            "`reports/preregistered-2026-09-20.md` line 39, read from"
+            " `reports/baseline.md` *The noise floor* as that file stood on"
+            " 20 September. **That report now prints 0.26 for this leg**: the"
+            " sweep of 21 September moved every floor, and the constant is a"
+            " dated quotation rather than a reading of the current file",
         ),
         (
             "FLOOR_JULY_ALL",
             (0.23,),
             QUOTED,
-            "`reports/baseline.md` line 1062, the seed floor on that leg",
+            "`reports/preregistered-2026-09-20.md` line 49, read from"
+            " `reports/baseline.md` *The noise floor* as that file stood on"
+            " 20 September. **That report now prints 0.61 for this leg, and"
+            " the verdict is not in question.** Both figures are right about"
+            " their own moment: the rule is re-read under the parameters in"
+            " force, and under the sweep's cell July gains 0.63 s against that"
+            " 0.61 and clears it, which is why `reports/baseline.md` computes"
+            " *Adopted*. Reading the 20 September gain against the"
+            " 21 September floor would mix two moments. What was wrong here"
+            " was the citation and not the figure",
         ),
         (
             "FLOOR_JULY_THREE",
             (1.02,),
             QUOTED,
-            "`reports/baseline.md` line 1063, the seed floor on that leg",
+            "`reports/preregistered-2026-09-20.md` line 50, read from"
+            " `reports/baseline.md` *The noise floor* as that file stood on"
+            " 20 September. **That report now prints 0.63 for this leg**",
         ),
         (
             "JULY_SINGLES_POOLED",
             (325.81, 326.23),
             QUOTED,
-            "`reports/baseline.md` line 1023: the span the five July single-seed"
-            " fits must reproduce before any experiment is read",
+            "`reports/preregistered-2026-09-20.md` line 36, the digest table,"
+            " read from `reports/baseline.md` before the sweep of"
+            " 21 September: the span the five July single-seed fits must"
+            " reproduce before any experiment is read",
         ),
         (
             "JULY_SINGLES_THREE",
             (237.02, 238.83),
             QUOTED,
-            "`reports/baseline.md` lines 1062 to 1063, the same reproduction"
-            " gate on the three airports",
+            "`reports/preregistered-2026-09-20.md` line 37, the digest table,"
+            " the same reproduction gate on the three airports, read from"
+            " `reports/baseline.md` before the sweep of 21 September",
         ),
         (
             "JULY_AVERAGE_POOLED",
             (325.29,),
             QUOTED,
-            "`reports/baseline.md` line 1023, the five-seed average the"
-            " reproduction gate requires",
+            "`reports/preregistered-2026-09-20.md` line 38, the digest table,"
+            " the five-seed average the reproduction gate requires, read from"
+            " `reports/baseline.md` before the sweep of 21 September",
         ),
         (
             "HALF_LIVES",
@@ -390,29 +465,22 @@ _SCRIPTS: tuple[Constant, ...] = (
             "MIN_DESIGNATOR_PAIRS",
             (5,),
             CHOSEN,
-            NO_BASIS + ": the floor on pairs per runway designator. The"
-            " constants either side of it carry inline comments and this one"
-            " does not",
-        ),
-        (
-            "DIRECT_SNAP_M",
-            (60.0,),
-            CHOSEN,
-            NO_BASIS + " here: it mirrors `taxiout.graph.DIRECT_SNAP_M`, which"
-            " has a basis, and this copy cites nothing",
+            f"{NO_BASIS}: the floor on pairs per runway designator before the"
+            " report names that designator. The constants either side carry"
+            " inline comments and this one carries none",
         ),
         (
             "USABLE_ENTRY_SHARE",
             (0.6,),
             CHOSEN,
-            "line 76's comment: a junction in the first 60% of the runway is a"
+            "line 75's comment: a junction in the first 60% of the runway is a"
             " usable entry",
         ),
         (
             "MIN_ENTRY_OFFSET_M",
             (50.0,),
             CHOSEN,
-            "line 77's comment: nearer than this to the threshold is the threshold",
+            "line 76's comment: nearer than this to the threshold is the threshold",
         ),
         ("HOUR", (3600.0,), MECHANISM, "seconds in an hour"),
         (
@@ -432,7 +500,7 @@ _SCRIPTS: tuple[Constant, ...] = (
             "THIN_BUCKETS",
             (3,),
             MECHANISM,
-            "a slice of `FREQUENCY_BUCKETS`; line 89's inline comment reads"
+            "a slice of `FREQUENCY_BUCKETS`; line 88's inline comment reads"
             " `seen a hundred times or fewer`",
         ),
     ),
@@ -500,7 +568,7 @@ _SCRIPTS: tuple[Constant, ...] = (
             "GAIN_BAND_EDGES_MIN",
             (0, 20, 30, 45, 60, 120),
             CHOSEN,
-            "line 102: coarser than `BAND_EDGES_MIN` because a sum of squares"
+            "line 103: coarser than `BAND_EDGES_MIN` because a sum of squares"
             " over a five-minute band of a 1% population is noise",
         ),
         (
@@ -514,7 +582,7 @@ _SCRIPTS: tuple[Constant, ...] = (
             "BAND_EDGES_MIN",
             (0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 120),
             CHOSEN,
-            "line 136: five-minute bands of the gap, with the two wide ones the"
+            "line 138: five-minute bands of the gap, with the two wide ones the"
             " review used at the top, because past an hour the bound is not a"
             " bound and the bands only need to show that",
         ),
@@ -522,14 +590,14 @@ _SCRIPTS: tuple[Constant, ...] = (
             "PRESSURE_MIN",
             (20,),
             CHOSEN,
-            "line 158: below twenty minutes the bound holds essentially always,"
+            "line 159: below twenty minutes the bound holds essentially always,"
             " so the share under it summarises stand pressure",
         ),
         (
             "FLOOR_CAPS_MIN",
             (20, 30, 45, 60),
             CHOSEN,
-            "line 162: the caps the hard floor is tried at, on the reasoning"
+            "line 163: the caps the hard floor is tried at, on the reasoning"
             " that the bound is sound at short gaps and collapses at long ones",
         ),
     ),
@@ -539,55 +607,59 @@ _SCRIPTS: tuple[Constant, ...] = (
             "TAIL_CUTS_S",
             (600.0, 1200.0),
             CHOSEN,
-            "line 111 names them as where the tail is cut, in seconds of"
+            "line 128 names them as where the tail is cut, in seconds of"
             " absolute residual",
         ),
         (
             "REOCCUPIED_BAND_MIN",
             (20.0, 45.0),
             CHOSEN,
-            "line 114: the band where the stand-occupancy bound is the"
+            "line 131: the band where the stand-occupancy bound is the"
             " mechanism, the same band `reports/baseline.md` decomposes on",
         ),
         (
             "LAG_EDGES_MIN",
             (0, 15, 30, 45, 60, 120),
             CHOSEN,
-            "line 118: plan-lag bands in minutes, the last open and nulls their own row",
+            "line 135: plan-lag bands in minutes, the last open and nulls their own row",
         ),
         (
             "LARGEST_ROWS",
             (5,),
             CHOSEN,
-            "line 122: how many of the largest rows to print per leg",
+            "line 139: how many of the largest rows to print per leg",
         ),
         (
             "WORST_QUANTILE",
             (0.99,),
             CHOSEN,
-            "line 125: the share of absolute residual that counts as the worst"
+            "line 142: the share of absolute residual that counts as the worst"
             " one percent",
         ),
         (
             "PEAK_HOURS",
             (6,),
             CHOSEN,
-            NO_BASIS + ": how many take-off hours the section names. Line 140"
-            " says both figures are read off the leg's own squared error rather"
-            " than fixed in advance, which is how they are used and not why six",
+            VALUE_NOT_JUSTIFIED + ": how many take-off hours the section"
+            " names. The method is recorded in the comment above it, lines 158"
+            " to 160: both counts are read off the leg's own squared error"
+            " rather than fixed in advance, and `reports/residual.md` prints"
+            " the hours it found. That is how the figure is used; no reason"
+            " for six rather than five or eight is recorded",
         ),
         (
             "NAMED_PREFIXES",
             (10,),
             CHOSEN,
-            NO_BASIS + ": how many callsign prefixes are named before pooling"
-            " the rest, for the same reason as `PEAK_HOURS` above",
+            VALUE_NOT_JUSTIFIED + ": how many callsign prefixes are named"
+            " before pooling the rest. The same comment at lines 158 to 160"
+            " covers it on the same terms as `PEAK_HOURS` above",
         ),
         (
             "MIN_INTERVAL_DAYS",
             (5,),
             CHOSEN,
-            "line 150: below this many distinct take-off days a day-clustered"
+            "line 169: below this many distinct take-off days a day-clustered"
             " resample has too few clusters to say anything, and reports no"
             " variation at all, which prints as a narrow interval and means the"
             " opposite",
@@ -612,15 +684,16 @@ _SCRIPTS: tuple[Constant, ...] = (
             "STAND_IN_MIN_PAIR",
             (5,),
             CHOSEN,
-            NO_BASIS + ": the minimum pair count the stand-in physical model"
-            " uses. Nothing in the script records why five, though"
-            " `taxiout.tails.MIN_COUNT` is also five and has a basis",
+            f"{NO_BASIS}: the minimum rows a (stand, runway) pair needs"
+            " before the stand-in physical model reads its mean. Nothing in"
+            " the script records why five, though `taxiout.tails.MIN_COUNT` is"
+            " also five and does carry a reason",
         ),
         (
             "PREFIX_ROWS",
             (15,),
             CHOSEN,
-            "line 78: enough to show the shape of the claim, with the sentence"
+            "line 105: enough to show the shape of the claim, with the sentence"
             " under each table computed over every row",
         ),
     ),
@@ -632,14 +705,14 @@ _SCRIPTS: tuple[Constant, ...] = (
             "DISRUPTION_MIN_ROWS",
             (20,),
             CHOSEN,
-            "line 556 states the rule both sides of the data are read at, so the"
+            "line 557 states the rule both sides of the data are read at, so the"
             " two tables can be set against each other",
         ),
         (
             "DISRUPTION_RATE_MULTIPLE",
             (10,),
             CHOSEN,
-            "line 556, covering this too: a share this many times the airport's"
+            "line 557, covering this too: a share this many times the airport's"
             " own training-year rate before the day is called out",
         ),
     ),
@@ -657,9 +730,9 @@ _SCRIPTS: tuple[Constant, ...] = (
             "K_SENSITIVITY_SCALES",
             (0.5, 2.0),
             CHOSEN,
-            NO_BASIS + ": the factors the encoding's shrinkage is re-read at."
-            " The comment above belongs to `FAMILYWISE_ALPHA` and covers"
-            " Bonferroni, not this",
+            f"{NO_BASIS}: the halving and doubling the encoding's shrinkage"
+            " is re-read at in the k-sensitivity diagnostic. The comment above"
+            " belongs to `FAMILYWISE_ALPHA` and covers Bonferroni, not this",
         ),
         (
             "RANKING_MIX",
@@ -717,7 +790,7 @@ _SCRIPTS: tuple[Constant, ...] = (
             "HEADROOM_UNCOMMITTED_S",
             (15.43,),
             QUOTED,
-            "lines 2576 to 2580: the first run on the reference machine,"
+            "line 2578: the first run on the reference machine,"
             " 10 September, under the booster's earlier setting and never"
             " committed. The migration record gives its gain and nothing finer",
         ),
@@ -733,7 +806,7 @@ _SCRIPTS: tuple[Constant, ...] = (
             "EXPECTED_DID_S",
             (1.0,),
             CHOSEN,
-            "lines 2670 to 2677: none of the four blocks is a property of the"
+            "line 2671: none of the four blocks is a property of the"
             " (airport, stand, runway) pair, so each should be within about a"
             " second of zero on the held-out-pair contrast. Not a gate, and the"
             " section says so",
@@ -856,7 +929,7 @@ _SCRIPTS: tuple[Constant, ...] = (
             "LARGEST_CELL",
             (0.03, 255, 20),
             MECHANISM,
-            "lines 146 to 151: the widest tree at the smallest leaf floor, which"
+            "line 147: the widest tree at the smallest leaf floor, which"
             " is the grid's cost bound by construction rather than a choice",
         ),
         (
@@ -969,24 +1042,32 @@ CONSTANTS: tuple[Constant, ...] = (
             "GAP_BUCKETS_MIN",
             (0, 2, 2, 5, 5, 15),
             CHOSEN,
-            f"{NO_BASIS}: the take-off gap buckets the lag-1 autocorrelation is"
-            " read in. The module docstring describes them and nothing records"
-            " why these edges",
+            f"{NO_BASIS}: the take-off gap bands, in minutes, that the lag-1"
+            " autocorrelation between consecutive same-runway residuals is read"
+            " in. The module docstring describes the reading and names no"
+            " edges; nothing anywhere records why 0-2, 2-5 and 5-15",
         ),
         (
             "HALF_WINDOW_S",
             (15, 60),
             CHOSEN,
-            f"{NO_BASIS}: the oracle regression's window half-width. The"
-            " docstring states the fifteen minutes as a fact about the"
-            " instrument; no basis for the width is recorded",
+            f"{VALUE_NOT_JUSTIFIED}: the oracle regression's window"
+            " half-width. The method is recorded twice and printed once: the"
+            " module docstring states the regression is on the mean residual"
+            " of the other same-runway departures within fifteen minutes"
+            " either side, and `reports/congestion.md` line 486 prints the"
+            " same sentence under *The ceiling*. Both state the width as the"
+            " instrument's definition; no reason for fifteen minutes rather"
+            " than ten or twenty is recorded",
         ),
         (
             "MIN_ROWS",
             (30,),
             CHOSEN,
-            f"{NO_BASIS}: below this a bucket's correlation is not reported."
-            " Nothing records why thirty",
+            f"{NO_BASIS}: the row floor, used in two places and not one --"
+            " below it a gap band's correlation is not reported, and below it"
+            " `oracle` declines to fit and returns a zero slope. Nothing"
+            " records why thirty",
         ),
     ),
     *_mod(
@@ -1023,8 +1104,8 @@ CONSTANTS: tuple[Constant, ...] = (
             (6, 3600.0),
             CHOSEN,
             f"{NO_BASIS}: six hours as the cap on how stale a configuration"
-            " reading may be. The comment above covers the window and the floor"
-            " and not this",
+            " reading may be carried forward. The comment above it covers the"
+            " trailing window and the movement floor and not this",
         ),
         (
             "MOVEMENT_COLUMNS",
@@ -1039,9 +1120,13 @@ CONSTANTS: tuple[Constant, ...] = (
             "CORRIDOR_WINDOWS_MIN",
             (5, 15),
             CHOSEN,
-            f"{NO_BASIS}: the shared-corridor block's trailing windows. They"
-            " match `congestion.WINDOWS_MIN`'s first two, which is probably the"
-            " reason, and probably is not a basis",
+            f"{VALUE_NOT_JUSTIFIED}: the shared-corridor block's trailing"
+            " windows. The module docstring records a reason for the ceiling"
+            ' on them -- "Windows of 5 and 15 minutes only: at an hour,'
+            ' "shared an edge" means nothing" -- and'
+            " `reports/congestion.md` line 370 prints the same sentence under"
+            " *The shared corridor*. So the record rules out an hour and does"
+            " not record why five and fifteen rather than three and ten",
         ),
     ),
     *_mod(
@@ -1080,7 +1165,7 @@ CONSTANTS: tuple[Constant, ...] = (
             "INNER_FOLDS",
             (5,),
             CHOSEN,
-            "line 168: five leaves each row's encoding built from four fifths of"
+            "line 169: five leaves each row's encoding built from four fifths of"
             " its group, enough to be the group's mean and never the row itself",
         ),
         (
@@ -1094,7 +1179,7 @@ CONSTANTS: tuple[Constant, ...] = (
             "LENGTH_RATIO_MATERIAL",
             (1.5,),
             CHOSEN,
-            "line 180 names it the pre-registered threshold for the"
+            "line 181 names it the pre-registered threshold for the"
             " length-dependence check and states the test it decides",
         ),
         (
@@ -1126,33 +1211,48 @@ CONSTANTS: tuple[Constant, ...] = (
             (30, 60.0),
             CHOSEN,
             f"{NO_BASIS}: the plausibility floor on a plan lag, minus thirty"
-            " minutes. Nothing in the module records why",
+            " minutes -- a pushback this far ahead of the plan is not a lag."
+            " Nothing in the module or the reports records why thirty minutes",
         ),
         (
             "LAG_HI_S",
             (2, 3600.0),
             CHOSEN,
-            f"{NO_BASIS}: the plausibility ceiling on a plan lag, two hours."
-            " Nothing records why, and `taxiout.tails.LONG_S` is the same two"
-            " hours with a basis, which this could have cited",
+            f"{VALUE_NOT_JUSTIFIED}: the plausibility ceiling on a plan lag,"
+            " two hours. The same two hours as `taxiout.tails.LONG_S`, whose"
+            " reason is recorded at `src/taxiout/tails.py` line 88 -- two hours is above"
+            " every plausible taxi-out and below every artifact. **Cited and"
+            " not imported**: that sentence is about the length of a taxi, and"
+            " this bounds the gap between a plan and a pushback, so an import"
+            " would tie two decisions the record never ties together and would"
+            " move this window silently if the record-quality threshold moved."
+            " What the record does not hold is why two hours bounds a plan lag",
         ),
         (
             "TAXI_IN_LO_S",
             (60.0,),
             CHOSEN,
-            f"{NO_BASIS}: the plausibility floor on an arrival's taxi-in",
+            f"{NO_BASIS}: the plausibility floor on an arrival's taxi-in, one"
+            " minute. Nothing records why",
         ),
         (
             "TAXI_IN_HI_S",
             (3600.0,),
             CHOSEN,
-            f"{NO_BASIS}: the plausibility ceiling on an arrival's taxi-in",
+            f"{NO_BASIS}: the plausibility ceiling on an arrival's taxi-in,"
+            " one hour. Unlike `LAG_HI_S` and `ARRIVAL_LATE_S` this one is not"
+            " two hours and has no counterpart carrying a reason anywhere",
         ),
         (
             "ARRIVAL_LATE_S",
             (2, 3600.0),
             CHOSEN,
-            f"{NO_BASIS}: the plausibility bound on an arrival's lateness",
+            f"{VALUE_NOT_JUSTIFIED}: the plausibility bound on an arrival's"
+            " lateness, the same two hours as `LAG_HI_S` above and as"
+            " `taxiout.tails.LONG_S`, whose reason is at `src/taxiout/tails.py` line 88."
+            " Cited on the same terms and for the same reason: that sentence"
+            " bounds a taxi duration and this bounds a lateness, so the"
+            " citation places the magnitude and does not justify this use",
         ),
         (
             "MIN_ROWS",
@@ -1348,8 +1448,9 @@ CONSTANTS: tuple[Constant, ...] = (
             "HALF_WINDOW_MIN",
             (15,),
             CHOSEN,
-            f"{NO_BASIS}: the half-width of the runway plan-lag window. Nothing"
-            " in the module records why fifteen minutes",
+            f"{NO_BASIS}: the half-width of the runway plan-lag neighbourhood,"
+            " which names the feature columns as well as cutting the window."
+            " Nothing in the module records why fifteen minutes",
         ),
         (
             "MOVEMENT_COLUMNS",
@@ -1388,9 +1489,10 @@ CONSTANTS: tuple[Constant, ...] = (
             "DISPLACED_JOIN_M",
             (80.0,),
             CHOSEN,
-            f"{NO_BASIS}: the adjacency tolerance for joining a displaced"
-            " threshold to its runway. The comment above gives the rule and not"
-            " this distance",
+            f"{NO_BASIS}: how close a displaced-threshold way must start to"
+            " where a runway ends before it is joined to it. The comment above"
+            " gives the rule -- alignment and adjacency both required -- and"
+            " not this distance",
         ),
     ),
     *_mod(
@@ -1406,29 +1508,40 @@ CONSTANTS: tuple[Constant, ...] = (
             "WINDOWS_MIN",
             (5, 15),
             CHOSEN,
-            f"{NO_BASIS}: the trailing windows. The docstring states them;"
-            " nothing records why, though they match"
-            " `congestion.WINDOWS_MIN`'s first two",
+            f"{VALUE_NOT_JUSTIFIED}: the trailing windows. The method is"
+            " recorded in the module docstring, which reads the gap share"
+            ' "over the trailing five and fifteen minutes", and in'
+            " `docs/plan.md` line 374, the dated record of the block's design."
+            " **Not in `reports/congestion.md`**: that report prints the"
+            " block's feature list and its `sat_span3_s` distribution and"
+            " states no window. They match `congestion.WINDOWS_MIN`'s first"
+            " two, which is a resemblance and not a recorded reason, and no"
+            " reason for five and fifteen is recorded",
         ),
         (
             "MIN_GAP_WINDOW_MIN",
             (5,),
             CHOSEN,
-            f"{NO_BASIS}: the window the smallest consecutive gap is read over",
+            f"{NO_BASIS}: the trailing window the smallest consecutive"
+            " take-off gap is read over, which names the feature column too."
+            " Nothing records why five minutes",
         ),
         (
             "SPAN_GAPS",
             (3,),
             CHOSEN,
-            f"{NO_BASIS}: how many gaps the span reading covers",
+            f"{NO_BASIS}: how many consecutive take-off gaps the span reading"
+            " spans. Nothing records why three",
         ),
         (
             "SPAN_CAP_S",
             (1800.0,),
             CHOSEN,
-            f"{NO_BASIS}: the thirty-minute cap on the span. The docstring"
-            " states the cap and that a short span sits at it; no basis for the"
-            " value is recorded",
+            f"{NO_BASIS}: thirty minutes, used twice -- the cap on the span,"
+            " and the value the span takes when fewer than three take-offs"
+            " precede the subject in the window, which `sat_span3_short` flags."
+            " The docstring states both uses and records no reason for the"
+            " value",
         ),
         (
             "MOVEMENT_COLUMNS",
@@ -1546,15 +1659,24 @@ CONSTANTS: tuple[Constant, ...] = (
             "PAIR_FOLDS",
             (3,),
             CHOSEN,
-            f"{NO_BASIS}: how many folds the held-out-pair contrast uses."
-            " Nothing records why three",
+            f"{VALUE_NOT_JUSTIFIED}: how many folds the held-out-pair"
+            " contrast uses. The design is recorded and printed:"
+            " `reports/baseline.md` line 282, *Held-out pairs*, states"
+            ' "3 folds" and explains the dealing -- whole (airport, stand,'
+            " runway) pairs round-robin within each airport, so every fold"
+            " holds out a volume-representative third. No reason for three"
+            " rather than five or ten is recorded",
         ),
         (
             "SEEN_FRACTION",
             (0.05,),
             CHOSEN,
-            f"{NO_BASIS}: the share of rows sampled as the matched seen-pair"
-            " evaluation set. Nothing records why five percent",
+            f"{VALUE_NOT_JUSTIFIED}: the share of rows sampled as the matched"
+            " seen-pair evaluation set. The design is recorded and printed:"
+            " `reports/baseline.md` line 287 states the sample is of rows"
+            " whose pairs stayed in training and which were themselves"
+            " excluded from the fit, which is what the sample is for. No"
+            " reason for five percent rather than one or ten is recorded",
         ),
         (
             "SEED",
@@ -1574,8 +1696,17 @@ CONSTANTS: tuple[Constant, ...] = (
             "BOOTSTRAP_LEVEL",
             (0.95,),
             CHOSEN,
-            f"{NO_BASIS}: the interval's coverage. The conventional 95%, and the"
-            " convention is not recorded as the reason",
+            f"{VALUE_NOT_JUSTIFIED}: the interval's coverage. The"
+            ' conventional level, printed as "95% interval" throughout the'
+            " reports and the paper, and visible in the code as well: the"
+            " comment above `BOOTSTRAP_DRAWS` at line 83 sizes the draws by"
+            " where they put the 2.5th and 97.5th percentiles, which are this"
+            " level's own tails. **Nothing records why 95 rather than any"
+            " other level.** This is the most load-bearing of the constants"
+            " whose value is unargued, since every interval in the paper rests"
+            " on it, and the one where the absence matters least, because 95%"
+            " is the universal default and departing from it is what would"
+            " have needed a reason",
         ),
     ),
     *_mod(
@@ -1738,16 +1869,6 @@ class Pending(NamedTuple):
 
 PROVENANCE_PENDING: tuple[Pending, ...] = (
     Pending(
-        "chosen constants whose basis is recorded nowhere in the code",
-        "each is a real choice, each is marked "
-        + repr(NO_BASIS)
-        + " in its own entry, and the count is summed from `CONSTANTS` rather"
-        " than written here so the two cannot disagree. Writing a basis is"
-        " cheap; inventing one is not available, so the entries say what the"
-        " constant does and that the reason is unrecorded",
-        "a basis pass before the freeze",
-    ),
-    Pending(
         "`docs/paper.md`'s figures match no report in the repository",
         "it was last touched at `9424d7b` on 20 September, before the wider"
         " sweep of 21 September and before the regenerations of 22 September, so"
@@ -1787,32 +1908,33 @@ PROVENANCE_PENDING: tuple[Pending, ...] = (
         "the next block that spends a ladder run",
     ),
     Pending(
-        "reports with no declared inputs",
-        "`report_inputs_footer` and check 8 are in place and"
-        " `REPORT_INPUTS_DECLARED` names the generators carrying a footer. The"
-        " rest are generators whose reports cost between forty minutes and"
-        " seven hours to rebuild, and a footer that is not in the file it"
-        " describes is worth nothing, so they land with the run that"
-        " regenerates them",
-        "Block 11's pinned rebuild, which regenerates every report",
+        "six reports still have no declared inputs",
+        "nine of the fifteen generators now carry the footer, by the rule that"
+        " the Makefile's measured time is under five minutes."
+        " `REPORTS_WITHOUT_FOOTER` names the other six with what each costs and"
+        " who owns it, and check 8 fails on a report that carries no footer and"
+        " is not on that list, so the remainder is a decision rather than an"
+        " oversight. Two of the six are cheap and are there for a different"
+        " reason: `geometry_gaps.md` and `determinism.md` do not reproduce from"
+        " this tree, and a footer records the inputs of the run that wrote the"
+        " file",
+        "the runs that regenerate them: two at Block 09f, four at Block 11",
     ),
     Pending(
-        "cross-report citation is unchecked",
-        "141 citations across 75 ordered pairs, and nothing ties a quoted figure"
-        " to the file it came from. This is the class that bit: the oracle"
-        " ceiling at Heathrow on July moved 9.9 to 9.5 when"
-        " `reports/congestion.md` was regenerated, and 9.9 was quoted in the"
-        " paper drafts. A checker that passed because it could not see would be"
-        " worse than none",
-        "`code_09e`",
-    ),
-    Pending(
-        "external snapshots and their pinning are unscanned",
-        "`scripts/fetch_osm.py` takes a `--date` and the OSM cache is from"
-        " 1 September. Whether the pins are recorded and checked is a question"
-        " about a rebuild rather than about the tree, and this block registers"
-        " that it did not look rather than asserting either way",
-        "Block 11's pinned rebuild",
+        "the OSM cache is eleven snapshots and not one, and no pin is recorded",
+        "the cache was scanned and the result contradicted the expectation it"
+        " was scanned against. Each of the eleven files carries its own"
+        " Overpass `timestamp_osm_base`, and they are **seven different"
+        " moments** spanning 2026-09-01T13:23:05Z to 13:32:15Z, not one moment"
+        " eleven times: the fetch was sequential and unpinned, so each airport"
+        " got whatever OSM state was live when its request was served. So"
+        " `--date <one moment>` is not the rebuild, and no single pin is"
+        " recoverable from the artifacts. Recording a pin is held back"
+        " deliberately rather than written to the wrong shape",
+        "the owner, then Block 11: whether a pinned rebuild uses eleven"
+        " per-airport dates or one date and accepts a different OSM state for"
+        " ten of the eleven airports is a decision about the freeze and not a"
+        " transcription",
     ),
 )
 
@@ -1879,7 +2001,37 @@ SCOPE: tuple[tuple[str, str], ...] = (
     ),
     (
         "cross-report citation",
-        "NOT covered. On the pending list, owned by `code_09e`",
+        "covered by check 11, scoped to the citation's own sentence and to"
+        " decimal figures. Bare integers are out: a report says *the three"
+        " airports* and *5 folds* in words a gate cannot tell from a"
+        " measurement. A frozen dated record is out as a citing document,"
+        " because its figures were true on its date and the file it cites has"
+        " moved since, which is what makes it a record; check 5 holds it to a"
+        " digest instead",
+    ),
+    (
+        "`docs/paper.md` as a citing document",
+        "NOT covered by check 11, and deliberately: it is stale by its own"
+        " pending entry, so running the check over it would print a wall of"
+        " findings that are all one fact. Block 10 builds the paper's own"
+        " checker as part of the figure pass",
+    ),
+    (
+        "the line numbers a basis cites",
+        "covered by check 12. A basis that names a line is a citation and"
+        " drifts the moment anything above it is edited: the commit that"
+        " created this register edited two of the generators it registers and"
+        " left sixteen of its own citations pointing at blank lines and"
+        " unrelated code. The cost is that an edit above a cited constant now"
+        " fails the gate until the citation is moved, which is the intended"
+        " trade -- a citation that fails loudly beats one that drifts quietly",
+    ),
+    (
+        "a line citation into another file",
+        "checked only for existing and for not being blank, which is all a"
+        " line number in prose can be checked for. Where the cited file is"
+        " regenerable the citation is pointed at a frozen dated record"
+        " instead, which cannot move under it",
     ),
     (
         "the notes and prompts outside the repository",
@@ -1897,14 +2049,21 @@ SCOPE: tuple[tuple[str, str], ...] = (
 # ``report_inputs_footer`` below, so the format is fixed in one place.
 REPORT_INPUTS_HEADING = "## What this report was generated from"
 
-# Generators that carry the footer. The rest are on ``PROVENANCE_PENDING``:
-# a footer is only worth anything in the file it describes, and those reports
-# cost between forty minutes and seven hours to rebuild.
+# Generators that carry the footer. The rule for who is here is the Makefile's
+# own measured time -- under five minutes and the generator carries one -- and
+# the rest are in ``REPORTS_WITHOUT_FOOTER`` above with what each costs and who
+# owns it, because a footer is only worth anything in the file it describes and
+# a report nobody can rebuild here cannot be given one.
 REPORT_INPUTS_DECLARED: tuple[tuple[str, str], ...] = (
+    ("scripts/check_runways_ourairports.py", "reports/runway_crosscheck.md"),
+    ("scripts/report_congestion.py", "reports/congestion.md"),
+    ("scripts/report_coverage.py", "reports/stand_coverage.md"),
     ("scripts/report_headroom.py", "reports/headroom.md"),
     ("scripts/report_occupancy.py", "reports/occupancy.md"),
     ("scripts/report_residual.py", "reports/residual.md"),
+    ("scripts/report_synthetic_airport.py", "reports/synthetic_airport.md"),
     ("scripts/report_tails.py", "reports/tails.md"),
+    ("scripts/review_challenge_data.py", "reports/data_review.md"),
 )
 
 
@@ -1951,6 +2110,120 @@ def report_inputs_footer(repo, paths) -> list[str]:
         "| --- | --- |",
         *rows,
     ]
+
+
+# --------------------------------------------------------------------------
+# what a report quotes from another report
+
+
+# Reports whose generator writes no provenance footer, each with what it costs
+# to rebuild and who owns it. **Listed and not silently skipped**: check 8
+# fails if a report carries no footer and is not named here, so the set of
+# undeclared reports is a decision and not an oversight. The rule for who
+# belongs here is the Makefile's own measured time: a generator under five
+# minutes carries a footer, and the rest wait for a run that regenerates them,
+# because a footer is worth nothing in a file that does not carry it.
+class Unfootered(NamedTuple):
+    report: str
+    generator: str
+    cost: str
+    owner: str
+
+
+REPORTS_WITHOUT_FOOTER: tuple[Unfootered, ...] = (
+    Unfootered(
+        "reports/baseline.md",
+        "scripts/run_baselines.py",
+        "seven and a quarter hours at 8.2 GiB",
+        "the next block that spends a ladder run",
+    ),
+    Unfootered(
+        "reports/transfer.md",
+        "scripts/report_transfer.py",
+        "forty minutes at 7.1 GiB, re-timed 21 September 2026",
+        "the next block that spends a ladder run",
+    ),
+    Unfootered(
+        "reports/penalty_sensitivity.md",
+        "scripts/check_penalty_sensitivity.py",
+        "the better part of an hour by its own docstring, which is longer than"
+        " the whole of `make reports` as the Makefile's note times it",
+        "the run that regenerates it",
+    ),
+    Unfootered(
+        "reports/taxi_routing.md",
+        "scripts/build_taxi_graph.py",
+        "not timed here: it rewrites every distance matrix under"
+        " `data/processed/taxi_distance/`, which is an input to most of the"
+        " other reports, so it is not run inside a block that fits nothing",
+        "the run that regenerates it",
+    ),
+    Unfootered(
+        "reports/geometry_gaps.md",
+        "scripts/report_geometry_gaps.py",
+        "37.5 s, so cheap enough -- but the committed report does not"
+        " reproduce: three cells that print `-0` come back `+0`, with every"
+        " magnitude and count unchanged. A footer records the inputs of the"
+        " run that wrote the file, and this file was not written by a run this"
+        " tree can reproduce",
+        "the run that regenerates it",
+    ),
+    Unfootered(
+        "reports/determinism.md",
+        "scripts/check_determinism.py",
+        "1.0 s for `report`, and the committed report does not reproduce"
+        " either: it compares against runs labelled *the Mac run* and *run 1 on"
+        " this machine*, and today the same command compares against"
+        " `data/processed/residuals`, which the ladder of 21 September"
+        " rewrote. Four measured rows move with the reference",
+        "the run that regenerates it",
+    ),
+)
+
+
+# A figure in a citation's sentence that the cited report does not carry, and
+# the reason it does not have to. **An explicit list with a reason each**, so
+# an exemption is a recorded judgement rather than a hole in the instrument.
+# The ordinary case is a sentence that sets a quoted figure against one of the
+# citing report's own, which is a contrast and not a quotation.
+class Uncited(NamedTuple):
+    source: str
+    cited: str
+    figures: tuple[str, ...]
+    why: str
+
+
+REPORT_CITATION_EXEMPTIONS: tuple[Uncited, ...] = (
+    Uncited(
+        "reports/baseline.md",
+        "reports/geometry_gaps.md",
+        ("0.29", "0.64", "7.88", "91.19"),
+        "the sentence quotes the ranking set's bucket mix from"
+        " `geometry_gaps.md` -- 0.52 / 1.36 / 7.95 / 90.17, all four of which"
+        " the cited file carries -- and sets it against December's own mix,"
+        " which is this report's own figure and is not in the cited file by"
+        " construction",
+    ),
+    Uncited(
+        "reports/headroom.md",
+        "reports/baseline.md",
+        ("17.6011",),
+        "the sentence prints this report's own recomputation of the ladder's"
+        " step from the stored residuals *against* the +17.60 s"
+        " `baseline.md` prints, which the cited file does carry. The point of"
+        " the sentence is that the two agree, so the recomputed figure cannot"
+        " be in the cited file",
+    ),
+    Uncited(
+        "reports/synthetic_airport.md",
+        "reports/tails.md",
+        ("6.0",),
+        "the 6.0 m/s is the authored field's own taxi speed, stated in"
+        " `taxiout.synthetic`; the citation of `tails.md` sits in the same"
+        " long sentence and is about where the record-quality term is"
+        " documented, not about this number",
+    ),
+)
 
 
 def parse_report_inputs(text: str) -> tuple[tuple[str, str], ...]:

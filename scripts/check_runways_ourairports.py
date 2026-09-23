@@ -40,6 +40,7 @@ sys.path.insert(0, str(REPO / "src"))
 from taxiout.airports import AIRPORTS  # noqa: E402
 from taxiout.geo import angle_diff_deg, bearing_deg, geodesic_m  # noqa: E402
 from taxiout.osm import USER_AGENT, cache_path  # noqa: E402
+from taxiout.provenance import report_inputs_footer  # noqa: E402
 from taxiout.runways import build_runways, parse_designators  # noqa: E402
 
 SOURCE = "https://davidmegginson.github.io/ourairports-data/runways.csv"
@@ -217,6 +218,12 @@ def main() -> int:
         "as `08H/26H`, which `parse_designators` rejects because they are not",
         "runway designators. That is intended: routing a departure to a helipad",
         "would be worse than not routing it.",
+        "",
+        "",
+        *report_inputs_footer(
+            REPO,
+            [CACHE] + [cache_path(REPO / "data" / "raw", ap.icao) for ap in AIRPORTS],
+        ),
         "",
         "OSM data (c) OpenStreetMap contributors, ODbL 1.0.",
         "OurAirports data released to the public domain.",

@@ -60,6 +60,7 @@ from taxiout.challenge import (  # noqa: E402
 from taxiout.coverage import identifier_shape  # noqa: E402
 from taxiout.join import STAGES, UNMATCHED, collapse, join_rates, join_stands  # noqa: E402
 from taxiout.metar import load_metar, regime_by_hour  # noqa: E402
+from taxiout.provenance import challenge_inputs, report_inputs_footer  # noqa: E402
 
 DATA = REPO / "data" / "challenge"
 MATRICES = REPO / "data" / "processed" / "taxi_distance"
@@ -1461,6 +1462,13 @@ def main() -> int:
         + [""]
         + dg_lines
         + [
+            "",
+            *report_inputs_footer(
+                REPO,
+                challenge_inputs(DATA)
+                + sorted(p for p in MATRICES.glob("*.csv") if "_features" not in p.name)
+                + sorted(METAR.glob("*.csv")),
+            ),
             "",
             "Distance matrices derived from OpenStreetMap: data (c) OpenStreetMap contributors,",
             "ODbL 1.0. Movement and flight data supplied by EUROCONTROL PRC and the",
