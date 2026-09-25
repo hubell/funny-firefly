@@ -35,23 +35,48 @@ help:
 	@echo ""
 	@echo "'make data' calls the Overpass API and takes a few minutes; it is"
 	@echo "resumable and skips airports already cached. 'make reports' is"
-	@echo "offline and takes two to three minutes for all 11 airports."
+	@echo "offline and takes ABOUT AN HOUR, dominated by one of its three"
+	@echo "scripts. The two to three minutes this line used to give is"
+	@echo "build_taxi_graph.py alone; report_coverage.py is 0.1 s; and"
+	@echo "check_penalty_sensitivity.py re-routes every stand at every"
+	@echo "airport for each penalty and takes the better part of an hour by"
+	@echo "its own docstring. That last figure is NOT measured here and is"
+	@echo "the script's own estimate: it rewrites a report, and the two graph"
+	@echo "steps rewrite the distance matrices most other reports read, so"
+	@echo "neither is run inside a block that fits models."
 	@echo "'make synthetic' needs neither, and is the one geometry report a"
 	@echo "clean checkout can regenerate. The four targets below it need the"
 	@echo "challenge data under data/challenge/, which is never committed."
 	@echo ""
-	@echo "Measured on the reference machine, eight cores: 'make baseline' takes"
-	@echo "seven and a quarter hours and peaks at 8.2 GiB of memory, 'make sweep'"
-	@echo "an hour and a half at 6.7 GiB, 'make congestion' two minutes, and"
-	@echo "'make residual' and 'make occupancy' under a minute each, and 'make"
-	@echo "headroom' three minutes at 3.7 GiB. 'make transfer' takes forty"
-	@echo "minutes at 7.1 GiB, re-timed under these parameters on 21 September"
-	@echo "2026; it took a quarter of an hour under the earlier ones."
+	@echo "Measured on the reference machine, eight cores, all re-timed on"
+	@echo "23 to 25 September 2026 under the cell adopted then:"
+	@echo "  make baseline    9 h 44 min   8.1 GiB"
+	@echo "  make transfer      50 min     7.0 GiB"
+	@echo "  make sweep       1 h 30 min   6.7 GiB   (does not run again)"
+	@echo "  make congestion     1:44      6.7 GiB"
+	@echo "  make headroom       2:37      3.7 GiB"
+	@echo "  make geometry-gaps    37 s    2.8 GiB"
+	@echo "  make residual         21 s    3.2 GiB"
+	@echo "  make occupancy        15 s    2.8 GiB"
+	@echo "  make submission     6:55      7.6 GiB   (one seed)"
+	@echo "  check_determinism.py report  0.8 s      (refits nothing)"
 	@echo ""
-	@echo "'make baseline' took about two hours until 21 September 2026, when the"
-	@echo "one permitted wider sweep moved the booster to 3,000 trees and 255"
-	@echo "leaves. That is 3.2 times the work per fit, and every target that fits"
-	@echo "the submission rung scales with it."
+	@echo "A five-seed submission, measured for the first time on 24 September,"
+	@echo "is 29 min 20 s at 8.0 GiB. That is minutes rather than hours, which"
+	@echo "is what the estimate behind SEED_AVERAGE_ADOPTED assumed and had"
+	@echo "never had measured under it."
+	@echo ""
+	@echo "'make baseline' took about two hours until 21 September 2026, when"
+	@echo "the one permitted wider sweep moved the booster to 3,000 trees and"
+	@echo "255 leaves, and 7 h 11 min until 23 September, when the extension"
+	@echo "moved it to 6,000 trees and 127 leaves. Every target that fits the"
+	@echo "submission rung scales with it."
+	@echo ""
+	@echo "THESE ARE MONOTONIC-CLOCK FIGURES, from /usr/bin/time, and a host"
+	@echo "that suspends will show a longer wall time for the same work. The"
+	@echo "9 h 44 min run above spanned 30 h 19 min of wall clock because this"
+	@echo "host slept for 20 h 35 min of it. Time a long run with /usr/bin/time"
+	@echo "and hold a systemd-inhibit sleep lock, or the number is fiction."
 
 all: data reports test licence-check
 
@@ -141,10 +166,13 @@ headroom:
 	$(PYTHON) scripts/report_headroom.py
 
 # Reads data/challenge/ and the matrices from 'make reports'. Writes the
-# ablation ladder. Needs the modelling extras; about two hours on eight cores,
-# with a peak of 8 GiB of memory.
+# ablation ladder. Needs the modelling extras; 9 h 44 min on eight cores,
+# with a peak of 8.1 GiB of memory, measured 23 to 24 September 2026 under
+# the adopted cell. Unbuffered: this script prints one line per rung and
+# block-buffers them into a file otherwise, which left a nine-hour run with
+# no readable progress.
 baseline:
-	$(PYTHON) scripts/run_baselines.py
+	$(PYTHON) -u scripts/run_baselines.py
 
 # Reads data/challenge/ and the matrices from 'make reports'. Ten fits: train
 # on nine airports, predict the tenth, with no identifier of the tenth in the
@@ -152,7 +180,7 @@ baseline:
 # no identifier-based entry can answer at all. About a quarter of an hour on
 # eight cores.
 transfer:
-	$(PYTHON) scripts/report_transfer.py
+	$(PYTHON) -u scripts/report_transfer.py
 
 # The parameter sweeps: fit January to September 2025, score October. The
 # first ran on the saturation rung, the top rung at the time; the second, the
@@ -165,7 +193,7 @@ transfer:
 # times the costliest cell alone, --read applies the reading rule without
 # fitting anything.
 sweep:
-	$(PYTHON) scripts/sweep_params.py
+	$(PYTHON) -u scripts/sweep_params.py
 
 # Reads data/challenge/ and the matrices from 'make reports'. Fits the
 # submission rung twenty times under criteria fixed in writing before any of

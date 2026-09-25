@@ -90,6 +90,10 @@ from taxiout.models import (  # noqa: E402
     booster_backend,
     fit_rows as fitting_rows,
 )
+from taxiout.provenance import (  # noqa: E402
+    challenge_inputs,
+    report_inputs_footer,
+)
 from taxiout.unimpeded import (  # noqa: E402
     MIN_CLASS_ROWS,
     MIN_PAIR_COUNT,
@@ -129,6 +133,25 @@ OUT = REPO / "reports" / "baseline.md"
 # The forward splits' validation residuals, per booster rung, for the ceiling
 # diagnostic in scripts/report_congestion.py. Gitignored: they carry the target.
 RESIDUALS = REPO / "data" / "processed" / "residuals"
+
+
+def _inputs() -> list:
+    """Every path this run read, for the provenance footer.
+
+    Named individually rather than as a directory: a directory has no digest,
+    and "the data under `data/challenge/`" is the declaration check 8 exists to
+    replace. The four groups are the challenge frames, the stand-to-runway
+    distance matrices every geometry feature reads, the METAR archive the
+    weather rungs read, and the runway reference. ``RESIDUALS`` is not here: the
+    ladder writes those files and does not read them.
+    """
+    return (
+        challenge_inputs(DATA)
+        + sorted(q for q in MATRICES.glob("*.csv") if "_features" not in q.name)
+        + sorted(METAR.glob("*.csv"))
+        + [OURAIRPORTS]
+    )
+
 
 # Loaded but never entered as a feature. The record-quality layer needs the
 # schedule to compute the lag its cells rest on, and the block time to measure
@@ -2498,7 +2521,7 @@ def section_encoding(
 # fitting a small booster on the submission rung's stored residuals with
 # five-fold cross-validation grouped by day. They are here for one purpose --
 # a refit that finds MATERIALLY MORE than the headroom trips this gate's own
-# leakage audit, not a success, because a block cannot buy
+# headroom-overshoot test, not a success, because a block cannot buy
 # more than the information it carries. The trigger is a constant of this gate
 # and NOT the one in ``docs/prior_art.md``, which is deliberately a ratio -- a
 # cut of more than roughly 64% of the ex-tail airport-mean baseline, or a
@@ -2551,7 +2574,7 @@ HEADROOM_READINGS: tuple[tuple[str, float, float, int], ...] = (
     (
         "on the ladder generated on 8 September and committed at `ad1eecf` on 9"
         " September, before the recorded-taxi tail came out of the fit, and read"
-        " on both columns as the audit is now",
+        " on both columns as the test is now",
         15.86,
         5.56,
         2,
@@ -2574,7 +2597,27 @@ HEADROOM_READINGS: tuple[tuple[str, float, float, int], ...] = (
         5.37,
         2,
     ),
+    # The fourth. ``reports/migration-2026-09-10.md`` lines 536 to 541 record
+    # this regeneration and state that ``reports/baseline.md`` prints the
+    # history; the constant carried three readings and this one appeared
+    # nowhere here, so the published history read "fired, missed, fired" where
+    # the record reads "fired, missed, fired, missed". Quoted from that file at
+    # the precision it printed, like the three above it.
+    (
+        "on the regeneration of 19 September, the first with the encoding"
+        " fitted on the rows the booster was fitted on",
+        14.64,
+        4.345,
+        3,
+    ),
 )
+# Which reading above was taken under the reference configuration, whose seed
+# floor is the one ``HEADROOM_FLOOR_BEFORE_S`` carries. Named by position rather
+# than taken as the last reading: the readings are in date order, a later one
+# was added after that floor was measured, and the paragraph below would
+# otherwise attribute the reference configuration's floor to a run fitted under
+# a different one.
+HEADROOM_REFERENCE_READING = 2
 # The one other run on the record: the first on the reference machine, on 10
 # September under the booster's earlier setting, never committed. The migration
 # record gives its gain and that it fired, and nothing finer.
@@ -2614,18 +2657,24 @@ def _audit_history(margins, floors, leg: str, key: str = "occupancy") -> list[st
         " estimate, the verdict has changed from one regeneration of the ladder"
         " to the next, and each time what moved it was something other than the"
         " block: the rows the booster was fitted on; the booster's configuration,"
-        " on another machine; and the rows the encoding was fitted on."
+        " on another machine; the rows the encoding was fitted on; and the"
+        " booster's parameters. The ratio beside each overshoot is what the refit"
+        " took divided by what the residual fit estimated, computed here from the"
+        " two figures it stands between rather than quoted from anywhere."
     ]
+    est = EXPECTED_HEADROOM_S[key][1]
     said += [
         f" {what[0].upper()}{what[1:]}, the block took {gain:+,.2f} s, an overshoot"
-        f" of {over:.{places}f} s, and the trigger {_against_trigger(over, places)}."
+        f" of {over:.{places}f} s at {gain / est:.2f} times the estimate, and the"
+        f" trigger {_against_trigger(over, places)}."
         for what, gain, over, places in HEADROOM_READINGS
     ]
     if now is not None:
         said.append(
-            " In this run, with the encoding fitted on the rows the booster is"
-            f" fitted on, it takes {now[1]:+,.2f} s, an overshoot of {now[4]:.3f} s,"
-            f" and {_against_trigger(now[4], 3, now=True)}."
+            " In this run, under the booster parameters adopted on 23 September,"
+            f" it takes {now[1]:+,.2f} s, an overshoot of {now[4]:.3f} s at"
+            f" {now[1] / est:.2f} times the estimate, and"
+            f" {_against_trigger(now[4], 3, now=True)}."
         )
     said.append(
         " One more run belongs beside these: the first on the reference machine,"
@@ -2637,7 +2686,7 @@ def _audit_history(margins, floors, leg: str, key: str = "occupancy") -> list[st
         " recomputed: those runs fitted rows or settings this one does not."
     )
     floor = []
-    last = HEADROOM_READINGS[-1]
+    last = HEADROOM_READINGS[HEADROOM_REFERENCE_READING]
     was = abs(last[2] - HEADROOM_TRIGGER_S)
     floor.append(
         "No seed floor was measured before the reference configuration. Under it"
@@ -3295,13 +3344,14 @@ def section_gate2c(
             ]
         )
 
-    # The leakage-audit trigger, applied rather than described, on BOTH columns
+    # The headroom-overshoot trigger, applied rather than described, on BOTH
+    # columns
     # of the headroom estimate rather than on the first alone. The December
     # estimate was made over all ten airports and the July estimate over the
     # three July 2026 contains, so each leg has to be read against the figure it
     # was estimated against: the pooled July RMSE is over ten airports and is
     # not the quantity ``expected[1]`` bounds. Testing one leg and calling the
-    # audit passed is how an overshoot on the other goes unseen.
+    # test passed is how an overshoot on the other goes unseen.
     overshoot, margins = [], []
     legs = (
         (forward[0], 0, _ex_flagged, f"{forward[0].name.title()}, all ten"),
@@ -3419,7 +3469,8 @@ def section_gate2c(
         "small booster on the submission rung's stored residuals",
         "(`docs/review_headroom.md`), and it is quoted from there rather than",
         "recomputed here. A block that finds *materially more* than its headroom trips",
-        f"this gate's leakage audit and is not a success: the {HEADROOM_TRIGGER_S:.0f} s",
+        f"this gate's headroom-overshoot test and is not a success: the"
+        f" {HEADROOM_TRIGGER_S:.0f} s",
         "is a constant fixed here, and *not* the trigger in `docs/prior_art.md`, which",
         "is a ratio -- a cut of more than roughly 64% of the ex-tail airport-mean",
         "baseline, or a validation-to-leaderboard gap -- because that file records that",
@@ -3688,7 +3739,7 @@ def section_gate2c(
     lines += ["", *_tfree_section(results, forward, arm, floors)]
     lines += [
         "",
-        "**The leakage audit, applied.** "
+        "**The headroom overshoot.** "
         + (
             "No block beats its estimated headroom by more than "
             f"{HEADROOM_TRIGGER_S:.0f} s, so the trigger does not fire."
@@ -3709,7 +3760,7 @@ def section_gate2c(
                         f" {HEADROOM_TRIGGER_S - _closest(margins)[4]:.3f} s, and a"
                         " test passed by that much is not evidence of anything. It is"
                         " reported as a near miss rather than as a pass, because the"
-                        " whole reason this audit reads both of its columns is that a"
+                        " whole reason this test reads both of its columns is that a"
                         " trigger which did not fire was once taken for a result."
                         if HEADROOM_TRIGGER_S - _closest(margins)[4]
                         < HEADROOM_NEAR_MISS_S
@@ -3738,8 +3789,8 @@ def section_gate2c(
                 for _, g, e, leg in overshoot
             )
             + (
-                " Read literally, the rule above says a block that trips the audit is"
-                " not a success. The chain's rule does not read the audit, and the"
+                " Read literally, the rule above says a block that trips this test is"
+                " not a success. The chain's rule does not read it, and the"
                 " block stays in the chain and in the submission: an overshoot inside"
                 " the seed floor cannot tell leakage from noise. That reading was"
                 " adopted after the number was seen, and the report says so in those"
@@ -3755,6 +3806,23 @@ def section_gate2c(
             + " There are two readings of an overshoot and the difference between them"
             " matters, so both are stated."
         ),
+        "",
+        "**Why this section is not called a leakage test.** What it compares is a"
+        " refit against a residual-fit estimate, and `docs/review_headroom.md` §7"
+        " established on 8 September, before this section took its present form,"
+        " that the two cannot be read as agreeing or disagreeing with each other:"
+        " a residual fit bounds a refit from below, and the gap between them is"
+        ' the value of the interaction "rather than evidence of anything wrong".'
+        " So what this section measures is the size of that gap, and that is what"
+        " it is now named for. The one reading under which the gap would mean"
+        " something else is that the estimate has gone stale, and that was"
+        " measured: [`headroom.md`](headroom.md) recomputes it at the stated"
+        " capacity on the 21 September residuals and comes back within five"
+        " hundredths of a second of the"
+        f" {EXPECTED_HEADROOM_S['occupancy'][1]:+,.1f} s quoted here, so staleness"
+        " explains none of the gap. The name *leakage audit* belongs to"
+        " [`congestion.md`](congestion.md)'s source registry printed as an"
+        " assertion, which is a leakage test and which passes.",
         *(
             []
             if not overshoot
@@ -3947,7 +4015,8 @@ def _band_section(results, features, y, forward, arm) -> list[str]:
         "What stands behind this block is the source registry, the poison tests and"
         " the concentration above. The agreement of the residual-fit headroom with"
         " the refit is deliberately not on that list: the two are measured on"
-        " different objects and the leakage audit below reports how far apart they"
+        " different objects and the headroom overshoot below reports how far apart"
+        " they"
         " came, but a block is not vouched for by an estimate agreeing with it.",
     ]
     return out
@@ -5392,6 +5461,8 @@ def main() -> int:
                     "",
                 ]
             ),
+            *report_inputs_footer(REPO, _inputs()),
+            "",
             "Distance matrices derived from OpenStreetMap: data (c) "
             "OpenStreetMap contributors, ODbL 1.0. Movement and flight data",
             "supplied by EUROCONTROL PRC and the OpenSky Network under the terms",

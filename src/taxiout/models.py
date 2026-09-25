@@ -146,11 +146,15 @@ TRANSFERABLE_EXCLUDED: tuple[str, ...] = ("icao", "stand", "designator", "pair")
 
 # Fixed once, for a compute budget, before any RMSE existed. L2 because the
 # metric is RMSE. No early stopping: see the module docstring.
-# Chosen by the two permitted sweeps (scripts/sweep_params.py), both of which
-# fit January to September 2025 and score October 2025 -- a month the ladder
-# never reads -- over the rows the record-quality term leaves to the physical
-# model. THE TWO SWEEPS' OCTOBER FIGURES ARE NOT COMPARABLE WITH EACH OTHER,
-# and the paragraph after next says why.
+# Chosen by the two permitted sweeps (scripts/sweep_params.py) and by one
+# permitted extension of the second, all of which fit January to September 2025
+# and score October 2025 -- a month the ladder never reads -- over the rows the
+# record-quality term leaves to the physical model. THE TWO SWEEPS' OCTOBER
+# FIGURES ARE NOT COMPARABLE WITH EACH OTHER, and the paragraph headed WHY 235.0
+# AND 214.9 CANNOT BE SUBTRACTED says why. The extension's figures ARE
+# comparable with the second sweep's: it ran under the same rules on the same
+# rows, and every cell it reads is a cell of that sweep's grid or an extension
+# of one axis of it.
 #
 # The first sweep, 3 September 2026: trees (300, 600, 1000), learning rate
 # (0.03, 0.06, 0.1), leaves (31, 63, 127) and minimum child samples
@@ -171,17 +175,86 @@ TRANSFERABLE_EXCLUDED: tuple[str, ...] = ("icao", "stand", "designator", "pair")
 # 3,000 trees and read at (300, 600, 1000, 1500, 2000, 3000), on the SUBMISSION
 # rung's features under the fit rules that stand: fit_rows with the four-hour
 # exclusion, the shrunk encoding on those rows, the record-quality model on the
-# training months, and no recency schedule. The cell below is that sweep's, and
-# it scored 214.90 s on October; that grid ran from 214.90 to 235.44 s. The
+# training months, and no recency schedule. The cell it chose,
+# (3,000 trees, 0.015, 255 leaves, 20), scored 214.90 s on October; that grid
+# ran from 214.90 to 235.44 s. The
 # cell that stood before it, (1000 trees, 0.03, 127 leaves, 50), scores 217.28 s
 # under the same rules in the same run, so the move is worth 2.38 s against a
 # seed floor of 0.19 s measured from five single-seed fits of that cell in that
 # run. Its day-clustered interval against the cell it replaced is
 # [-2.89, -1.89] s, printed because the sweep could have chosen a cell whose
 # interval spanned zero; the rule that chose it reads the floor and nothing
-# else. The chosen cell sits on an edge of this grid on all four axes, which is
-# recorded here because the pre-registration fixes that the grid is not
-# extended again whatever it shows.
+# else. That cell sits on an edge of this grid on all four axes, which was
+# recorded at the time because the pre-registration fixed that the grid would
+# not be extended again whatever it showed. It was extended anyway, once, and
+# the next paragraph is the record of who reopened it and when.
+#
+# THE EXTENSION OF THE SECOND SWEEP, 22 and 23 September 2026. The reopening
+# was Hunter's, on 22 September, after the edge above had been recorded and
+# knowing which direction October was still falling in. That is a decision
+# taken with the result in view rather than before it, and it is written down
+# here in those words rather than presented as the plan. Three axes were
+# reopened and probed one at a time from the cell that stood, under that
+# sweep's rules on the same rows: more trees won, 511 leaves lost by 0.2274 s
+# and a minimum child sample of 10 lost by 0.2381 s. Only one axis won, so no
+# combination was fitted.
+#
+# WHAT THE TREES AXIS BOUGHT, READ AS PAIRED CONTRASTS. What 3,000 to 6,000
+# trees buys is a difference within one seed, so it is read as a paired
+# contrast and not as a difference of levels:
+#
+#     (0.015, 255), seed 0:  214.9045 -> 214.3041   -0.6004 s   3.31 floors
+#     (0.015, 255), seed 1:  215.1932 -> 214.5913   -0.6019 s   3.32 floors
+#     (0.03,  127), seed 0:  214.9982 -> 214.4391   -0.5591 s   3.08 floors
+#
+# Mean -0.5871 s, spread 0.0428 s across two seeds and two leaf settings, under
+# a quarter of the 0.1815 s floor. The seed moves the level by 0.2872 s and
+# moves the contrast by less than two thousandths of a second, so the effect is
+# very nearly invariant to the seed and what the seed moves is where both
+# readings sit. The extension's own stopping rule read levels instead, setting
+# a 6,000-tree fit at one seed against a 3,000-tree fit at another for
+# -0.3132 s; that figure carries the trees effect and the level shift together
+# and understates the first by the second. The rule is recorded as
+# mis-specified and the table above is the amendment to it, not a rereading of
+# anything else the extension fixed.
+#
+# The trees axis was on an edge again at 6,000, with October still falling
+# monotonically at 4,000, 5,000 and 6,000, and the extension's criteria stopped
+# it there. It is closed.
+#
+# WHY THIS CELL AND NOT THE BETTER ONE. On October the better reading is
+# (0.015, 255) at 6,000 trees, 214.3041 against this cell's 214.4391, and it
+# was NOT taken. The two differ by 0.1350 s, which is 0.74 of the floor and
+# less than half the 0.2872 s that same cell moves between two draws of its own
+# seed: this instrument cannot separate them. That is the situation the
+# one-standard-error rule of Breiman, Friedman, Olshen and Stone (1984) exists
+# for, and among candidates the evidence cannot separate it takes the cheaper.
+# (0.015, 255) at 6,000 is named here as the equal-performing alternative, at
+# 1.35x this cell's October fit time, so the choice is visible rather than
+# implied.
+#
+# WHAT THE CHOSEN CELL IS WORTH. Against the cell it replaces it reads 214.4391
+# against 214.9045, so the move is worth 0.4654 s against a seed floor of
+# 0.1815 s measured from five single-seed fits of the replaced cell in the
+# extension's own run, 2.56 floors. Its day-clustered interval against that
+# cell is [-0.9492, +0.0009] s and spans zero by nine ten-thousandths of a
+# second, so the floor and the interval disagree here as they did at
+# Experiment 3 of the pre-registered run. Both are printed and neither is
+# suppressed; the rule that chose the cell reads the floor and nothing else,
+# and which instrument the paper quotes is stated where it quotes one.
+#
+# WHAT IT COSTS, MEASURED AND NOT SCALED. The October fits are 189.7 s for the
+# replaced cell, 237.5 s for this one and 321.8 s for (0.015, 255) at 6,000.
+# This cell builds 762,000 terminal nodes against that one's 1,530,000, half of
+# them, and takes 73.8% of its fit time rather than 50%: a tree's cost is not
+# linear in its leaf budget, and the ladder does more than build trees. No
+# ratio measured on one October fit is carried across to another quantity, and
+# what the ladder itself costs under this cell is measured by the run that
+# regenerates `reports/baseline.md` rather than projected from these three.
+#
+# The extension was run from outside this tree and its per-cell records are
+# under data/processed/, gitignored, with the sweeps'. This paragraph is the
+# only account of it the repository carries.
 #
 # WHY 235.0 AND 214.9 CANNOT BE SUBTRACTED. The first figure is the saturation
 # rung with no shrunk encoding and no four-hour exclusion; the second is the
@@ -190,13 +263,13 @@ TRANSFERABLE_EXCLUDED: tuple[str, ...] = ("icao", "stand", "designator", "pair")
 # sweep bought is 217.28 to 214.90, and nothing else here is a difference
 # between two comparable numbers.
 #
-# Both grids' numbers stay under data/processed/, gitignored, and are not
+# All three passes' numbers stay under data/processed/, gitignored, and are not
 # reported anywhere else.
 BOOSTER_PARAMS: dict[str, object] = {
     "objective": "regression",
-    "n_estimators": 3000,
-    "learning_rate": 0.015,
-    "num_leaves": 255,
+    "n_estimators": 6000,
+    "learning_rate": 0.03,
+    "num_leaves": 127,
     "min_child_samples": 20,
     "colsample_bytree": 0.9,
     "subsample": 0.8,

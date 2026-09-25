@@ -77,6 +77,7 @@ from taxiout.models import (  # noqa: E402
     Booster,
     fit_rows as fitting_rows,
 )
+from taxiout.provenance import report_inputs_footer  # noqa: E402
 from taxiout.unimpeded import fit_geometric, fit_pru_reference, lower_tail  # noqa: E402
 from taxiout.validation import december_split, month_of, rmse  # noqa: E402
 
@@ -85,6 +86,26 @@ CACHE = WORK / "december_identifiers.pkl"
 OUT = REPO / "reports" / "determinism.md"
 RUNG = "identifiers"
 SPLIT = "december"
+
+
+def _inputs() -> list:
+    """Every path ``report`` read, for the provenance footer.
+
+    Named individually rather than as a directory: a directory has no digest.
+    Two groups, and neither is the challenge data. ``report`` fits nothing and
+    reads nothing under ``data/challenge/``: it reads the records ``build`` and
+    ``fit`` left under ``data/processed/determinism/``, which is where the
+    measurement actually lives, and the one residual file it compares those
+    fits against. **That second path is why this report goes stale without
+    anything here changing**: the ladder rewrites it, and four of the measured
+    rows are read against whatever it holds.
+    """
+    records = sorted(
+        q for q in WORK.iterdir() if q.suffix in (".json", ".npy", ".npz", ".pkl")
+    )
+    reference = rb.RESIDUALS / f"{SPLIT}_{RUNG}.parquet"
+    return records + ([reference] if reference.exists() else [])
+
 
 # The configurations compared. The first three are the question the gate asks.
 # The next three separate its two halves -- whether pinning the histogram
@@ -1071,6 +1092,8 @@ def report(args) -> int:
             + (", ".join(f"`{k}={v}`" for k, v in extra.items()) or "nothing")
             for name, extra in CONFIGS.items()
         ],
+        "",
+        *report_inputs_footer(REPO, _inputs()),
         "",
         "Distance matrices derived from OpenStreetMap: data (c)",
         "OpenStreetMap contributors, ODbL 1.0. Movement and flight data supplied by",

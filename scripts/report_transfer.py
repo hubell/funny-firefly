@@ -79,8 +79,11 @@ from taxiout.unimpeded import (  # noqa: E402
 )
 from taxiout.validation import evaluate, rmse  # noqa: E402
 
+from taxiout.provenance import report_inputs_footer  # noqa: E402
+
 from run_baselines import (  # noqa: E402
     DATA,
+    _inputs,
     Tails,
     airport_fallback,
     build_features,
@@ -495,6 +498,11 @@ def main() -> int:
             # string "OpenStreetMap contributors", and wrapping it across a
             # newline is exactly the way this file failed the gate the first
             # time it was generated.
+            # The same paths the ladder declares, imported rather than
+            # repeated: this report is built by the ladder's own loaders on the
+            # ladder's own data, so two lists would be one list that can drift.
+            *report_inputs_footer(REPO, _inputs()),
+            "",
             "Distance matrices derived from OpenStreetMap: data (c) "
             "OpenStreetMap contributors, ODbL 1.0. Movement and flight data",
             "supplied by EUROCONTROL PRC and the OpenSky Network under the terms",

@@ -59,6 +59,7 @@ from taxiout.encoding import geometric_prior  # noqa: E402
 from taxiout.features import AGGREGATED_FIELDS, airport_fallback  # noqa: E402
 from taxiout.graph import DIRECT_SNAP_M, attach_stands, build_graph  # noqa: E402
 from taxiout.join import UNMATCHED, join_stands  # noqa: E402
+from taxiout.provenance import challenge_inputs, report_inputs_footer  # noqa: E402
 from taxiout.routing import label_runway_edges, runway_entries, runway_membership  # noqa: E402
 from taxiout.runways import build_runways  # noqa: E402
 from taxiout.tails import TailModel, combine  # noqa: E402
@@ -68,6 +69,23 @@ DATA = REPO / "data" / "challenge"
 MATRICES = REPO / "data" / "processed" / "taxi_distance"
 CACHE = REPO / "data" / "raw"
 OUT = REPO / "reports" / "geometry_gaps.md"
+
+
+def _inputs() -> list:
+    """Every path this run read, for the provenance footer.
+
+    Named individually rather than as a directory: a directory has no digest,
+    and "the data under `data/challenge/`" is the declaration check 8 exists to
+    replace. Three groups: the challenge frames, the stand-to-runway matrices
+    the geometric term is read against, and the cached OSM payload each
+    airport's movement area was parsed from.
+    """
+    return (
+        challenge_inputs(DATA)
+        + sorted(q for q in MATRICES.glob("*.csv") if "_features" not in q.name)
+        + sorted(CACHE.glob("*.json.gz"))
+    )
+
 
 MIN_PAIR_ROWS = 30  # the PRU reference's own floor for a pair
 MIN_CLASS_ROWS = 20  # per (pair, wake class) for the paired gap
@@ -115,7 +133,19 @@ def num(x: float, digits: int = 0) -> str:
 
 
 def signed(x: float, digits: int = 0) -> str:
-    return "n/a" if not np.isfinite(x) else f"{x:+,.{digits}f}"
+    """A signed figure, with a value that rounds to zero printed unsigned.
+
+    ``f"{x:+,.0f}"`` keeps the sign of a difference the printed precision has
+    already discarded, so a cell holding a few tenths of a metre prints `-0` or
+    `+0` according to which side of zero the last bits landed on. Three cells of
+    this report did exactly that between two runs, with every magnitude and
+    every count unchanged, which made a report that had not moved look as though
+    it had. A rounded zero prints one way.
+    """
+    if not np.isfinite(x):
+        return "n/a"
+    out = f"{x:+,.{digits}f}"
+    return f"{0:,.{digits}f}" if float(out.replace(",", "")) == 0.0 else out
 
 
 def table(
@@ -1258,6 +1288,8 @@ def main() -> int:
         "",
     ]
     footer = [
+        "",
+        *report_inputs_footer(REPO, _inputs()),
         "",
         "Distance matrices derived from OpenStreetMap: data (c) OpenStreetMap contributors,",
         "ODbL 1.0. Movement and flight data supplied by EUROCONTROL PRC and the",

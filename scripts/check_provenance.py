@@ -102,6 +102,7 @@ from taxiout.provenance import (  # noqa: E402
     MODEL_FIGURE_GENERATORS,
     NO_BASIS,
     PROVENANCE_PENDING,
+    REBUILD_PINS,
     REPORT_CITATION_EXEMPTIONS,
     REPORT_INPUTS_DECLARED,
     REPORTS_WITHOUT_FOOTER,
@@ -1261,6 +1262,27 @@ def document() -> str:
             "--",
         ),
         "",
+        "## What a rebuild of an external input is pinned to",
+        "",
+        f"**{len(REBUILD_PINS)}** external input(s) carry a pin. A pin is a claim",
+        "about what a rebuild would return and is recorded unverified: exercising",
+        "one costs the network and a server willing to answer, so what is written",
+        "here is how the pin is applied and what would make it fail.",
+        "",
+        *[
+            line
+            for k in REBUILD_PINS
+            for line in (
+                f"**{k.what}**",
+                "",
+                f"Rebuilt by {k.how}.",
+                "",
+                f"Recoverable {k.recoverable}.",
+                "",
+                *[f"- {c}" for c in k.caveats],
+                "",
+            )
+        ],
         "## What is still open",
         "",
         f"**{len(PROVENANCE_PENDING)}** items. `--strict` fails while this is not",

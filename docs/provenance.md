@@ -25,15 +25,15 @@ the gate's job is to prove there is no fifth.
 
 ## The constants
 
-`taxiout.provenance.CONSTANTS` carries **225** entries, one
+`taxiout.provenance.CONSTANTS` carries **226** entries, one
 per module-level numeric assignment the scanner finds outside the
-authored artifact. The scanner finds **278** in all, of which
+authored artifact. The scanner finds **279** in all, of which
 **50** are in `src/taxiout/synthetic.py` and are covered by
 `AUTHORED_ARTIFACTS` as a module rather than one by one.
 
 | class | entries | what it means |
 | --- | ---: | --- |
-| `mechanism` | 89 | definitional or a unit conversion; nobody chose it |
+| `mechanism` | 90 | definitional or a unit conversion; nobody chose it |
 | `chosen` | 105 | somebody picked it, and the basis says what against |
 | `derived` | 1 | computed from the data and frozen into the source |
 | `quoted` | 30 | a measurement from a named run or document |
@@ -86,24 +86,20 @@ either direction without somebody seeing it.
 
 ## What a report declares it was generated from
 
-**9** generators write a footer naming every
+**13** generators write a footer naming every
 path the run read, with a sha256 each; check 8 recomputes them and calls
 the report verified, stale or unverifiable. The rule for who carries one
 is the Makefile's own measured time: under five minutes and the generator
 writes a footer.
 
-**6** reports carry none, and are listed here
+**2** reports carry none, and are listed here
 rather than skipped: check 8 fails on a report with no footer that is on
 no list, so the remainder is a decision and not an oversight.
 
 | report | what it costs to rebuild | owner |
 | --- | --- | --- |
-| `reports/baseline.md` | seven and a quarter hours at 8.2 GiB | the next block that spends a ladder run |
-| `reports/transfer.md` | forty minutes at 7.1 GiB, re-timed 21 September 2026 | the next block that spends a ladder run |
-| `reports/penalty_sensitivity.md` | the better part of an hour by its own docstring, which is longer than the whole of `make reports` as the Makefile's note times it | the run that regenerates it |
+| `reports/penalty_sensitivity.md` | the better part of an hour by its own docstring, still unmeasured here. The Makefile's note used to give `make reports` as two to three minutes, which was this script's two siblings and not this script; that note now says about an hour and names which figure is measured and which is the docstring's | the run that regenerates it |
 | `reports/taxi_routing.md` | not timed here: it rewrites every distance matrix under `data/processed/taxi_distance/`, which is an input to most of the other reports, so it is not run inside a block that fits nothing | the run that regenerates it |
-| `reports/geometry_gaps.md` | 37.5 s, so cheap enough -- but the committed report does not reproduce: three cells that print `-0` come back `+0`, with every magnitude and count unchanged. A footer records the inputs of the run that wrote the file, and this file was not written by a run this tree can reproduce | the run that regenerates it |
-| `reports/determinism.md` | 1.0 s for `report`, and the committed report does not reproduce either: it compares against runs labelled *the Mac run* and *run 1 on this machine*, and today the same command compares against `data/processed/residuals`, which the ladder of 21 September rewrote. Four measured rows move with the reference | the run that regenerates it |
 
 ## What a report quotes from another report
 
@@ -120,7 +116,7 @@ reach as well as on a figure it cannot find.
 | in | citing | figures | why |
 | --- | --- | --- | --- |
 | `reports/baseline.md` | `reports/geometry_gaps.md` | 0.29, 0.64, 7.88, 91.19 | the sentence quotes the ranking set's bucket mix from `geometry_gaps.md` -- 0.52 / 1.36 / 7.95 / 90.17, all four of which the cited file carries -- and sets it against December's own mix, which is this report's own figure and is not in the cited file by construction |
-| `reports/headroom.md` | `reports/baseline.md` | 17.6011 | the sentence prints this report's own recomputation of the ladder's step from the stored residuals *against* the +17.60 s `baseline.md` prints, which the cited file does carry. The point of the sentence is that the two agree, so the recomputed figure cannot be in the cited file |
+| `reports/headroom.md` | `reports/baseline.md` | 15.9815 | the sentence prints this report's own recomputation of the ladder's step from the stored residuals *against* the +15.98 s `baseline.md` prints, which the cited file does carry. The point of the sentence is that the two agree, so the recomputed figure cannot be in the cited file. Both figures moved with the cell adopted on 23 September; they read 15.9815 and +15.98 where they read 17.6011 and +17.60 under the cell before it |
 | `reports/synthetic_airport.md` | `reports/tails.md` | 6.0 | the 6.0 m/s is the authored field's own taxi speed, stated in `taxiout.synthetic`; the citation of `tails.md` sits in the same long sentence and is about where the record-quality term is documented, not about this number |
 
 ## Authored artifacts
@@ -150,9 +146,25 @@ demand destroying the record.
 | `reports/submission-2026-09-19.md` | a dated record of one scored file, written at the tree it was built from |
 | `reports/preregistered-2026-09-20.md` | the pre-registered experiments and their verdicts, and the source of `sweep_params.BLOCK_07_OCTOBER_*`. Its criteria were fixed before its numbers existed and the document is the proof of that order |
 
+## What a rebuild of an external input is pinned to
+
+**1** external input(s) carry a pin. A pin is a claim
+about what a rebuild would return and is recorded unverified: exercising
+one costs the network and a server willing to answer, so what is written
+here is how the pin is applied and what would make it fail.
+
+**the OSM movement-area geometry for the eleven airports, under `data/raw/*.json.gz`**
+
+Rebuilt by `python scripts/fetch_osm.py --pin-from-cache --force`, which reads each airport's own `osm3s.timestamp_osm_base` out of its cached payload and pins that airport's Overpass query to that moment.
+
+Recoverable per airport, and only per airport. The eleven files carry **seven** distinct stamps spanning 2026-09-01T13:23:05Z to 13:32:15Z, because the fetch was sequential and unpinned and each airport was answered from whatever state its mirror had ingested when it was served. One `--date` would pin eight of the eleven to a state their matrices were not built from, which is why no single pin was recorded when the cache was first scanned.
+
+- attic retention is not guaranteed. An instance may decline a query at a date this old, and one that declines is a failure to report. The mode refuses to fetch an airport whose stamp it cannot read, because **a silently unpinned fetch is a stop**: it would replace an answer whose OSM state is recorded with one whose is not.
+- the comparison is on the parsed elements and on the matrices they produce, not on the payload bytes. The response header records the answering instance's own version, so two payloads that differ byte for byte can carry the same geometry, and a bytewise test would fail on the instance rather than on the map.
+
 ## What is still open
 
-**6** items. `--strict` fails while this is not
+**4** items. `--strict` fails while this is not
 empty and is the freeze condition; the ordinary run prints it and passes,
 because a gate that fails today cannot be wired into a commit path. Emptied
 by the work and never by editing the tuple.
@@ -161,10 +173,8 @@ by the work and never by editing the tuple.
 | --- | --- |
 | `docs/paper.md`'s figures match no report in the repository | Block 10, the figure pass, building the paper's own checker as part of it |
 | a five-seed submission has never been timed under the current cell | a timing run before the freeze |
-| `HEADROOM_READINGS` is missing its fourth reading | the next block that spends a ladder run, which Block 11's pinned rebuild does anyway |
-| `reports/baseline.md`'s section still carries the name *The leakage audit, applied* | the next block that spends a ladder run |
-| six reports still have no declared inputs | the runs that regenerate them: two at Block 09f, four at Block 11 |
-| the OSM cache is eleven snapshots and not one, and no pin is recorded | the owner, then Block 11: whether a pinned rebuild uses eleven per-airport dates or one date and accepts a different OSM state for ten of the eleven airports is a decision about the freeze and not a transcription |
+| two reports still have no declared inputs | the runs that regenerate them, at Block 11 |
+| the per-airport OSM pin is recorded and has never been exercised | Block 11, on the machine and with the network, comparing the parsed elements and the matrices they produce rather than the payload bytes |
 
 ## What this does not reach
 

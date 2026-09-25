@@ -154,6 +154,19 @@ LARGEST_CELL = {"learning_rate": 0.03, "num_leaves": 255, "min_child_samples": 2
 # The current cell, whose figure the reading rule compares the best cell
 # against. Read out of ``BOOSTER_PARAMS`` rather than written down, so that
 # moving the parameters moves this with them.
+#
+# SINCE 23 SEPTEMBER THE CURRENT CELL IS NOT A ROW OF THIS GRID, and that is a
+# fact about the parameters rather than a defect here. ``CURRENT_CELL`` is
+# still one of the twenty-seven, (0.03, 127, 20); ``CURRENT_TREES`` is 6,000
+# and this grid's trees axis stops at 3,000. The extension that took it there
+# is recorded beside ``BOOSTER_PARAMS`` in ``taxiout.models``: three axes
+# reopened one at a time past the second sweep's edge, of which only the trees
+# axis won. It was not run from this file and it is not a third sweep, so no
+# grid here is widened to cover it. What follows from it is that
+# ``apply_reading_rule`` can no longer be applied to this grid, because the
+# rule reads the current cell's figure out of the grid and the grid does not
+# carry that row. The rule already fired, on 21 September, against the cell it
+# was written for.
 CURRENT_CELL = {k: BOOSTER_PARAMS[k] for k in GRID}
 CURRENT_TREES = int(BOOSTER_PARAMS["n_estimators"])
 
@@ -607,7 +620,13 @@ def apply_reading_rule(grid: pd.DataFrame, floor: float) -> dict:
         want = want[want[axis] == value]
     want = want[want["n_estimators"] == CURRENT_TREES]
     if len(want) != 1:
-        raise SystemExit("the current cell is not exactly one row of the grid")
+        raise SystemExit(
+            "the current cell is not exactly one row of the grid: it is"
+            f" {cell_label(CURRENT_CELL, CURRENT_TREES)} and this grid reads"
+            f" {sorted(TREES)} trees. See the note beside CURRENT_TREES above;"
+            " the extension of 23 September took the trees axis past this grid"
+            " and the rule this function implements has already been applied."
+        )
     current = float(want["rmse_oct_s"].iloc[0])
     ordered = grid.sort_values("rmse_oct_s", kind="mergesort").reset_index(drop=True)
     best = as_cell(ordered.iloc[0].to_dict())

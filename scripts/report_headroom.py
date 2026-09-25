@@ -229,7 +229,7 @@ SECTION_7_READINGS: tuple[tuple[str, float, float], ...] = (
 # residuals the ladder wrote, and the two are required to agree at the
 # precision the report prints: a quoted figure that no longer matches the files
 # it was read off is the defect this whole block is about.
-LADDER_STEP_QUOTED_S = 17.60
+LADDER_STEP_QUOTED_S = 15.98
 
 # Capacities the occupancy block is re-read at, so that the sentence "the
 # figure is a property of this capacity" is a measurement in the report and

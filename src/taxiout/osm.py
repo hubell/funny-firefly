@@ -75,6 +75,32 @@ def cache_path(cache_dir: Path, icao: str) -> Path:
     return cache_dir / f"{icao}.json.gz"
 
 
+def cached_osm_base(cache_dir: Path, icao: str) -> str | None:
+    """The OSM state one cached airport was actually answered from.
+
+    Overpass returns ``osm3s.timestamp_osm_base``: the moment of the last edit
+    the answering instance had ingested. **It is per answer and not per run.**
+    The eleven airports here were fetched sequentially and unpinned, so they
+    carry seven different moments spanning nine minutes, and one ``--date`` for
+    all of them would pin eight to a state their matrices were not built from.
+    This is what ``--pin-from-cache`` reads so each airport's rebuild asks for
+    its own.
+
+    ``None`` if the file is absent or carries no such stamp, which the caller
+    must treat as a stop rather than falling back to an unpinned fetch.
+    """
+    import gzip
+    import json
+
+    path = cache_path(cache_dir, icao)
+    if not path.exists():
+        return None
+    with gzip.open(path, "rt", encoding="utf-8") as fh:
+        payload = json.load(fh)
+    stamp = payload.get("osm3s", {}).get("timestamp_osm_base")
+    return stamp or None
+
+
 def _post(endpoint: str, query: str, timeout: int) -> dict:
     req = urllib.request.Request(
         endpoint,

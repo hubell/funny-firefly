@@ -48,22 +48,44 @@ def test_the_grid_holds_the_current_cell_and_is_the_pre_registered_one():
     assert sw.GRID["num_leaves"] == (63, 127, 255)
     assert sw.GRID["min_child_samples"] == (20, 50, 200)
     assert tuple(sw.CURRENT_CELL[k] for k in sw.GRID) in sw.CELLS
-    assert sw.CURRENT_TREES in sw.TREES
     # The rung is the submission rung, read from the key and not pinned to
     # the rung the first sweep ran on.
     assert sw.SWEEP_RUNG.key == "plan-diffs"
 
 
-def test_the_current_cell_is_a_member_of_the_grid_whatever_it_is():
-    """The reading rule compares the best cell against a row of the same grid.
+def test_the_current_cell_sits_past_this_grid_on_the_trees_axis_alone():
+    """Where the adopted cell stands against the grid that did not choose it.
 
     ``CURRENT_CELL`` is read out of ``BOOSTER_PARAMS`` rather than written
-    down, so it moves when the parameters move. What has to stay true is that
-    it is one row of this grid, because the rule reads the current cell's
-    figure from the grid and from nowhere else.
+    down, so it moves when the parameters move, and on 23 September it did:
+    the extension recorded beside ``BOOSTER_PARAMS`` took the trees axis to
+    6,000, past the 3,000 this grid stops at. What is still true is that the
+    three axes this grid holds are one of its twenty-seven cells; what is no
+    longer true is that the whole cell is a row of it. Asserted in that shape
+    rather than deleted, so that a later move off the grid on one of the other
+    three axes is a failure and not a silence.
     """
     assert tuple(sw.CURRENT_CELL[k] for k in sw.GRID) in sw.CELLS
-    assert sw.CURRENT_TREES in sw.TREES
+    assert sw.CURRENT_TREES == 6000
+    assert sw.CURRENT_TREES not in sw.TREES
+
+
+def test_the_reading_rule_refuses_a_grid_that_does_not_carry_the_current_cell():
+    """And says why, because the reason is now the ordinary case.
+
+    The rule reads the current cell's figure out of the grid and from nowhere
+    else, so with the cell off the grid it cannot be applied at all. It must
+    refuse rather than pick a neighbouring row.
+    """
+    bare = pd.DataFrame(
+        [
+            {**sw.cell_values(cell), "n_estimators": trees, "rmse_oct_s": 400.0}
+            for cell in sw.CELLS
+            for trees in sw.TREES
+        ]
+    )
+    with pytest.raises(SystemExit, match="not exactly one row of the grid"):
+        sw.apply_reading_rule(bare, 0.5)
 
 
 # --------------------------------------------------------------------------
@@ -178,8 +200,12 @@ def _grid(best_rmse: float, current_rmse: float = 218.0) -> pd.DataFrame:
     """
     rows = []
     best = BEST
+    # The current cell's trees value is past ``sw.TREES`` since the extension
+    # of 23 September, so the grid this helper builds carries it explicitly.
+    # Without it the current cell has no row and the rule refuses the frame,
+    # which is a different test and is written as one above.
     for cell in sw.CELLS:
-        for trees in sw.TREES:
+        for trees in sorted(set(sw.TREES) | {sw.CURRENT_TREES}):
             value = 400.0
             if cell == CURRENT:
                 value = current_rmse if trees == sw.CURRENT_TREES else 401.0
@@ -229,9 +255,16 @@ def test_the_current_cell_figure_is_this_run_s_and_comes_from_the_grid():
     assert got["difference_s"] == pytest.approx(217.25 - 219.5)
 
 
-def test_the_rule_reads_all_one_hundred_and_sixty_two_rows():
-    got = sw.apply_reading_rule(_grid(217.25), 0.5)
-    assert got["rows"] == 162
+def test_the_rule_reads_every_row_of_the_frame_it_is_handed():
+    """The pre-registered grid is 162 rows and is checked as such above.
+
+    This frame is that grid plus the one row the current cell now needs, since
+    the extension of 23 September put its trees value past the trees axis, so
+    the count here is the frame's own and not the grid's.
+    """
+    frame = _grid(217.25)
+    got = sw.apply_reading_rule(frame, 0.5)
+    assert got["rows"] == len(frame) == len(sw.CELLS) * (len(sw.TREES) + 1)
     assert len(got["top_eight"]) == 8
 
 
