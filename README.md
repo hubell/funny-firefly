@@ -270,9 +270,27 @@ rather than shipping a copy of OSM.
 
 `--date 2026-01-01T00:00:00Z` pins a fetch to a moment in OSM's history, which
 is what makes a rebuild months from now reproduce these numbers rather than
-whatever the map says then. The figures in the committed reports were built from
-an unpinned fetch; not every Overpass mirror answers attic queries, so a pinned
-fetch may exercise the mirror rotation harder.
+whatever the map says then. Not every Overpass mirror answers attic queries, so
+a pinned fetch may exercise the mirror rotation harder.
+
+The figures in the committed reports were built from an unpinned fetch on
+1 September 2026, in which each airport was answered from the OSM state of the
+moment it was served, so no single `--date` reproduces it. Each airport's
+moment is recorded in `taxiout.provenance.OSM_PINS`. `make data` fetches
+today's map; the rebuild that reproduces the committed figures pins each
+airport to its own moment:
+
+```bash
+python scripts/fetch_osm.py --pin-from-register --force
+```
+
+An answer's header does not show whether a pin was applied, so the rebuild is
+checked by its elements. `--compare FETCHED REFERENCE` compares each airport's
+parsed elements with the cache the matrices were built from, and
+`--control-date 2020-01-01T00:00:00Z --only LIRF` asks the instance that
+answered for a date whose answer is known to differ, which shows that it
+applies a pin at all. `--force` writes in place, so run the rebuild in a clean
+checkout or copy the cache aside first.
 
 ## Data sources
 

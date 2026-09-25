@@ -149,22 +149,45 @@ demand destroying the record.
 ## What a rebuild of an external input is pinned to
 
 **1** external input(s) carry a pin. A pin is a claim
-about what a rebuild would return and is recorded unverified: exercising
-one costs the network and a server willing to answer, so what is written
-here is how the pin is applied and what would make it fail.
+about what a rebuild would return. Exercising one costs the network and a
+server willing to answer, so what is written here is how the pin is
+applied, how a rebuild proves it was, and what would make it fail.
 
 **the OSM movement-area geometry for the eleven airports, under `data/raw/*.json.gz`**
 
-Rebuilt by `python scripts/fetch_osm.py --pin-from-cache --force`, which reads each airport's own `osm3s.timestamp_osm_base` out of its cached payload and pins that airport's Overpass query to that moment.
+Rebuilt by `python scripts/fetch_osm.py --pin-from-register --force`, which pins each airport's Overpass query to its own entry in `OSM_PINS`.
 
-Recoverable per airport, and only per airport. The eleven files carry **seven** distinct stamps spanning 2026-09-01T13:23:05Z to 13:32:15Z, because the fetch was sequential and unpinned and each airport was answered from whatever state its mirror had ingested when it was served. One `--date` would pin eight of the eleven to a state their matrices were not built from, which is why no single pin was recorded when the cache was first scanned.
+Recoverable per airport, and only per airport, and from `OSM_PINS` rather than from the cache. The eleven entries carry **seven** distinct stamps spanning 2026-09-01T13:23:05Z to 13:32:15Z, because the fetch was sequential and unpinned and each airport was answered from whatever state its instance had ingested when it was served; one `--date` would pin eight of the eleven to a state their matrices were not built from. **The cache cannot carry them**: every answer is stamped with the answering instance's own current database state and never with the pin, so a pinned rebuild re-stamps each file with the rebuild day. The mode that read the pins from the cache, `--pin-from-cache`, would have worked exactly once and then pinned every airport to that day with no error, and it now refuses.
 
-- attic retention is not guaranteed. An instance may decline a query at a date this old, and one that declines is a failure to report. The mode refuses to fetch an airport whose stamp it cannot read, because **a silently unpinned fetch is a stop**: it would replace an answer whose OSM state is recorded with one whose is not.
-- the comparison is on the parsed elements and on the matrices they produce, not on the payload bytes. The response header records the answering instance's own version, so two payloads that differ byte for byte can carry the same geometry, and a bytewise test would fail on the instance rather than on the map.
+- attic retention is not guaranteed. An instance may decline a query at a date this old, and one that declines is a failure to report. The mode refuses to fetch an airport the register has no pin for, because **a silently unpinned fetch is a stop**: it would replace an answer whose OSM state is recorded with one whose is not.
+- **nothing in an answer's header proves the pin was applied.** The proof is the elements: `--compare FETCHED REFERENCE` matches each airport's parsed elements on type and id against the cache the matrices were built from and compares every field, and the matrices built from them are compared after that. Not the payload bytes, which differ in the header between any two answers.
+- an airport unchanged since its pin answers the same pinned or not, so a match alone does not show the pin at work. The control does: `--control-date` asks the instance that answered for one airport at a date whose answer is known to differ, and reports whether it does. LIRF at 2020-01-01T00:00:00Z differs, 355 elements against 494, measured on overpass-api.de on 25 September 2026.
+- the client falls back to two other mirrors when the first fails, and neither has been asked an attic query. The fetch record names the mirror that answered each airport, and `--compare` prints it.
+
+### The OSM pins, one per airport
+
+**11** airports at
+**7** distinct moments, in
+`taxiout.provenance.OSM_PINS`, which is what `--pin-from-register` reads.
+The basis, the same for every entry: each is the `osm3s.timestamp_osm_base` of that airport's cached Overpass answer, `data/raw/<ICAO>.json.gz`, which is the database state the Overpass instance that served it had ingested when it answered, on 1 September 2026. The eleven were fetched one after another and unpinned, so the database moved under the fetch and eleven answers carry seven moments rather than one. Read from the cache files on 25 September 2026, and the same eleven values Block 09e read from them on 22 September. **The cache header cannot be the source of truth, because a rebuild overwrites it.** Overpass stamps every answer with the answering instance's current database state and never with the `[date:]` pin, which Block 09h measured on three answers carrying a 2026 pin, a 2020 pin and none, so a pinned rebuild writes each file stamped with the day of the rebuild. And `data/raw/` is gitignored, so a clean checkout has no cache and would have no pins. Recorded here, they survive both.
+
+| airport | `timestamp_osm_base` |
+| --- | --- |
+| EDDF | 2026-09-01T13:23:05Z |
+| EDDM | 2026-09-01T13:23:05Z |
+| EGLL | 2026-09-01T13:23:05Z |
+| EHAM | 2026-09-01T13:24:06Z |
+| LEBL | 2026-09-01T13:26:06Z |
+| LEMD | 2026-09-01T13:27:05Z |
+| LFPG | 2026-09-01T13:27:05Z |
+| LIRF | 2026-09-01T13:29:10Z |
+| LTAI | 2026-09-01T13:30:11Z |
+| LTFM | 2026-09-01T13:30:11Z |
+| LSZH | 2026-09-01T13:32:15Z |
 
 ## What is still open
 
-**4** items. `--strict` fails while this is not
+**3** items. `--strict` fails while this is not
 empty and is the freeze condition; the ordinary run prints it and passes,
 because a gate that fails today cannot be wired into a commit path. Emptied
 by the work and never by editing the tuple.
@@ -172,9 +195,8 @@ by the work and never by editing the tuple.
 | what | owner |
 | --- | --- |
 | `docs/paper.md`'s figures match no report in the repository | Block 10, the figure pass, building the paper's own checker as part of it |
-| a five-seed submission has never been timed under the current cell | a timing run before the freeze |
 | two reports still have no declared inputs | the runs that regenerate them, at Block 11 |
-| the per-airport OSM pin is recorded and has never been exercised | Block 11, on the machine and with the network, comparing the parsed elements and the matrices they produce rather than the payload bytes |
+| the per-airport OSM pin has been exercised on one airport on one instance, and not on the eleven | Block 11: `--pin-from-register --force` for all eleven, `--compare` against the cache the matrices were built from, one `--control-date` probe on the instance that answered, and the matrices compared after that |
 
 ## What this does not reach
 

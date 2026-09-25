@@ -1465,7 +1465,7 @@ CONSTANTS: tuple[Constant, ...] = (
             "POLITE_DELAY_S",
             (5.0,),
             CHOSEN,
-            "line 47: the Overpass free tier allows about two concurrent slots"
+            "line 49: the Overpass free tier allows about two concurrent slots"
             " per address and throttles hard, and a short pause is cheaper than"
             " absorbing backoffs",
         ),
@@ -1884,6 +1884,54 @@ FROZEN_DOCUMENTS: tuple[Frozen, ...] = (
 # what a rebuild of an external input can be pinned to
 
 
+class OsmPin(NamedTuple):
+    """One airport's OSM pin: the Overpass database state its cache came from."""
+
+    icao: str
+    timestamp_osm_base: str
+
+
+# The basis of the eleven entries below, stated once because it is the same for
+# each: every entry's source is its own airport's cache file, and everything
+# else about where the value came from is shared.
+OSM_PINS_BASIS = (
+    "each is the `osm3s.timestamp_osm_base` of that airport's cached Overpass"
+    " answer, `data/raw/<ICAO>.json.gz`, which is the database state the"
+    " Overpass instance that served it had ingested when it answered, on"
+    " 1 September 2026. The eleven were fetched one after another and"
+    " unpinned, so the database moved under the fetch and eleven answers carry"
+    " seven moments rather than one. Read from the cache files on 25 September"
+    " 2026, and the same eleven values Block 09e read from them on 22"
+    " September. **The cache header cannot be the source of truth, because a"
+    " rebuild overwrites it.**"
+    " Overpass stamps every answer with the answering instance's current"
+    " database state and never with the `[date:]` pin, which Block 09h measured"
+    " on three answers carrying a 2026 pin, a 2020 pin and none, so a pinned"
+    " rebuild writes each file stamped with the day of the rebuild. And"
+    " `data/raw/` is gitignored, so a clean checkout has no cache and would"
+    " have no pins. Recorded here, they survive both"
+)
+
+# One entry per airport, in the order the cache files were written on
+# 1 September, which is the order of ``taxiout.airports.AIRPORTS``. The stamps
+# never go backwards down the list, which is what a sequential fetch against a
+# moving database looks like. ``scripts/fetch_osm.py --pin-from-register`` pins
+# each airport's query to its entry.
+OSM_PINS: tuple[OsmPin, ...] = (
+    OsmPin("EDDF", "2026-09-01T13:23:05Z"),
+    OsmPin("EDDM", "2026-09-01T13:23:05Z"),
+    OsmPin("EGLL", "2026-09-01T13:23:05Z"),
+    OsmPin("EHAM", "2026-09-01T13:24:06Z"),
+    OsmPin("LEBL", "2026-09-01T13:26:06Z"),
+    OsmPin("LEMD", "2026-09-01T13:27:05Z"),
+    OsmPin("LFPG", "2026-09-01T13:27:05Z"),
+    OsmPin("LIRF", "2026-09-01T13:29:10Z"),
+    OsmPin("LTAI", "2026-09-01T13:30:11Z"),
+    OsmPin("LTFM", "2026-09-01T13:30:11Z"),
+    OsmPin("LSZH", "2026-09-01T13:32:15Z"),
+)
+
+
 class Pinned(NamedTuple):
     what: str
     how: str
@@ -1891,36 +1939,50 @@ class Pinned(NamedTuple):
     caveats: tuple[str, ...]
 
 
-# **A pin is a claim about what a rebuild would return, and it is recorded here
-# unverified.** Verifying one costs the network and an Overpass instance willing
-# to answer an attic query, which is not something a block that fits models can
-# do honestly, so the record says how the pin is applied and what would make it
-# fail rather than asserting that it works.
+# **A pin is a claim about what a rebuild would return.** Exercising one costs
+# the network and an Overpass instance willing to answer an attic query, so the
+# record says how the pin is applied, how a rebuild proves it was, and what
+# would make it fail. The OSM pin has been exercised once, on one airport and
+# one instance; what that showed and what is left are on the pending list.
 REBUILD_PINS: tuple[Pinned, ...] = (
     Pinned(
         "the OSM movement-area geometry for the eleven airports, under"
         " `data/raw/*.json.gz`",
-        "`python scripts/fetch_osm.py --pin-from-cache --force`, which reads"
-        " each airport's own `osm3s.timestamp_osm_base` out of its cached"
-        " payload and pins that airport's Overpass query to that moment",
-        "per airport, and only per airport. The eleven files carry **seven**"
-        " distinct stamps spanning 2026-09-01T13:23:05Z to 13:32:15Z, because"
-        " the fetch was sequential and unpinned and each airport was answered"
-        " from whatever state its mirror had ingested when it was served. One"
-        " `--date` would pin eight of the eleven to a state their matrices were"
-        " not built from, which is why no single pin was recorded when the cache"
-        " was first scanned",
+        "`python scripts/fetch_osm.py --pin-from-register --force`, which pins"
+        " each airport's Overpass query to its own entry in `OSM_PINS`",
+        "per airport, and only per airport, and from `OSM_PINS` rather than"
+        " from the cache. The eleven entries carry **seven** distinct stamps"
+        " spanning 2026-09-01T13:23:05Z to 13:32:15Z, because the fetch was"
+        " sequential and unpinned and each airport was answered from whatever"
+        " state its instance had ingested when it was served; one `--date` would"
+        " pin eight of the eleven to a state their matrices were not built from."
+        " **The cache cannot carry them**: every answer is stamped with the"
+        " answering instance's own current database state and never with the"
+        " pin, so a pinned rebuild re-stamps each file with the rebuild day. The"
+        " mode that read the pins from the cache, `--pin-from-cache`, would have"
+        " worked exactly once and then pinned every airport to that day with no"
+        " error, and it now refuses",
         (
             "attic retention is not guaranteed. An instance may decline a query"
             " at a date this old, and one that declines is a failure to report."
-            " The mode refuses to fetch an airport whose stamp it cannot read,"
+            " The mode refuses to fetch an airport the register has no pin for,"
             " because **a silently unpinned fetch is a stop**: it would replace"
             " an answer whose OSM state is recorded with one whose is not.",
-            "the comparison is on the parsed elements and on the matrices they"
-            " produce, not on the payload bytes. The response header records the"
-            " answering instance's own version, so two payloads that differ byte"
-            " for byte can carry the same geometry, and a bytewise test would"
-            " fail on the instance rather than on the map.",
+            "**nothing in an answer's header proves the pin was applied.** The"
+            " proof is the elements: `--compare FETCHED REFERENCE` matches each"
+            " airport's parsed elements on type and id against the cache the"
+            " matrices were built from and compares every field, and the"
+            " matrices built from them are compared after that. Not the payload"
+            " bytes, which differ in the header between any two answers.",
+            "an airport unchanged since its pin answers the same pinned or not,"
+            " so a match alone does not show the pin at work. The control does:"
+            " `--control-date` asks the instance that answered for one airport"
+            " at a date whose answer is known to differ, and reports whether it"
+            " does. LIRF at 2020-01-01T00:00:00Z differs, 355 elements against"
+            " 494, measured on overpass-api.de on 25 September 2026.",
+            "the client falls back to two other mirrors when the first fails,"
+            " and neither has been asked an attic query. The fetch record names"
+            " the mirror that answered each airport, and `--compare` prints it.",
         ),
     ),
 )
@@ -1951,14 +2013,6 @@ PROVENANCE_PENDING: tuple[Pending, ...] = (
         "Block 10, the figure pass, building the paper's own checker as part of it",
     ),
     Pending(
-        "a five-seed submission has never been timed under the current cell",
-        "the recommendation to set `SEED_AVERAGE_ADOPTED` rests on an estimate"
-        " reached by scaling Block 07's leg fits, and an estimate that supports"
-        " a recommendation is measured before the recommendation is acted on."
-        " `make submission` is the target that settles it",
-        "a timing run before the freeze",
-    ),
-    Pending(
         "two reports still have no declared inputs",
         "thirteen of the fifteen generators now carry the footer. Four of them"
         " gained one on 23 September, when a run regenerated each: the ladder"
@@ -1975,17 +2029,22 @@ PROVENANCE_PENDING: tuple[Pending, ...] = (
         "the runs that regenerate them, at Block 11",
     ),
     Pending(
-        "the per-airport OSM pin is recorded and has never been exercised",
-        "the shape question is settled and is in `REBUILD_PINS`: the eleven"
-        " files carry seven `timestamp_osm_base` values, so the rebuild is"
-        " `--pin-from-cache`, which pins each airport to its own, rather than"
-        " one `--date` that would pin eight of them to a state their matrices"
-        " were not built from. What is not settled is whether it returns"
-        " anything: the mode was written and its guards were exercised offline,"
-        " no query was sent, and attic retention at this date is not"
-        " guaranteed. The test is the freeze's own",
-        "Block 11, on the machine and with the network, comparing the parsed"
-        " elements and the matrices they produce rather than the payload bytes",
+        "the per-airport OSM pin has been exercised on one airport on one"
+        " instance, and not on the eleven",
+        "Block 09h pinned LIRF to its own stamp, 2026-09-01T13:29:10Z, on"
+        " overpass-api.de on 25 September 2026, and the pin serves: all 494"
+        " elements matched the cache in every field and in order, the matrix"
+        " came out byte for byte, and the same instance pinned to 2020-01-01"
+        " returned 355, so it applies `[date:]`. That is one airport on one"
+        " instance. LIRF has not changed"
+        " since 1 September, so a match there cannot by itself tell a pinned"
+        " fetch from an unpinned one, and the ten other airports, where a pin"
+        " would matter for any that changed after its own stamp, have never"
+        " been fetched pinned. Nor has either fallback mirror",
+        "Block 11: `--pin-from-register --force` for all eleven, `--compare`"
+        " against the cache the matrices were built from, one `--control-date`"
+        " probe on the instance that answered, and the matrices compared after"
+        " that",
     ),
 )
 

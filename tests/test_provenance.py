@@ -853,3 +853,108 @@ def test_every_unfootered_report_names_a_cost_and_an_owner():
         assert (REPO / u.report).exists(), u.report
         assert u.report not in declared, f"{u.report} both declares and does not"
         assert len(u.cost) > 10 and len(u.owner) > 10, u.report
+
+
+# --------------------------------------------------------------------------
+# the OSM pins, recorded where a rebuild cannot destroy them: Block 09i
+
+
+# The seven moments Block 09e counted across the eleven cache files on
+# 22 September, with how many airports carry each. Written out here as a second
+# transcription, independent of the register's, so an edit to either shows.
+BLOCK_09E_STAMPS = {
+    "2026-09-01T13:23:05Z": 3,
+    "2026-09-01T13:24:06Z": 1,
+    "2026-09-01T13:26:06Z": 1,
+    "2026-09-01T13:27:05Z": 2,
+    "2026-09-01T13:29:10Z": 1,
+    "2026-09-01T13:30:11Z": 2,
+    "2026-09-01T13:32:15Z": 1,
+}
+
+
+def test_the_register_carries_one_osm_pin_per_airport_at_the_seven_stamps():
+    """Eleven entries, eleven distinct airports, the seven moments 09e counted.
+
+    Nothing else in the repository carries the per-airport values: the cache
+    that did is gitignored, and a pinned rebuild re-stamps it with the rebuild
+    day. So the register's copy is held here against a second transcription.
+    """
+    from collections import Counter
+
+    from taxiout.airports import AIRPORTS
+    from taxiout.provenance import OSM_PINS
+
+    icaos = [p.icao for p in OSM_PINS]
+    assert len(OSM_PINS) == 11
+    assert len(set(icaos)) == 11
+    assert icaos == [a.icao for a in AIRPORTS], "one per airport, in fetch order"
+    stamps = [p.timestamp_osm_base for p in OSM_PINS]
+    assert len(set(stamps)) == 7
+    assert Counter(stamps) == BLOCK_09E_STAMPS
+    # Fetched one after another against a moving database, so never backwards.
+    assert stamps == sorted(stamps)
+
+
+def test_the_osm_pins_equal_the_cache_stamps_while_the_original_cache_exists():
+    """The register against the cache it was read from, wherever that exists.
+
+    **This passes on the cache fetched on 1 September and fails after any
+    rebuild, and failing then is correct.** Overpass stamps every answer with
+    its own database state on the day and never with the pin, so a rebuilt
+    file carries the rebuild day: from then on the register is right and the
+    cache is not. The test's job is to have caught a transcription error while
+    the original cache still existed to catch it against.
+    """
+    from taxiout.osm import cached_osm_base
+    from taxiout.provenance import OSM_PINS
+
+    cache = REPO / "data" / "raw"
+    present = [p for p in OSM_PINS if (cache / f"{p.icao}.json.gz").exists()]
+    if not present:
+        pytest.skip(
+            "no OSM cache in this checkout: data/raw/ is gitignored, so a clean"
+            " checkout has none, and there the register is the only record of"
+            " the pins"
+        )
+    read = {p.icao: cached_osm_base(cache, p.icao) for p in present}
+    recorded = {p.icao: p.timestamp_osm_base for p in present}
+    assert read == recorded, (
+        "a cache stamp differs from its pin in OSM_PINS. Either the register was"
+        " transcribed wrongly, or this cache was re-fetched and carries the day"
+        " of the re-fetch, in which case the register is right and this test"
+        " has done its job"
+    )
+
+
+def test_the_recorded_rebuild_reads_the_register_and_never_the_cache():
+    """The recorded command is the one that survives a rebuild.
+
+    The one recorded before read each pin out of the cache header, which a
+    rebuild overwrites with the rebuild day, so its second run would have
+    pinned every airport to that day with no error.
+    """
+    from taxiout.provenance import REBUILD_PINS
+
+    for k in REBUILD_PINS:
+        assert "--pin-from-register --force" in k.how
+        assert "`OSM_PINS`" in k.how
+        assert "--pin-from-cache" not in k.how
+
+
+def test_the_pending_list_closes_the_timing_and_narrows_the_pin():
+    """One item closed by work already done, one rewritten and not closed.
+
+    A five-seed submission was timed under the current cell on 24 September,
+    at 29 min 20 s, and its entry outlived the measurement. The OSM pin has
+    served on one airport on one instance, which narrows its item and does not
+    discharge it.
+    """
+    whats = [p.what for p in PROVENANCE_PENDING]
+    assert not any("five-seed submission" in w for w in whats)
+    assert not any("has never been exercised" in w for w in whats)
+    pin = [p for p in PROVENANCE_PENDING if "OSM pin" in p.what]
+    assert len(pin) == 1
+    assert "Block 11" in pin[0].owner
+    for mode in ("--pin-from-register", "--compare", "--control-date"):
+        assert mode in pin[0].owner, mode

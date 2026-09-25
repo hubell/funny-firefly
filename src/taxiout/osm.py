@@ -20,7 +20,9 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from collections import Counter
 from pathlib import Path
+from typing import NamedTuple
 
 from .airports import Airport
 
@@ -76,18 +78,21 @@ def cache_path(cache_dir: Path, icao: str) -> Path:
 
 
 def cached_osm_base(cache_dir: Path, icao: str) -> str | None:
-    """The OSM state one cached airport was actually answered from.
+    """The ``osm3s.timestamp_osm_base`` one cached airport's answer carries.
 
-    Overpass returns ``osm3s.timestamp_osm_base``: the moment of the last edit
-    the answering instance had ingested. **It is per answer and not per run.**
-    The eleven airports here were fetched sequentially and unpinned, so they
-    carry seven different moments spanning nine minutes, and one ``--date`` for
-    all of them would pin eight to a state their matrices were not built from.
-    This is what ``--pin-from-cache`` reads so each airport's rebuild asks for
-    its own.
+    Overpass returns the moment of the last edit the answering instance had
+    ingested when it answered. **It is per answer and not per run, and it is
+    never the pin.** The eleven airports here were fetched sequentially and
+    unpinned on 1 September 2026, so their files carry seven different moments,
+    and those moments are the pins; but every answer is stamped with the
+    instance's own current state whatever ``[date:]`` asked for, so a file
+    re-fetched with a pin carries the day of the re-fetch instead.
 
-    ``None`` if the file is absent or carries no such stamp, which the caller
-    must treat as a stop rather than falling back to an unpinned fetch.
+    **That is why nothing pins from this.** The pins are
+    ``taxiout.provenance.OSM_PINS``, and this is read only to check that
+    register against the original cache while one exists.
+
+    ``None`` if the file is absent or carries no such stamp.
     """
     import gzip
     import json
@@ -122,12 +127,21 @@ def fetch_airport(
     attempts_per_mirror: int = 2,
     timeout: int = 60,
     date: str | None = None,
+    mirrors: tuple[str, ...] = MIRRORS,
 ) -> tuple[dict, bool]:
     """Return ``(overpass_json, from_cache)`` for one airport.
 
     ``date`` pins the query to a moment in OSM's history; see ``build_query``.
     The pinned date, if any, is recorded inside the cached payload so a matrix
-    built from it can say what it was built from.
+    built from it can say what it was built from, and so is the mirror that
+    answered. That record is the only one of which instance served an answer
+    and what it was asked: the response's own header names the software and the
+    instance's current database state, and never the pin.
+
+    ``mirrors`` narrows the rotation. The control probe in
+    ``scripts/fetch_osm.py`` asks only the instance that answered the fetch it
+    checks, because a control answered by a different instance proves nothing
+    about the first.
 
     Raises ``RuntimeError`` only after every mirror has been tried.
     """
@@ -139,7 +153,7 @@ def fetch_airport(
     query = build_query(ap, date=date)
     errors: list[str] = []
     for round_idx in range(attempts_per_mirror):
-        for mirror in MIRRORS:
+        for mirror in mirrors:
             try:
                 payload = _post(mirror, query, timeout)
             except urllib.error.HTTPError as exc:
@@ -167,4 +181,78 @@ def fetch_airport(
 
     raise RuntimeError(
         f"all Overpass mirrors failed for {ap.icao}:\n  " + "\n  ".join(errors)
+    )
+
+
+def read_payload(path: Path) -> dict:
+    """One stored Overpass answer, parsed."""
+    with gzip.open(path, "rt", encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+class ElementComparison(NamedTuple):
+    """Two Overpass answers compared element by element, and not byte by byte.
+
+    ``fetched`` and ``reference`` count each side's elements by type.
+    ``differing`` is the number of elements on both sides with any field
+    unequal, and ``fields`` says which fields and how often. ``duplicates``
+    counts a ``(type, id)`` repeated on either side, which fails ``identical``
+    because a lookup by key would hide the repeat.
+    """
+
+    fetched: dict[str, int]
+    reference: dict[str, int]
+    only_fetched: int
+    only_reference: int
+    in_both: int
+    differing: int
+    fields: dict[str, int]
+    duplicates: int
+    same_order: bool
+
+    @property
+    def same_elements(self) -> bool:
+        """No element on one side only, and none on both that differs."""
+        return self.only_fetched == 0 and self.only_reference == 0 and self.differing == 0
+
+    @property
+    def identical(self) -> bool:
+        """The same elements, every field equal, in the same order."""
+        return self.same_elements and self.duplicates == 0 and self.same_order
+
+
+def compare_elements(fetched: dict, reference: dict) -> ElementComparison:
+    """Compare the parsed elements of two Overpass answers.
+
+    **The elements and not the payload, because the header differs between any
+    two answers.** ``osm3s.timestamp_osm_base`` is the answering instance's own
+    database state on the day it answered, pinned or not, and the client adds a
+    record of the fetch; two answers carrying the same geometry therefore never
+    match byte for byte. Elements are matched on ``(type, id)`` and compared on
+    every field, so geometry, node lists and tags all count.
+    """
+    ours = fetched.get("elements", [])
+    theirs = reference.get("elements", [])
+    our_keys = [(e.get("type"), e.get("id")) for e in ours]
+    their_keys = [(e.get("type"), e.get("id")) for e in theirs]
+    by_ours = dict(zip(our_keys, ours))
+    by_theirs = dict(zip(their_keys, theirs))
+    shared = by_ours.keys() & by_theirs.keys()
+    fields: Counter = Counter()
+    differing = 0
+    for key in shared:
+        a, b = by_ours[key], by_theirs[key]
+        if a != b:
+            differing += 1
+            fields.update(f for f in a.keys() | b.keys() if a.get(f) != b.get(f))
+    return ElementComparison(
+        fetched=dict(Counter(kind for kind, _ in our_keys)),
+        reference=dict(Counter(kind for kind, _ in their_keys)),
+        only_fetched=len(by_ours.keys() - by_theirs.keys()),
+        only_reference=len(by_theirs.keys() - by_ours.keys()),
+        in_both=len(shared),
+        differing=differing,
+        fields=dict(sorted(fields.items())),
+        duplicates=len(our_keys) - len(by_ours) + len(their_keys) - len(by_theirs),
+        same_order=our_keys == their_keys,
     )
