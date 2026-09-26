@@ -90,10 +90,11 @@ modelling stage, measured against the target.
       them and kept without them
 - [x] The ceiling — an oracle bound on what any queue model could add,
       in [`reports/congestion.md`](reports/congestion.md)
-- [x] Runway saturation, the cheap Gate 3, measured against the ceiling:
-      worth nothing; the simulation is not started without a decision
-- [x] The one parameter sweep, on October 2025, recorded in
-      `src/taxiout/models.py` with the number that chose it
+- [x] Runway saturation, the cheap Gate 3, measured against the ceiling on
+      3 September: worth nothing then; the simulation is not started without
+      a decision
+- [x] Two parameter sweeps and one extension of the second, on October 2025,
+      recorded in `src/taxiout/models.py` with the numbers that chose the cell
 - [x] An identifier encoding shrunk toward the geometry rather than toward a
       group mean, with the shrinkage weight estimated per airport and not
       tuned — the arms and the leakage guards in
@@ -444,14 +445,15 @@ scripts/
   check_runways_ourairports.py reports/runway_crosscheck.md (network)
   report_synthetic_airport.py  reports/synthetic_airport.md (+ .svg; reads nothing)
   review_challenge_data.py     reports/data_review.md (needs challenge data)
-  report_tails.py              reports/tails.md (needs challenge data)
+  report_tails.py              reports/tails.md, all but one section (needs challenge data)
+  pooled_tails.py              that one section of reports/tails.md, with --report (needs challenge data)
   report_geometry_gaps.py      reports/geometry_gaps.md (needs challenge data + OSM cache)
   report_congestion.py         reports/congestion.md (needs challenge data)
   report_occupancy.py          reports/occupancy.md (needs challenge data + residuals)
   report_headroom.py           reports/headroom.md (needs challenge data + residuals)
   run_baselines.py             reports/baseline.md (needs challenge data)
   report_transfer.py           reports/transfer.md (needs challenge data)
-  sweep_params.py              the one parameter sweep, on October 2025
+  sweep_params.py              the second parameter sweep, on October 2025; keeps the first's terms
   make_submission.py           a submission file (needs challenge data)
   check_licence_hygiene.py     verifies no OSM or challenge content is tracked
   check_provenance.py          verifies every number is categorised (+ docs/provenance.md)

@@ -2005,12 +2005,19 @@ class Pending(NamedTuple):
 
 PROVENANCE_PENDING: tuple[Pending, ...] = (
     Pending(
-        "`docs/paper.md`'s figures match no report in the repository",
-        "it was last touched at `9424d7b` on 20 September, before the wider"
-        " sweep of 21 September and before the regenerations of 22 September, so"
-        " essentially every model figure in it is stale. Each section already"
-        " carries a `Source:` line, which is what a checker would read",
-        "Block 10, the figure pass, building the paper's own checker as part of it",
+        "`docs/paper.md` quotes the reports as they stood on 24 September, and"
+        " the freeze regenerates them",
+        "the figure pass of 25 September brought every figure in the paper to"
+        " the reports of 23 and 24 September, and `scripts/check_paper.py"
+        " --strict` passes on it: every figure is in the section of the file"
+        " its source line names, listed as history with a reason, or computed"
+        " by an arithmetic the check verifies. The freeze then rebuilds the"
+        " geometry from pinned fetches and regenerates every report under the"
+        " parameters that ship, and a report that prints a figure differently"
+        " afterwards leaves the paper quoting the old one, which the check"
+        " will say",
+        "Block 11: `scripts/check_paper.py --strict` after the regenerations,"
+        " and the paper moved with any figure that moved",
     ),
     Pending(
         "two reports still have no declared inputs",
@@ -2106,8 +2113,8 @@ SCOPE: tuple[tuple[str, str], ...] = (
         "`docs/` and `README.md`",
         "the two frozen documents are covered by check 5, which is an"
         " immutability digest and not a currency check. `docs/paper.md` is"
-        " Block 10's and is on the pending list; the rest carries no model"
-        " figure",
+        " covered by check 14, and the pending list says what the freeze's"
+        " regenerations owe it; the rest carries no model figure",
     ),
     (
         "cross-report citation",
@@ -2121,10 +2128,40 @@ SCOPE: tuple[tuple[str, str], ...] = (
     ),
     (
         "`docs/paper.md` as a citing document",
-        "NOT covered by check 11, and deliberately: it is stale by its own"
-        " pending entry, so running the check over it would print a wall of"
-        " findings that are all one fact. Block 10 builds the paper's own"
-        " checker as part of the figure pass",
+        "covered by check 14 and not by check 11. The paper names its sources"
+        " once per section, in a `Source:` line, where a report names them in"
+        " the sentence, so `scripts/check_paper.py` reads each figure against"
+        " the files its section cites and the sections of them it names."
+        " `--strict` passes on it since the figure pass of 25 September and is"
+        " run again after every regeneration; `--report` prints every figure"
+        " with where it was found",
+    ),
+    (
+        "integers under a thousand in `docs/paper.md`",
+        "NOT covered by check 14. A figure there is a decimal, a percentage, or"
+        " an integer of four or more digits, and a count or a whole number of"
+        " seconds below a thousand is neither: the rows a term covers, a"
+        " rounded gain in seconds. The paper writes them as numerals, so they"
+        " can go stale, and no check here will say so",
+    ),
+    (
+        "the paper's drafting notes",
+        "no longer in `docs/paper.md`: the figure pass of 25 September moved"
+        " the section that said it was not part of the paper out of the"
+        " repository, so `PAPER_EXCLUDED_SECTIONS` is empty and check 14 reads"
+        " every section the paper has. The mechanism stays: a section listed"
+        " there is reported with its figure count rather than passed over, and"
+        " an entry naming a section the paper does not have fails",
+    ),
+    (
+        "the correctness of a figure in `docs/paper.md`",
+        "NOT covered. Check 14 is a check of presence: a figure has to appear,"
+        " at the paper's own precision, in the file its section cites and,"
+        " where the source line names a section of that file, in that section."
+        " A short figure can equal a number in a cited section by chance, and"
+        " the check prints every number in scope that a figure matches so a"
+        " reader can tell the row the sentence quotes from a coincidence; it"
+        " cannot tell them apart itself",
     ),
     (
         "the line numbers a basis cites",
@@ -2313,6 +2350,264 @@ REPORT_CITATION_EXEMPTIONS: tuple[Uncited, ...] = (
         " `taxiout.synthetic`; the citation of `tails.md` sits in the same"
         " long sentence and is about where the record-quality term is"
         " documented, not about this number",
+    ),
+)
+
+
+# --------------------------------------------------------------------------
+# the paper's figures
+
+# The paper whose figures ``scripts/check_paper.py`` checks against the files
+# its sections cite. Check 14 of ``scripts/check_provenance.py`` runs it.
+PAPER = "docs/paper.md"
+
+# The fewest digits an integer needs to be read as a figure in the paper. A
+# decimal and a percentage are figures at any size. Below a thousand the
+# paper's numerals are dates, list numbers and gate names as often as they are
+# measurements, so the line is drawn where every integer is a quantity, and
+# ``SCOPE`` records what it leaves out. Held here, beside the patterns that
+# narrow the definition, because it is the other half of it.
+PAPER_INTEGER_MIN_DIGITS = 4
+
+
+class PaperPattern(NamedTuple):
+    """A kind of token shaped like a figure that is not a measurement."""
+
+    name: str
+    pattern: str
+    why: str
+
+
+# Matched by pattern rather than listed one by one, because each is a whole
+# kind: the paper refers to its own sections by number throughout, and a list
+# of them would grow with every cross-reference. A token inside a match is
+# counted and reported by the pattern's name, never silently dropped.
+PAPER_EXEMPT_PATTERNS: tuple[PaperPattern, ...] = (
+    PaperPattern(
+        "section reference",
+        r"§\s*\d+(?:\.\d+)*",
+        "the paper's reference to one of its own sections. It names a place in"
+        " the document and measures nothing",
+    ),
+    PaperPattern(
+        "heading number",
+        r"^#{1,6}\s+\d+(?:\.\d+)*\.?(?=\s)",
+        "a section's own number at the start of its heading: the same thing as"
+        " a section reference, seen from the section itself",
+    ),
+    PaperPattern(
+        "year",
+        r"(?<![\w.,])(?:19|20)\d{2}(?![\w%]|\.\d|,\d{3})",
+        "a bare four-digit integer from 1900 to 2099. The paper writes every"
+        " count of a thousand or more with a thousands separator, so a bare"
+        " four-digit integer in it is a year: the training year, the ranking"
+        " year, or the year of a cited work",
+    ),
+    PaperPattern(
+        "version string",
+        r"(?i:\b(?:v|version|release|python|cpython|odbl|gplv?)\s?)\d+(?:\.\d+)+",
+        "a software or license version names a release and measures nothing."
+        " A dotted number with three or more parts is never read as a figure"
+        " in the first place, so this covers the two-part form after a name",
+    ),
+)
+
+
+class PaperSection(NamedTuple):
+    """A section of the paper named by its key, with the reason it is listed.
+
+    The key is the section's number with a section sign, or, for a section
+    with no number, its heading without the bracketed status tag, so an edit
+    to the tag or the title does not orphan the entry.
+    """
+
+    section: str
+    why: str
+
+
+# Sections that carry figures and no source line by design. **Checked against
+# every live report rather than a named one**, so a figure no live report
+# carries still fails; what the entry excuses is the missing line, not the
+# figures. Not every section without a source line belongs here: one that
+# quotes figures and names nothing is a finding, and the figure pass gives it a
+# source line rather than an entry.
+PAPER_NO_SOURCE_SECTIONS: tuple[PaperSection, ...] = (
+    PaperSection(
+        "Abstract",
+        "its figures summarize the body, whose sections name their sources, so"
+        " it is read against every live report rather than a named one",
+    ),
+    PaperSection(
+        "§1.2",
+        "the three claims, each pointing at the section that carries its"
+        " measurement. Its figures summarize the body the same way the"
+        " abstract's do, and are read against every live report",
+    ),
+)
+
+# Sections excluded from the check by name. **Excluded and reported**, never
+# skipped in silence: a section that says it is not part of the paper is still
+# in `docs/paper.md` and ships with it, so the report prints it with its figure
+# count, and an entry naming a section the paper no longer has fails. **Empty
+# since the figure pass of 25 September**, which moved the one such section,
+# the drafting notes, out of the paper and into the notes folder outside the
+# repository; every section the paper has is checked.
+PAPER_EXCLUDED_SECTIONS: tuple[PaperSection, ...] = ()
+
+
+class PaperFigure(NamedTuple):
+    """One figure in one section, with the reason it stands as it does.
+
+    For a computed figure, ``arithmetic`` is the expression the paper's figure
+    is computed by, over numbers, and ``operands`` names the numbers in it that
+    are quoted from the section's own sources. ``scripts/check_paper.py``
+    verifies both: each operand has to be in the expression and in a cited
+    source, and the value has to round to the figure. A number in the
+    expression that is not an operand is a constant of the arithmetic, and the
+    entry's ``why`` says where it comes from.
+    """
+
+    section: str
+    figure: str
+    why: str
+    arithmetic: str = ""
+    operands: tuple[str, ...] = ()
+
+
+# One reason for the twenty-three keys of §7.1.1, which quote one record.
+_PREREGISTERED = (
+    "Experiment 2 or 3 of 20 September, run under the parameters then in force"
+    " and not repeated under the parameters that ship, so the figure is that"
+    " day's and matches only the dated record the experiments wrote. The"
+    " subsection's heading, its first paragraph and the sentence quoting the"
+    " figure all say so"
+)
+
+# Figures that match only in a frozen dated record and stand anyway, each with
+# its section and the reason it is quoted as history: a figure that matches
+# only in a record frozen before the model moved was true of that model and
+# not of this one, so it is stale until the entry says why the paper quotes
+# the past. `figure` is written as the paper writes it, sign included with a
+# minus as a hyphen, so one entry covers a figure the section quotes more than
+# once the same way and never a magnitude and a signed bound that share their
+# digits. Transcribed on
+# 25 September from the figure pass's report and checked against the checker's
+# own verdicts, which reach every entry; an entry nothing reaches fails.
+PAPER_HISTORICAL_FIGURES: tuple[PaperFigure, ...] = (
+    PaperFigure(
+        "§6.4",
+        "10.0",
+        "the saturation rung's oracle ceiling on December as measured on 3 and"
+        " 4 September under the parameters then in force, from the entry of"
+        " 4 September in `docs/plan.md`: the measurement Gate 3 was stopped on."
+        " The sentence dates it, and the rung's ceiling under the parameters"
+        " that ship is given two sentences later from `reports/congestion.md`",
+    ),
+    PaperFigure(
+        "§6.4",
+        "8.5",
+        "the same rung's ceiling on July on the same day, from the same entry;"
+        " dated in the same sentence",
+    ),
+    PaperFigure(
+        "§7.4",
+        "1.29",
+        "the route-length check's ratio before 19 September, with the encoding"
+        " fitted on the unflagged training rows, from the dated record of"
+        " 10 September. The sentence dates it and gives beside it the reading"
+        " since then, 1.56, from the live ladder report",
+    ),
+    *(
+        PaperFigure("§7.1.1", figure, _PREREGISTERED)
+        for figure in (
+            "0.40",
+            "0.30",
+            "1.15",
+            "0.77",
+            "-0.40",
+            "0.34",
+            "-1.6",
+            "+0.9",
+            "+0.77",
+            "0.23",
+            "-0.2",
+            "+2.3",
+            "+0.10",
+            "-0.4",
+            "+0.6",
+            "-0.84",
+            "-1.5",
+            "-1.61",
+            "1.02",
+            "224.8",
+            "224.7",
+            "+0.37",
+            "0.19",
+        )
+    ),
+)
+
+# The ladder steps the paper states as differences, each computed from two
+# ex-flagged RMSE figures in `reports/baseline.md`, *The ablation ladder*. The
+# four in §1.2 repeat four of §6.3's, and §1.2 is read against every live
+# report, so the operands are found there too.
+_PLAN_LAG_DECEMBER = (
+    "the plan-lag block's step on the December split: `identifiers + time +"
+    " geometry + aircraft` to `+ plan lags`, ex-flagged"
+)
+_PLAN_LAG_JULY = "the same step on the July split, ex-flagged"
+_EXCESS_DECEMBER = (
+    "what every congestion and weather block is worth net of the plan lags on"
+    " the December split: `+ plan lags` to `+ weather`, ex-flagged"
+)
+_EXCESS_JULY = "the same, on the July split"
+
+# Figures the paper computes from report figures rather than quotes, a
+# difference stated in words, each with the arithmetic the checker verifies.
+# Transcribed on 25 September from the figure pass's report. 5.8 also equals
+# an interval bound in *Held-out pairs*, which §6.3 cites, by chance; the
+# entry stands first so the check reads the figure as what it is, and the
+# report prints the chance match beside it.
+PAPER_FIGURE_EXEMPTIONS: tuple[PaperFigure, ...] = (
+    PaperFigure("§1.2", "79.3", _PLAN_LAG_DECEMBER, "320.2 - 240.9", ("320.2", "240.9")),
+    PaperFigure("§1.2", "57.4", _PLAN_LAG_JULY, "407.3 - 349.9", ("407.3", "349.9")),
+    PaperFigure("§1.2", "7.7", _EXCESS_DECEMBER, "240.9 - 233.2", ("240.9", "233.2")),
+    PaperFigure("§1.2", "5.8", _EXCESS_JULY, "349.9 - 344.1", ("349.9", "344.1")),
+    PaperFigure("§6.3", "79.3", _PLAN_LAG_DECEMBER, "320.2 - 240.9", ("320.2", "240.9")),
+    PaperFigure("§6.3", "57.4", _PLAN_LAG_JULY, "407.3 - 349.9", ("407.3", "349.9")),
+    PaperFigure(
+        "§6.3",
+        "59.3",
+        "the plan-lag block measured at the `+ weather` rung by removing it:"
+        " `+ weather (without plan lags)` against `+ weather`, December,"
+        " ex-flagged",
+        "292.5 - 233.2",
+        ("292.5", "233.2"),
+    ),
+    PaperFigure(
+        "§6.3",
+        "51.7",
+        "the same measurement on the July split",
+        "395.8 - 344.1",
+        ("395.8", "344.1"),
+    ),
+    PaperFigure("§6.3", "7.7", _EXCESS_DECEMBER, "240.9 - 233.2", ("240.9", "233.2")),
+    PaperFigure("§6.3", "5.8", _EXCESS_JULY, "349.9 - 344.1", ("349.9", "344.1")),
+    PaperFigure(
+        "§7.1.2",
+        "0.27",
+        "the winner's curse of the sweep, an expectation and not a measurement,"
+        " as the sentence says: the standard deviation one seed carries, the"
+        " floor of 0.19 s divided by root two, times the expected value of the"
+        " largest of twenty-seven independent standard normal draws, 1.998,"
+        " which is the integral of x n phi(x) Phi(x) to the power n minus one"
+        " over the real line at n equal to 27, computed by numerical"
+        " integration and reproducible by anyone. The expectation is the"
+        " largest the shortfall can be, reached when every cell sits at one"
+        " level, and the sentence says that too. 0.19 is quoted from"
+        " `src/taxiout/models.py`; 1.998 is a constant of the arithmetic",
+        "0.19 / 2 ** (1 / 2) * 1.998",
+        ("0.19",),
     ),
 )
 

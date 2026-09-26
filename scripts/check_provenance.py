@@ -60,10 +60,17 @@ The checks
 7. no decimal figure is hardcoded in a generator's prose
 8. every declared report input still has the digest it was read at
 9. a report claims every generator that writes into it
+10. the generated document matches the manifests
+11. a figure quoted beside a report's name is in that report
+12. every line a basis cites says what the basis says
+13. no generator of a report imports a fetcher
+14. every figure in the paper is in a file its section cites, by
+    ``scripts/check_paper.py``
 
 ``--strict`` is the freeze condition and Block 11 runs it. The ordinary run
-prints checks 6 and 8's unverifiable inputs and passes, because a gate that
-fails today cannot be wired into a commit path.
+prints check 6's open items, check 8's unverifiable inputs and check 14's
+findings on the paper, and passes, because a gate that fails today cannot be
+wired into a commit path.
 
 Usage
 -----
@@ -88,7 +95,9 @@ from typing import NamedTuple
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
+sys.path.insert(0, str(REPO / "scripts"))
 
+import check_paper as paper  # noqa: E402
 from taxiout.provenance import (  # noqa: E402
     AUTHORED_ARTIFACTS,
     REGISTER_MODULE,
@@ -103,6 +112,13 @@ from taxiout.provenance import (  # noqa: E402
     NO_BASIS,
     OSM_PINS,
     OSM_PINS_BASIS,
+    PAPER,
+    PAPER_EXCLUDED_SECTIONS,
+    PAPER_EXEMPT_PATTERNS,
+    PAPER_FIGURE_EXEMPTIONS,
+    PAPER_HISTORICAL_FIGURES,
+    PAPER_INTEGER_MIN_DIGITS,
+    PAPER_NO_SOURCE_SECTIONS,
     PROVENANCE_PENDING,
     REBUILD_PINS,
     REPORT_CITATION_EXEMPTIONS,
@@ -887,8 +903,9 @@ def citing_documents() -> list[str]:
     frozen record is excluded and the exclusion is the point**: its figures were
     true on its own date and the file it cites has moved on since, which is what
     makes it a record rather than a claim about the tree, and check 5 holds it
-    to its digest instead. ``docs/paper.md`` is not here either: it is stale by
-    its own pending entry and Block 10 builds its checker as part of the pass.
+    to its digest instead. ``docs/paper.md`` is not here either: it names its
+    sources once per section rather than in the sentence, and check 14 reads it
+    that way.
     """
     frozen = {f.path for f in FROZEN_DOCUMENTS}
     reports = sorted(
@@ -1084,6 +1101,21 @@ def check_fetchers_reach_no_report() -> tuple[bool, list[str]]:
     return (not offending), lines
 
 
+def check_paper_figures(strict: bool) -> tuple[bool, list[str]]:
+    """Check 14: every figure in the paper is in a file its section cites.
+
+    ``scripts/check_paper.py`` is the instrument, and this puts it inside the
+    one gate, so a run covers the repository and the paper together. Its
+    findings pass outside ``--strict``, the arrangement check 6 uses for the
+    pending list, so that a regeneration which moves a figure the paper quotes
+    is reported by every ordinary run and fails the freeze condition rather
+    than the commit path; ``--strict`` fails on them. A register entry of the
+    paper's that reaches nothing, or whose arithmetic does not verify, fails in
+    both modes.
+    """
+    return paper.gate(strict)
+
+
 # --------------------------------------------------------------------------
 # the generated document
 
@@ -1235,6 +1267,99 @@ def document() -> str:
                 for e in REPORT_CITATION_EXEMPTIONS
             ],
             "----",
+        ),
+        "",
+        "## What the paper quotes",
+        "",
+        f"Check 14 runs `scripts/check_paper.py` over `{PAPER}`. A figure there is",
+        "a decimal, a percentage, or an integer of at least",
+        f"**{PAPER_INTEGER_MIN_DIGITS}** digits, and every figure in a section must",
+        "appear in a file the section's `Source:` line cites and, where that line",
+        "names a section of the file in italics, in that section of it, as a",
+        "number that rounds to it at the figure's own precision and carries its",
+        "sign where the paper writes one. A figure that matches only in a frozen",
+        "dated record is *historical*, and passes only if it is listed below with a",
+        "reason. A figure the paper computes from report figures is listed below",
+        "with its arithmetic, which the check verifies: every named operand has to",
+        "be in the cited sections and the value has to round to the figure. The",
+        "register's own lists below are never read as a source. Outside `--strict`",
+        "the check prints its findings and passes; `--strict` is the paper's freeze",
+        "condition, and `--report` prints every figure with its status, section by",
+        "section, with every number in scope it matches, so a chance match can be",
+        "told from the row a sentence quotes.",
+        "",
+        f"**{len(PAPER_EXEMPT_PATTERNS)}** patterns mark a token shaped like a",
+        "figure as something else. A token they cover is counted under the",
+        "pattern's name, not dropped.",
+        "",
+        *table(
+            ["pattern", "regular expression", "why"],
+            [
+                [p.name, "`" + p.pattern.replace("|", "\\|") + "`", p.why]
+                for p in PAPER_EXEMPT_PATTERNS
+            ],
+            "---",
+        ),
+        "",
+        f"**{len(PAPER_NO_SOURCE_SECTIONS)}** sections carry figures and no source",
+        "line by design, and are read against every live report instead. What an",
+        "entry excuses is the missing line, not the figures.",
+        "",
+        *table(
+            ["section", "why"],
+            [[e.section, e.why] for e in PAPER_NO_SOURCE_SECTIONS],
+            "--",
+        ),
+        "",
+        f"**{len(PAPER_EXCLUDED_SECTIONS)}** section(s) excluded by name, and",
+        "reported with their figure count rather than skipped.",
+        "",
+        *table(
+            ["section", "why"],
+            [[e.section, e.why] for e in PAPER_EXCLUDED_SECTIONS],
+            "--",
+        ),
+        "",
+        f"**{len(PAPER_HISTORICAL_FIGURES)}** historical figures stand, each with",
+        "its reason.",
+        "",
+        *(
+            table(
+                ["section", "figure", "why"],
+                [[e.section, e.figure, e.why] for e in PAPER_HISTORICAL_FIGURES],
+                "---",
+            )
+            if PAPER_HISTORICAL_FIGURES
+            else [
+                "None. A figure that matches only in a frozen record fails `--strict`",
+                "until it is listed here or brought up to date.",
+            ]
+        ),
+        "",
+        f"**{len(PAPER_FIGURE_EXEMPTIONS)}** figures are computed from report",
+        "figures rather than quoted, each with the arithmetic the check verifies,",
+        "the operands it reads from the cited sections, and the reason.",
+        "",
+        *(
+            table(
+                ["section", "figure", "arithmetic", "operands", "why"],
+                [
+                    [
+                        e.section,
+                        e.figure,
+                        f"`{e.arithmetic}`",
+                        ", ".join(e.operands),
+                        e.why,
+                    ]
+                    for e in PAPER_FIGURE_EXEMPTIONS
+                ],
+                "-----",
+            )
+            if PAPER_FIGURE_EXEMPTIONS
+            else [
+                "None. A computed figure that is not listed here is unmatched, and",
+                "fails `--strict`.",
+            ]
         ),
         "",
         "## Authored artifacts",
@@ -1488,6 +1613,10 @@ def main() -> int:
         (
             "13 -- no generator of a report imports a fetcher",
             check_fetchers_reach_no_report(),
+        ),
+        (
+            "14 -- every figure in the paper is in a file its section cites",
+            check_paper_figures(args.strict),
         ),
     )
     # Every check this module defines has to be in the tuple above. A check that

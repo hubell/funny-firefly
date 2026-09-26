@@ -27,7 +27,7 @@ the gate's job is to prove there is no fifth.
 
 `taxiout.provenance.CONSTANTS` carries **226** entries, one
 per module-level numeric assignment the scanner finds outside the
-authored artifact. The scanner finds **279** in all, of which
+authored artifact. The scanner finds **280** in all, of which
 **50** are in `src/taxiout/synthetic.py` and are covered by
 `AUTHORED_ARTIFACTS` as a module rather than one by one.
 
@@ -119,6 +119,101 @@ reach as well as on a figure it cannot find.
 | `reports/headroom.md` | `reports/baseline.md` | 15.9815 | the sentence prints this report's own recomputation of the ladder's step from the stored residuals *against* the +15.98 s `baseline.md` prints, which the cited file does carry. The point of the sentence is that the two agree, so the recomputed figure cannot be in the cited file. Both figures moved with the cell adopted on 23 September; they read 15.9815 and +15.98 where they read 17.6011 and +17.60 under the cell before it |
 | `reports/synthetic_airport.md` | `reports/tails.md` | 6.0 | the 6.0 m/s is the authored field's own taxi speed, stated in `taxiout.synthetic`; the citation of `tails.md` sits in the same long sentence and is about where the record-quality term is documented, not about this number |
 
+## What the paper quotes
+
+Check 14 runs `scripts/check_paper.py` over `docs/paper.md`. A figure there is
+a decimal, a percentage, or an integer of at least
+**4** digits, and every figure in a section must
+appear in a file the section's `Source:` line cites and, where that line
+names a section of the file in italics, in that section of it, as a
+number that rounds to it at the figure's own precision and carries its
+sign where the paper writes one. A figure that matches only in a frozen
+dated record is *historical*, and passes only if it is listed below with a
+reason. A figure the paper computes from report figures is listed below
+with its arithmetic, which the check verifies: every named operand has to
+be in the cited sections and the value has to round to the figure. The
+register's own lists below are never read as a source. Outside `--strict`
+the check prints its findings and passes; `--strict` is the paper's freeze
+condition, and `--report` prints every figure with its status, section by
+section, with every number in scope it matches, so a chance match can be
+told from the row a sentence quotes.
+
+**4** patterns mark a token shaped like a
+figure as something else. A token they cover is counted under the
+pattern's name, not dropped.
+
+| pattern | regular expression | why |
+| --- | --- | --- |
+| section reference | `§\s*\d+(?:\.\d+)*` | the paper's reference to one of its own sections. It names a place in the document and measures nothing |
+| heading number | `^#{1,6}\s+\d+(?:\.\d+)*\.?(?=\s)` | a section's own number at the start of its heading: the same thing as a section reference, seen from the section itself |
+| year | `(?<![\w.,])(?:19\|20)\d{2}(?![\w%]\|\.\d\|,\d{3})` | a bare four-digit integer from 1900 to 2099. The paper writes every count of a thousand or more with a thousands separator, so a bare four-digit integer in it is a year: the training year, the ranking year, or the year of a cited work |
+| version string | `(?i:\b(?:v\|version\|release\|python\|cpython\|odbl\|gplv?)\s?)\d+(?:\.\d+)+` | a software or license version names a release and measures nothing. A dotted number with three or more parts is never read as a figure in the first place, so this covers the two-part form after a name |
+
+**2** sections carry figures and no source
+line by design, and are read against every live report instead. What an
+entry excuses is the missing line, not the figures.
+
+| section | why |
+| --- | --- |
+| Abstract | its figures summarize the body, whose sections name their sources, so it is read against every live report rather than a named one |
+| §1.2 | the three claims, each pointing at the section that carries its measurement. Its figures summarize the body the same way the abstract's do, and are read against every live report |
+
+**0** section(s) excluded by name, and
+reported with their figure count rather than skipped.
+
+| section | why |
+| --- | --- |
+
+**26** historical figures stand, each with
+its reason.
+
+| section | figure | why |
+| --- | --- | --- |
+| §6.4 | 10.0 | the saturation rung's oracle ceiling on December as measured on 3 and 4 September under the parameters then in force, from the entry of 4 September in `docs/plan.md`: the measurement Gate 3 was stopped on. The sentence dates it, and the rung's ceiling under the parameters that ship is given two sentences later from `reports/congestion.md` |
+| §6.4 | 8.5 | the same rung's ceiling on July on the same day, from the same entry; dated in the same sentence |
+| §7.4 | 1.29 | the route-length check's ratio before 19 September, with the encoding fitted on the unflagged training rows, from the dated record of 10 September. The sentence dates it and gives beside it the reading since then, 1.56, from the live ladder report |
+| §7.1.1 | 0.40 | Experiment 2 or 3 of 20 September, run under the parameters then in force and not repeated under the parameters that ship, so the figure is that day's and matches only the dated record the experiments wrote. The subsection's heading, its first paragraph and the sentence quoting the figure all say so |
+| §7.1.1 | 0.30 | Experiment 2 or 3 of 20 September, run under the parameters then in force and not repeated under the parameters that ship, so the figure is that day's and matches only the dated record the experiments wrote. The subsection's heading, its first paragraph and the sentence quoting the figure all say so |
+| §7.1.1 | 1.15 | Experiment 2 or 3 of 20 September, run under the parameters then in force and not repeated under the parameters that ship, so the figure is that day's and matches only the dated record the experiments wrote. The subsection's heading, its first paragraph and the sentence quoting the figure all say so |
+| §7.1.1 | 0.77 | Experiment 2 or 3 of 20 September, run under the parameters then in force and not repeated under the parameters that ship, so the figure is that day's and matches only the dated record the experiments wrote. The subsection's heading, its first paragraph and the sentence quoting the figure all say so |
+| §7.1.1 | -0.40 | Experiment 2 or 3 of 20 September, run under the parameters then in force and not repeated under the parameters that ship, so the figure is that day's and matches only the dated record the experiments wrote. The subsection's heading, its first paragraph and the sentence quoting the figure all say so |
+| §7.1.1 | 0.34 | Experiment 2 or 3 of 20 September, run under the parameters then in force and not repeated under the parameters that ship, so the figure is that day's and matches only the dated record the experiments wrote. The subsection's heading, its first paragraph and the sentence quoting the figure all say so |
+| §7.1.1 | -1.6 | Experiment 2 or 3 of 20 September, run under the parameters then in force and not repeated under the parameters that ship, so the figure is that day's and matches only the dated record the experiments wrote. The subsection's heading, its first paragraph and the sentence quoting the figure all say so |
+| §7.1.1 | +0.9 | Experiment 2 or 3 of 20 September, run under the parameters then in force and not repeated under the parameters that ship, so the figure is that day's and matches only the dated record the experiments wrote. The subsection's heading, its first paragraph and the sentence quoting the figure all say so |
+| §7.1.1 | +0.77 | Experiment 2 or 3 of 20 September, run under the parameters then in force and not repeated under the parameters that ship, so the figure is that day's and matches only the dated record the experiments wrote. The subsection's heading, its first paragraph and the sentence quoting the figure all say so |
+| §7.1.1 | 0.23 | Experiment 2 or 3 of 20 September, run under the parameters then in force and not repeated under the parameters that ship, so the figure is that day's and matches only the dated record the experiments wrote. The subsection's heading, its first paragraph and the sentence quoting the figure all say so |
+| §7.1.1 | -0.2 | Experiment 2 or 3 of 20 September, run under the parameters then in force and not repeated under the parameters that ship, so the figure is that day's and matches only the dated record the experiments wrote. The subsection's heading, its first paragraph and the sentence quoting the figure all say so |
+| §7.1.1 | +2.3 | Experiment 2 or 3 of 20 September, run under the parameters then in force and not repeated under the parameters that ship, so the figure is that day's and matches only the dated record the experiments wrote. The subsection's heading, its first paragraph and the sentence quoting the figure all say so |
+| §7.1.1 | +0.10 | Experiment 2 or 3 of 20 September, run under the parameters then in force and not repeated under the parameters that ship, so the figure is that day's and matches only the dated record the experiments wrote. The subsection's heading, its first paragraph and the sentence quoting the figure all say so |
+| §7.1.1 | -0.4 | Experiment 2 or 3 of 20 September, run under the parameters then in force and not repeated under the parameters that ship, so the figure is that day's and matches only the dated record the experiments wrote. The subsection's heading, its first paragraph and the sentence quoting the figure all say so |
+| §7.1.1 | +0.6 | Experiment 2 or 3 of 20 September, run under the parameters then in force and not repeated under the parameters that ship, so the figure is that day's and matches only the dated record the experiments wrote. The subsection's heading, its first paragraph and the sentence quoting the figure all say so |
+| §7.1.1 | -0.84 | Experiment 2 or 3 of 20 September, run under the parameters then in force and not repeated under the parameters that ship, so the figure is that day's and matches only the dated record the experiments wrote. The subsection's heading, its first paragraph and the sentence quoting the figure all say so |
+| §7.1.1 | -1.5 | Experiment 2 or 3 of 20 September, run under the parameters then in force and not repeated under the parameters that ship, so the figure is that day's and matches only the dated record the experiments wrote. The subsection's heading, its first paragraph and the sentence quoting the figure all say so |
+| §7.1.1 | -1.61 | Experiment 2 or 3 of 20 September, run under the parameters then in force and not repeated under the parameters that ship, so the figure is that day's and matches only the dated record the experiments wrote. The subsection's heading, its first paragraph and the sentence quoting the figure all say so |
+| §7.1.1 | 1.02 | Experiment 2 or 3 of 20 September, run under the parameters then in force and not repeated under the parameters that ship, so the figure is that day's and matches only the dated record the experiments wrote. The subsection's heading, its first paragraph and the sentence quoting the figure all say so |
+| §7.1.1 | 224.8 | Experiment 2 or 3 of 20 September, run under the parameters then in force and not repeated under the parameters that ship, so the figure is that day's and matches only the dated record the experiments wrote. The subsection's heading, its first paragraph and the sentence quoting the figure all say so |
+| §7.1.1 | 224.7 | Experiment 2 or 3 of 20 September, run under the parameters then in force and not repeated under the parameters that ship, so the figure is that day's and matches only the dated record the experiments wrote. The subsection's heading, its first paragraph and the sentence quoting the figure all say so |
+| §7.1.1 | +0.37 | Experiment 2 or 3 of 20 September, run under the parameters then in force and not repeated under the parameters that ship, so the figure is that day's and matches only the dated record the experiments wrote. The subsection's heading, its first paragraph and the sentence quoting the figure all say so |
+| §7.1.1 | 0.19 | Experiment 2 or 3 of 20 September, run under the parameters then in force and not repeated under the parameters that ship, so the figure is that day's and matches only the dated record the experiments wrote. The subsection's heading, its first paragraph and the sentence quoting the figure all say so |
+
+**11** figures are computed from report
+figures rather than quoted, each with the arithmetic the check verifies,
+the operands it reads from the cited sections, and the reason.
+
+| section | figure | arithmetic | operands | why |
+| --- | --- | --- | --- | --- |
+| §1.2 | 79.3 | `320.2 - 240.9` | 320.2, 240.9 | the plan-lag block's step on the December split: `identifiers + time + geometry + aircraft` to `+ plan lags`, ex-flagged |
+| §1.2 | 57.4 | `407.3 - 349.9` | 407.3, 349.9 | the same step on the July split, ex-flagged |
+| §1.2 | 7.7 | `240.9 - 233.2` | 240.9, 233.2 | what every congestion and weather block is worth net of the plan lags on the December split: `+ plan lags` to `+ weather`, ex-flagged |
+| §1.2 | 5.8 | `349.9 - 344.1` | 349.9, 344.1 | the same, on the July split |
+| §6.3 | 79.3 | `320.2 - 240.9` | 320.2, 240.9 | the plan-lag block's step on the December split: `identifiers + time + geometry + aircraft` to `+ plan lags`, ex-flagged |
+| §6.3 | 57.4 | `407.3 - 349.9` | 407.3, 349.9 | the same step on the July split, ex-flagged |
+| §6.3 | 59.3 | `292.5 - 233.2` | 292.5, 233.2 | the plan-lag block measured at the `+ weather` rung by removing it: `+ weather (without plan lags)` against `+ weather`, December, ex-flagged |
+| §6.3 | 51.7 | `395.8 - 344.1` | 395.8, 344.1 | the same measurement on the July split |
+| §6.3 | 7.7 | `240.9 - 233.2` | 240.9, 233.2 | what every congestion and weather block is worth net of the plan lags on the December split: `+ plan lags` to `+ weather`, ex-flagged |
+| §6.3 | 5.8 | `349.9 - 344.1` | 349.9, 344.1 | the same, on the July split |
+| §7.1.2 | 0.27 | `0.19 / 2 ** (1 / 2) * 1.998` | 0.19 | the winner's curse of the sweep, an expectation and not a measurement, as the sentence says: the standard deviation one seed carries, the floor of 0.19 s divided by root two, times the expected value of the largest of twenty-seven independent standard normal draws, 1.998, which is the integral of x n phi(x) Phi(x) to the power n minus one over the real line at n equal to 27, computed by numerical integration and reproducible by anyone. The expectation is the largest the shortfall can be, reached when every cell sits at one level, and the sentence says that too. 0.19 is quoted from `src/taxiout/models.py`; 1.998 is a constant of the arithmetic |
+
 ## Authored artifacts
 
 **`src/taxiout/synthetic.py`** -- a fictional airfield where every distance, turn and repair is hand-derived, with worked traffic in the challenge's own schema so the pipeline runs end to end without the challenge data. Its numeric constants ARE the field's definition, which is why the module is registered once here rather than constant by constant: there is no provenance question to answer about the coordinates of an invented stand.
@@ -194,7 +289,7 @@ by the work and never by editing the tuple.
 
 | what | owner |
 | --- | --- |
-| `docs/paper.md`'s figures match no report in the repository | Block 10, the figure pass, building the paper's own checker as part of it |
+| `docs/paper.md` quotes the reports as they stood on 24 September, and the freeze regenerates them | Block 11: `scripts/check_paper.py --strict` after the regenerations, and the paper moved with any figure that moved |
 | two reports still have no declared inputs | the runs that regenerate them, at Block 11 |
 | the per-airport OSM pin has been exercised on one airport on one instance, and not on the eleven | Block 11: `--pin-from-register --force` for all eleven, `--compare` against the cache the matrices were built from, one `--control-date` probe on the instance that answered, and the matrices compared after that |
 
@@ -212,9 +307,12 @@ Stated so its silence is not read as a pass.
 | `src/taxiout/synthetic.py` | covered once by `AUTHORED_ARTIFACTS` rather than constant by constant, with the condition that makes it safe proved by check 4 |
 | decimal figures in generator prose strings | covered by check 7: each is computed from the data or registered as deliberate prose |
 | decimal figures in code comments | NOT covered by an automated check. A comment is not read by any run and cannot reach a report, so a stale figure in one misleads a reader of the source and nothing else. The census counts them |
-| `docs/` and `README.md` | the two frozen documents are covered by check 5, which is an immutability digest and not a currency check. `docs/paper.md` is Block 10's and is on the pending list; the rest carries no model figure |
+| `docs/` and `README.md` | the two frozen documents are covered by check 5, which is an immutability digest and not a currency check. `docs/paper.md` is covered by check 14, and the pending list says what the freeze's regenerations owe it; the rest carries no model figure |
 | cross-report citation | covered by check 11, scoped to the citation's own sentence and to decimal figures. Bare integers are out: a report says *the three airports* and *5 folds* in words a gate cannot tell from a measurement. A frozen dated record is out as a citing document, because its figures were true on its date and the file it cites has moved since, which is what makes it a record; check 5 holds it to a digest instead |
-| `docs/paper.md` as a citing document | NOT covered by check 11, and deliberately: it is stale by its own pending entry, so running the check over it would print a wall of findings that are all one fact. Block 10 builds the paper's own checker as part of the figure pass |
+| `docs/paper.md` as a citing document | covered by check 14 and not by check 11. The paper names its sources once per section, in a `Source:` line, where a report names them in the sentence, so `scripts/check_paper.py` reads each figure against the files its section cites and the sections of them it names. `--strict` passes on it since the figure pass of 25 September and is run again after every regeneration; `--report` prints every figure with where it was found |
+| integers under a thousand in `docs/paper.md` | NOT covered by check 14. A figure there is a decimal, a percentage, or an integer of four or more digits, and a count or a whole number of seconds below a thousand is neither: the rows a term covers, a rounded gain in seconds. The paper writes them as numerals, so they can go stale, and no check here will say so |
+| the paper's drafting notes | no longer in `docs/paper.md`: the figure pass of 25 September moved the section that said it was not part of the paper out of the repository, so `PAPER_EXCLUDED_SECTIONS` is empty and check 14 reads every section the paper has. The mechanism stays: a section listed there is reported with its figure count rather than passed over, and an entry naming a section the paper does not have fails |
+| the correctness of a figure in `docs/paper.md` | NOT covered. Check 14 is a check of presence: a figure has to appear, at the paper's own precision, in the file its section cites and, where the source line names a section of that file, in that section. A short figure can equal a number in a cited section by chance, and the check prints every number in scope that a figure matches so a reader can tell the row the sentence quotes from a coincidence; it cannot tell them apart itself |
 | the line numbers a basis cites | covered by check 12. A basis that names a line is a citation and drifts the moment anything above it is edited: the commit that created this register edited two of the generators it registers and left sixteen of its own citations pointing at blank lines and unrelated code. The cost is that an edit above a cited constant now fails the gate until the citation is moved, which is the intended trade -- a citation that fails loudly beats one that drifts quietly |
 | a line citation into another file | checked only for existing and for not being blank, which is all a line number in prose can be checked for. Where the cited file is regenerable the citation is pointed at a frozen dated record instead, which cannot move under it |
 | the notes and prompts outside the repository | unreachable by any gate here. The discipline there is that a number is never invented to stand in for one not yet measured |
