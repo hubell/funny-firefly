@@ -64,18 +64,24 @@ verified, stale or unverifiable; a digest reading `absent` is the
 ordinary case on a clean checkout, where the data this repository does
 not redistribute is not present.
 
+A path marked (parsed elements) is a cached Overpass answer, and its
+digest is of the answer's elements in canonical form and not of the
+file's bytes: every answer's header carries the answering instance's
+own database stamp and the time of the fetch, so a refetch changes
+every byte of a file whose elements are all the same.
+
 | input | sha256 |
 | --- | --- |
-| `data/raw/EDDF.json.gz` | `e0070be4e51a3fbd6116b953f08cf65b3d9ae8f33552f96b1beeb8dab8e5eff6` |
-| `data/raw/EDDM.json.gz` | `ce07a6e30c2b9b8ee3915eda4776e6110daade41877a0dfd37199605a011ce52` |
-| `data/raw/EGLL.json.gz` | `b6b54e09cbbae2c9e61edc3b7c36b1a5dd0d3cf5e4970d9107a71b7ee8c0d8a8` |
-| `data/raw/EHAM.json.gz` | `03defc366b5d87dc336e63200ada21279b121b8e034baf257c33862f02f289fd` |
-| `data/raw/LEBL.json.gz` | `c28792b221c6d69c8609404ee68accf96be974a95397d34b95e0cde23c3aec01` |
-| `data/raw/LEMD.json.gz` | `a83c7c0c88afa734a26e1fc7f7b0ec637edcb50f54a010770613628f78d90e7f` |
-| `data/raw/LFPG.json.gz` | `c6a2d0343287265610468d36d13622826155b65556901e145881dc26344df964` |
-| `data/raw/LIRF.json.gz` | `1bb59d3a0cc8b08b74dbf5c2643c74fc308f43052d76400f2dab5773f7e1383c` |
-| `data/raw/LTAI.json.gz` | `3795f3cafe2e7565e9aed1e3b9723ede0793958973de1b082c5195ba9729a9d4` |
-| `data/raw/LTFM.json.gz` | `41d7c80ec533a2c63c7f2ebd7abac21becc10cc83d1103884349e70d87c63ff5` |
-| `data/raw/LSZH.json.gz` | `638fd31135e66d3327baf89e07a1b1c7bb55daf80ed7f0d03c3d35e8585fe09d` |
+| `data/raw/EDDF.json.gz` (parsed elements) | `4a9a159537ed83fce0d946d46ed71c4dd89792b20b9440f54597f362e83c4f88` |
+| `data/raw/EDDM.json.gz` (parsed elements) | `d790a576877cba9292032cb423d84d45ec2162d67c3c5bacfc80dfd320b06afe` |
+| `data/raw/EGLL.json.gz` (parsed elements) | `33414dfb5e832553dea481fe1909220d31bb5f1f6eedc943bf0e545bdf13d194` |
+| `data/raw/EHAM.json.gz` (parsed elements) | `75a5ba21881ff6eebb8ad98af183d10fb5a250e8dbb911c9e95626dbea5c47f4` |
+| `data/raw/LEBL.json.gz` (parsed elements) | `6d13a2e109963cd04632b85a078caa880c9a23d85cc0de2fb517485172d0abb5` |
+| `data/raw/LEMD.json.gz` (parsed elements) | `f5f0973767e13e5f6a6a0407c618e05148b451acf35ae61330b7012c37fe4a43` |
+| `data/raw/LFPG.json.gz` (parsed elements) | `fffb1658e98cb0e286d1beb53d45896b647d702473b6617c6492a57c5583ab4e` |
+| `data/raw/LIRF.json.gz` (parsed elements) | `5e119a8da376fdc4b8cd7ad14af2b5fdbc4160d8a279c188b61d22d8dfa35a26` |
+| `data/raw/LTAI.json.gz` (parsed elements) | `3a5645aba6978c6ac3ccb91a5fbc97d2ba7a89f6bb85d1609470ee685e03cbe6` |
+| `data/raw/LTFM.json.gz` (parsed elements) | `d3464ebd3624fba944824287d19b28902b8493b4931675992fe310a442845553` |
+| `data/raw/LSZH.json.gz` (parsed elements) | `3abcc627f43e258000b06697972cca33a45c1800ae0be52e696467ad1ed3f864` |
 
 Data (c) OpenStreetMap contributors, ODbL 1.0.

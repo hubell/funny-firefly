@@ -34,4 +34,32 @@ a taxiway/runway crossing inserts a junction node, so crossing traverses
 no runway edge and costs nothing extra. The penalty acts only on running
 *along* a runway, which is the intent.
 
+## What this report was generated from
+
+Every path this run read, with the sha256 of each as it was read.
+`scripts/check_provenance.py` recomputes them and reports this report as
+verified, stale or unverifiable; a digest reading `absent` is the
+ordinary case on a clean checkout, where the data this repository does
+not redistribute is not present.
+
+A path marked (parsed elements) is a cached Overpass answer, and its
+digest is of the answer's elements in canonical form and not of the
+file's bytes: every answer's header carries the answering instance's
+own database stamp and the time of the fetch, so a refetch changes
+every byte of a file whose elements are all the same.
+
+| input | sha256 |
+| --- | --- |
+| `data/raw/EDDF.json.gz` (parsed elements) | `4a9a159537ed83fce0d946d46ed71c4dd89792b20b9440f54597f362e83c4f88` |
+| `data/raw/EDDM.json.gz` (parsed elements) | `d790a576877cba9292032cb423d84d45ec2162d67c3c5bacfc80dfd320b06afe` |
+| `data/raw/EGLL.json.gz` (parsed elements) | `33414dfb5e832553dea481fe1909220d31bb5f1f6eedc943bf0e545bdf13d194` |
+| `data/raw/EHAM.json.gz` (parsed elements) | `75a5ba21881ff6eebb8ad98af183d10fb5a250e8dbb911c9e95626dbea5c47f4` |
+| `data/raw/LEBL.json.gz` (parsed elements) | `6d13a2e109963cd04632b85a078caa880c9a23d85cc0de2fb517485172d0abb5` |
+| `data/raw/LEMD.json.gz` (parsed elements) | `f5f0973767e13e5f6a6a0407c618e05148b451acf35ae61330b7012c37fe4a43` |
+| `data/raw/LFPG.json.gz` (parsed elements) | `fffb1658e98cb0e286d1beb53d45896b647d702473b6617c6492a57c5583ab4e` |
+| `data/raw/LIRF.json.gz` (parsed elements) | `5e119a8da376fdc4b8cd7ad14af2b5fdbc4160d8a279c188b61d22d8dfa35a26` |
+| `data/raw/LTAI.json.gz` (parsed elements) | `3a5645aba6978c6ac3ccb91a5fbc97d2ba7a89f6bb85d1609470ee685e03cbe6` |
+| `data/raw/LTFM.json.gz` (parsed elements) | `d3464ebd3624fba944824287d19b28902b8493b4931675992fe310a442845553` |
+| `data/raw/LSZH.json.gz` (parsed elements) | `3abcc627f43e258000b06697972cca33a45c1800ae0be52e696467ad1ed3f864` |
+
 OSM data (c) OpenStreetMap contributors, ODbL 1.0.

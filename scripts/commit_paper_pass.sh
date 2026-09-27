@@ -376,14 +376,19 @@ if [ "$(git rev-parse HEAD:reports)" != "$(git rev-parse HEAD^:reports)" ]; then
 fi
 echo "ok  $(git rev-parse --short HEAD:reports)"
 
-say "the commit's own tree, in a worktree with no data/"
+say "the commit's own tree, in a fresh worktree"
 # The condition the checker is validated in: a tree that contains the new
-# files as tracked files, so the scanner reads them, and no challenge data.
+# files as tracked files, so the scanner reads them, and no challenge data and
+# no OSM cache. A fresh worktree is that by construction: it checks out
+# tracked files only, and everything under data/ but three README-class files
+# is ignored. Those three stay, because they are the commit's; the paper's
+# §2.3 cites one of them, and the first run of this script removed data/
+# whole, found the notice missing, and failed its own commit's tree on a
+# condition the tree did not have.
 wt="$work/worktree"
 git worktree add -q --detach "$wt" HEAD
 (
     cd "$wt"
-    rm -rf data
     "$PY" -m pytest -q -rs > "$work/wt_pytest.txt" 2>&1 || {
         tail -30 "$work/wt_pytest.txt"
         exit 1

@@ -793,7 +793,64 @@ def _rung_rows(results, split_name: str, which: str, tails: Tails) -> list[list[
     return rows
 
 
-def section_ladder(results, splits, tails: Tails) -> list[str]:
+def _saturation_reading(results, splits, tails: Tails, floors: dict) -> str:
+    """What the saturation rung reads against the rung it was added to, per split.
+
+    Ex-flagged, as the ladder's last column prints it, and read against each
+    leg's seed floor on the unrounded figures, which is the test *The noise
+    floor* applies. Empty where a figure it needs was not fitted, so the prose
+    then says nothing it cannot read.
+    """
+    rung = LADDER_BY_KEY["saturation"]
+    if not tails.available:
+        return ""
+    below = LADDER_BY_KEY[rung.base].label
+    read, sides = [], []
+    for split in splits:
+        if split.name.startswith("pairs-"):
+            continue
+        entries = [results.get((split.name, k, "valid")) for k in (rung.key, rung.base)]
+        if any(e is None for e in entries):
+            return ""
+        sat, base = (
+            float(e["eval"].loc[e["eval"]["icao"] == "all", "rmse_ex_flagged_s"].iloc[0])
+            for e in entries
+        )
+        month = split.name.title()
+        read.append(
+            f"{sat:,.1f} s against `{below}`'s {base:,.1f} in {month}"
+            if not read
+            else f"{sat:,.1f} against {base:,.1f} in {month}"
+        )
+        floor = floors.get(f"{month}, all ten")
+        if floor is not None:
+            sides.append((month, abs(sat - base) > floor))
+    if not read:
+        return ""
+    every = "both forward splits" if len(read) == 2 else "every forward split"
+    against = ""
+    if sides and len(sides) == len(read):
+        if all(larger for _, larger in sides):
+            against = f", a change larger than the seed floor on {every}"
+        elif not any(larger for _, larger in sides):
+            against = f", a change inside the seed floor on {every}"
+        else:
+            against = (
+                ", a change larger than the seed floor in "
+                + " and ".join(m for m, larger in sides if larger)
+                + " and inside it in "
+                + " and ".join(m for m, larger in sides if not larger)
+            )
+    return (
+        " Under the parameters this run fits with, it scores "
+        + " and ".join(read)
+        + ", excluding flagged rows"
+        + against
+        + "."
+    )
+
+
+def section_ladder(results, splits, tails: Tails, floors=None) -> list[str]:
     header = ["rung", "RMSE (s)", "vs airport mean", "+ airport offset (s)"]
     align = "-rrr"
     if tails.available:
@@ -834,13 +891,16 @@ def section_ladder(results, splits, tails: Tails) -> list[str]:
         "chain. Above the weather rung sit three encoding arms, which are",
         "alternatives to one another rather than steps; above the arm those chose,",
         "the four Gate 2c blocks, as a chain of their own; and above everything,",
-        "runway saturation, which was built as the cheap queueing proxy, measured",
-        "against the ceiling and found to be worth nothing, and which is read",
-        "against the weather rung it was added to rather than against whatever the",
-        "submission has since moved to. The encoding arms and the Gate 2c blocks",
-        "each have a section below with the rule that admitted or rejected them;",
-        "the saturation rung's measurement against the ceiling is in",
-        "[`congestion.md`](congestion.md). The submission is",
+        "runway saturation, which was built as the cheap queueing proxy and measured",
+        "against the ceiling in the week of 3 September, when it bought nothing. It",
+        "is read against the weather rung it was added to rather than against",
+        "whatever the submission has since moved to."
+        + _saturation_reading(results, splits, tails, floors or {})
+        + f" It has never been fitted on top of `{TOP_RUNG.label}`, so what it would"
+        " add to the rung the submission is fitted from is not measured here.",
+        "The encoding arms and the Gate 2c blocks each have a section below with the",
+        "rule that admitted or rejected them; the saturation rung's measurement",
+        "against the ceiling is in [`congestion.md`](congestion.md). The submission is",
         f"fitted from `{TOP_RUNG.label}`, and the per-airport, strata and",
         "split-share sections read that rung.",
     ]
@@ -2627,6 +2687,18 @@ HEADROOM_UNCOMMITTED_S = 15.43
 # reason as the readings: the floor this run prints is its own. No floor was
 # measured before that configuration.
 HEADROOM_FLOOR_BEFORE_S = 1.28
+# What ``reports/headroom.md`` read for the same block and column, with the
+# regeneration it was read on: the estimate above, recomputed at the capacity
+# that report names. Quoted and not computed, on the same footing as the
+# readings: this generator fits no residual booster, and reading that report
+# back would make it an input of its own input, since ``make headroom`` reads
+# the residuals this run writes. Check 11 holds the sentence that quotes it to
+# that report. (when, and on what; the recomputed headroom, in seconds.)
+HEADROOM_RECOMPUTED: tuple[str, float] = (
+    "as `make headroom` regenerated it on 25 September 2026, on the residuals the"
+    " ladder wrote on 23 September",
+    10.00,
+)
 
 
 def _closest(margins):
@@ -3815,12 +3887,13 @@ def section_gate2c(
         ' the value of the interaction "rather than evidence of anything wrong".'
         " So what this section measures is the size of that gap, and that is what"
         " it is now named for. The one reading under which the gap would mean"
-        " something else is that the estimate has gone stale, and that was"
-        " measured: [`headroom.md`](headroom.md) recomputes it at the stated"
-        " capacity on the 21 September residuals and comes back within five"
-        " hundredths of a second of the"
-        f" {EXPECTED_HEADROOM_S['occupancy'][1]:+,.1f} s quoted here, so staleness"
-        " explains none of the gap. The name *leakage audit* belongs to"
+        " something else is that the estimate has gone stale."
+        " [`headroom.md`](headroom.md) recomputes it at a stated capacity from the"
+        f" residuals the ladder writes, and {HEADROOM_RECOMPUTED[0]}, it read"
+        f" {HEADROOM_RECOMPUTED[1]:+,.2f} s against the"
+        f" {EXPECTED_HEADROOM_S['occupancy'][1]:+,.1f} s quoted here. That report"
+        " draws no conclusion about this test from the two figures, and this"
+        " section draws none either. The name *leakage audit* belongs to"
         " [`congestion.md`](congestion.md)'s source registry printed as an"
         " assertion, which is a leakage test and which passes.",
         *(
@@ -5411,7 +5484,7 @@ def main() -> int:
         + [""]
         + section_unimpeded(results, features, splits)
         + [""]
-        + section_ladder(results, splits, tails)
+        + section_ladder(results, splits, tails, floors)
         + [""]
         + section_pairs(results, splits, features, y, tails)
         + [""]

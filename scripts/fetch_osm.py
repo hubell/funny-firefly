@@ -40,6 +40,24 @@ would have worked exactly once, and on every run after a rebuild it would have
 pinned all eleven airports to the rebuild day, with no error and a plausible
 result. It is retired and refuses. A clean checkout has no cache in any case.
 
+**What a rebuilt cache carries in place of the header** is a sidecar,
+``data/raw/PINS.json``: every fetch this script makes records there, for its
+airport, the pin the answer was fetched at, the instance that answered, the
+time, and the database state the instance answered from, copied from the fetch
+record the answer itself carries. An unpinned fetch is recorded too, with a
+null pin, so an entry never vouches for a file a later fetch replaced.
+``taxiout.osm.pin_agreement`` reads a cache by whichever evidence it has: an
+original answer by its header, a rebuilt one by the sidecar.
+
+**What a header can show is that a pin was impossible.** An instance cannot
+serve a state it has not ingested, so an answer whose database state precedes
+its pin is not the pinned answer, and the client refuses it: it is not written,
+that mirror is not asked again for the airport, and every failure and refusal
+is printed against its airport. On 26 September 2026 both fallback mirrors held
+databases from May 2026 and could not serve a September pin. A pinned airport
+that every mirror fails or refuses is reported as failed, never fetched another
+way, and the run exits non-zero.
+
 **Nothing in an answer's header proves that a pin was applied**, so the proof
 is in two parts, and both are commands here.
 
@@ -86,6 +104,7 @@ from taxiout.osm import (  # noqa: E402
     compare_elements,
     fetch_airport,
     read_payload,
+    record_fetch,
 )
 from taxiout.provenance import OSM_PINS  # noqa: E402
 
@@ -108,6 +127,11 @@ def register_pin(icao: str) -> str | None:
     return next((p.timestamp_osm_base for p in OSM_PINS if p.icao == icao), None)
 
 
+def _attempts(icao: str):
+    """A printer for the client's failed and refused attempts, one line each."""
+    return lambda line: print(f"  {icao}  attempt  {line}", flush=True)
+
+
 def _counts(counts: dict[str, int]) -> str:
     return "  ".join(
         f"{counts.get(kind, 0):>5} {kind}s" for kind in ("node", "way", "relation")
@@ -115,13 +139,16 @@ def _counts(counts: dict[str, int]) -> str:
 
 
 def _record(payload: dict) -> str:
-    """What an answer's own fetch record says: the pin asked and who answered."""
+    """What an answer's own fetch record says: the pin asked and who answered,
+    and the database state its header says the answer came from."""
+    stamp = (payload.get("osm3s") or {}).get("timestamp_osm_base") or "no stamp"
     rec = payload.get("taxiout:fetch")
     if not rec:
-        return "no fetch record"
+        return f"no fetch record, database at {stamp}"
     return (
         f"requested at {rec.get('date_pin') or 'no pin'},"
-        f" answered by {rec.get('mirror')} at {rec.get('fetched_utc')}"
+        f" answered by {rec.get('mirror')} at {rec.get('fetched_utc')},"
+        f" database at {stamp}"
     )
 
 
@@ -215,6 +242,7 @@ def control(ap: Airport, date: str) -> int:
                 force=True,
                 date=date,
                 mirrors=(mirror,) if mirror else MIRRORS,
+                log=_attempts(ap.icao),
             )
         except Exception as exc:  # noqa: BLE001
             print(f"  {ap.icao}  FAILED  {exc}", flush=True)
@@ -320,19 +348,24 @@ def main(argv: list[str] | None = None) -> int:
                 failures.append(ap.icao)
                 continue
         try:
-            payload, cached = fetch_airport(ap, CACHE, force=args.force, date=date)
+            payload, cached = fetch_airport(
+                ap, CACHE, force=args.force, date=date, log=_attempts(ap.icao)
+            )
         except Exception as exc:  # noqa: BLE001
             print(f"  {ap.icao}  FAILED  {exc}", flush=True)
             failures.append(ap.icao)
             continue
         if not cached:
             fetched += 1
+            record_fetch(CACHE, ap.icao, payload)
         origin = "cache" if cached else "overpass"
         pin = f"  pinned to {date}" if date else ""
         print(
             f"  {ap.icao}  {len(payload['elements']):>6} elements  ({origin}){pin}",
             flush=True,
         )
+        if not cached:
+            print(f"        {_record(payload)}", flush=True)
 
     if failures:
         print(f"\nincomplete: {' '.join(failures)} -- rerun to retry", flush=True)

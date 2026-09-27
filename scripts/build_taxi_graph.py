@@ -31,6 +31,7 @@ import argparse
 import csv
 import gzip
 import json
+import math
 import sys
 from pathlib import Path
 
@@ -38,6 +39,7 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
 
 from taxiout.airports import AIRPORTS, BY_ICAO  # noqa: E402
+from taxiout.geo import angle_diff_deg, bearing_deg  # noqa: E402
 from taxiout.graph import (  # noqa: E402
     DEDUP_M,
     DIRECT_SNAP_M,
@@ -46,6 +48,7 @@ from taxiout.graph import (  # noqa: E402
     build_graph,
 )
 from taxiout.osm import cache_path  # noqa: E402
+from taxiout.provenance import report_inputs_footer  # noqa: E402
 from taxiout.routing import (  # noqa: E402
     AGGREGATED_FIELDS,
     RUNWAY_PENALTY,
@@ -168,6 +171,7 @@ def process(icao: str, penalty: float, max_snap_m: float) -> dict:
         "detour_above_three": sum(1 for d in detours if d > 3.0),
         "no_crossing_data": all(c.values["runway_crossings"] == 0 for c in cells),
         "max_heading_error": max((e.heading_error_deg for e in entries), default=0.0),
+        "axes_deg": {r.ref: bearing_deg(*r.ends) for r in runways if r.ends},
         "designator_medians": {
             d: _median_of([c.values["taxi_m"] for c in cells if c.designator == d])
             for d in sorted({c.designator for c in cells})
@@ -337,6 +341,47 @@ def write_report(rows: list[dict], penalty: float, max_snap_m: float) -> None:
     ambiguous_total = sum(s["ambiguous_stands"] for s in rows)
     worst_spread = max(rows, key=lambda s: s["max_spread_m"])
 
+    # Istanbul's heading flag, read off the runway geometry this run routed: the
+    # largest angle between the axis of a 16 and the axis of a 17, stated as the
+    # bound it sits within at the one decimal the note prints -- "within" is a
+    # bound, and rounding the angle to the nearest tenth would state a tighter
+    # one than holds -- and how far a 16's axis sits off its nominal heading.
+    # Written only when LTFM was routed and both pairs have an axis.
+    ltfm_section = ""
+    istanbul = next((s for s in rows if s["icao"] == "LTFM"), None)
+    axes = istanbul["axes_deg"] if istanbul else {}
+    sixteens = [b for ref, b in axes.items() if ref.startswith("16")]
+    seventeens = [b for ref, b in axes.items() if ref.startswith("17")]
+    if sixteens and seventeens:
+        apart = max(
+            min(angle_diff_deg(a, b), angle_diff_deg(a, b + 180.0))
+            for a in sixteens
+            for b in seventeens
+        )
+        within = math.ceil(apart * 10) / 10
+        off = max(
+            e.heading_error_deg
+            for e in istanbul["entries"]
+            if e.designator.startswith("16")
+        )
+        ltfm_section = f"""### On the LTFM heading flag
+
+Istanbul's 16L/34R and 16R/34L sit within {within:.1f} deg of the same physical axis as
+17L/35R and 17R/35L, which reads as a {off:.0f} deg mismatch against the nominal
+heading of a 16. It is not a data error: with five parallel strips there are
+only three position letters to go round, so the designator number is offset
+instead. OurAirports independently lists the same six designators
+([`runway_crosscheck.md`](runway_crosscheck.md)) -- so the heading check must
+flag rather than reject.
+
+"""
+
+    # Every cached answer this run routed, with its digest, in the form every
+    # other report carries.
+    footer = "\n".join(
+        report_inputs_footer(REPO, [cache_path(CACHE, s["icao"]) for s in rows])
+    )
+
     backtrack_count = sum(len(s["backtracking_designators"]) for s in rows)
     backtrack_airports = sum(1 for s in rows if s["backtracking_designators"])
     constant = [
@@ -478,17 +523,7 @@ total distance barely depends on the penalty while the amount of foreign runway
 pavement used collapses with it, so the value sits on a plateau rather than at
 an optimum.
 
-### On the LTFM heading flag
-
-Istanbul's 16L/34R and 16R/34L sit within 0.1 deg of the same physical axis as
-17L/35R and 17R/35L, which reads as a 19 deg mismatch against the nominal
-heading of a 16. It is not a data error: with five parallel strips there are
-only three position letters to go round, so the designator number is offset
-instead. OurAirports independently lists the same six designators
-([`runway_crosscheck.md`](runway_crosscheck.md)) -- so the heading check must
-flag rather than reject.
-
-## What this does not establish
+{ltfm_section}## What this does not establish
 
 **That these identifiers join to `STAND_mvt` and `RUNWAY_mvt`.** Coverage and
 routability both measure the OSM side alone. The join rate is still the first
@@ -527,6 +562,8 @@ routine and shorten the taxi materially. The matrix gives full-length
 distances; `backtrack_m` is the part that an intersection departure would not
 fly, and is the lever for modelling it once the movement data shows which
 runways are used that way.
+
+{footer}
 
 Data (c) OpenStreetMap contributors, ODbL 1.0. Runway cross-check data from
 OurAirports (public domain).

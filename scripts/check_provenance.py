@@ -127,6 +127,7 @@ from taxiout.provenance import (  # noqa: E402
     SCOPE,
     VALUE_NOT_JUSTIFIED,
     digest,
+    elements_digest,
     parse_report_inputs,
 )
 
@@ -196,8 +197,7 @@ PROSE_EXEMPT: tuple[tuple[str, str, str], ...] = (
         "scripts/check_provenance.py",
         "*",
         "this gate. Its prose figures are the entries of the exemption table"
-        " below, which is a list of figures by construction, and the two"
-        " PENDING reasons that quote the prose they are about. It writes no"
+        " below, which is a list of figures by construction. It writes no"
         " report either",
     ),
     # Single figures, each a definition rather than a measurement.
@@ -232,26 +232,6 @@ PROSE_EXEMPT: tuple[tuple[str, str, str], ...] = (
         "scripts/check_provenance.py",
         "4.345",
         "this gate's own comment names the missing audit reading it looks for",
-    ),
-    # Real prose measurements, unfixed because their reports cost a
-    # regeneration this block does not spend. Each is on PROVENANCE_PENDING,
-    # the same arrangement check 3 uses for an unrecorded basis: recorded as an
-    # excursion rather than passed off as fine.
-    (
-        "scripts/build_taxi_graph.py",
-        "0.1",
-        'PENDING: "within 0.1 deg of the same physical axis" at LTFM is a'
-        " measurement stated in prose. Computable from the runway geometry the"
-        " same run holds; fixing it regenerates `reports/taxi_routing.md`",
-    ),
-    (
-        "scripts/review_challenge_data.py",
-        "0.02",
-        'PENDING: "the same rate to within 0.02 points" restates a threshold'
-        " the code writes as `0.0002` inside a function, so the figure and the"
-        " threshold are two copies of one number. The fix promotes the threshold"
-        " to a registered constant and formats the prose from it, and"
-        " regenerates `reports/data_review.md`",
     ),
 )
 
@@ -705,6 +685,12 @@ def check_report_inputs(strict: bool) -> tuple[bool, list[str]]:
     absent, the ordinary case on a clean checkout because the data this
     repository does not redistribute is not there, printed as unverifiable and
     never passed off as verified, and failed under ``--strict``.
+
+    A row marked as digested by its parsed elements, which is how a footer
+    declares a cached Overpass answer, is recomputed by
+    ``taxiout.provenance.elements_digest``, the function the footer was written
+    with; every other row by its bytes, including a cached answer declared
+    before that mark existed, since identical bytes are identical elements.
     """
     lines = []
     stale: list[str] = []
@@ -726,8 +712,9 @@ def check_report_inputs(strict: bool) -> tuple[bool, list[str]]:
             )
             continue
         verified = 0
-        for rel, was in declared:
-            now = digest(REPO / rel)
+        by_elements = 0
+        for rel, was, of_elements in declared:
+            now = elements_digest(REPO / rel) if of_elements else digest(REPO / rel)
             if now == "absent":
                 unverifiable.append(f"{report}: {rel} is absent")
             elif was == "absent":
@@ -736,6 +723,7 @@ def check_report_inputs(strict: bool) -> tuple[bool, list[str]]:
                 )
             elif now == was:
                 verified += 1
+                by_elements += of_elements
             else:
                 stale.append(f"{report}: {rel} has changed since the report was written")
         lines.append(
@@ -743,6 +731,11 @@ def check_report_inputs(strict: bool) -> tuple[bool, list[str]]:
             f" {verified} verified,"
             f" {len([u for u in unverifiable if u.startswith(report)])} unverifiable,"
             f" {len([s for s in stale if s.startswith(report)])} stale"
+            + (
+                f"; {by_elements} verified by their parsed elements"
+                if by_elements
+                else ""
+            )
         )
     lines += [f"        STALE  {s}" for s in stale]
     lines += [f"        unverifiable: {u}" for u in unverifiable]

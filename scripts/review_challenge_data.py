@@ -349,11 +349,18 @@ def null_rates(root: Path) -> pd.DataFrame:
     return out
 
 
+# How far apart, as a share, the `_flt` columns' null rates may sit on every
+# side of the data before the section stops calling them the same rate. The
+# prose prints it in percentage points, formatted from this, so the figure and
+# the threshold are one number.
+FLT_SAME_RATE = 0.0002
+
+
 def section_nulls(rates: pd.DataFrame) -> list[str]:
     rows = [[f"`{c}`"] + [pct(v, 2) for v in rates.loc[c]] for c in rates.index]
     flt = [c for c in rates.index if c.endswith("_flt")]
     flt_rates = rates.loc[flt]
-    same = bool((flt_rates.max() - flt_rates.min() < 0.0002).all())
+    same = bool((flt_rates.max() - flt_rates.min() < FLT_SAME_RATE).all())
     lines = [
         "## Null rates",
         "",
@@ -361,7 +368,8 @@ def section_nulls(rates: pd.DataFrame) -> list[str]:
         "the flight side is null as a block wherever the left join to the Network",
         "Manager record found nothing"
         + (
-            ", and every `_flt` column has the same rate to within 0.02 points."
+            ", and every `_flt` column has the same rate to within"
+            f" {100 * FLT_SAME_RATE:.2f} points."
             if same
             else "."
         ),

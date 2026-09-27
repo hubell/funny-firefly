@@ -9,8 +9,12 @@ differences, the distance-matrix block with its join-quality flags, the
 aircraft, the congestion blocks and the shared corridor, the weather regimes,
 the shrunk identifier encoding in place of the stand categorical, and the four
 Gate 2c blocks: stand occupancy, the callsign prefix, the destination geometry
-and the holiday calendar. Saturation was built and measured and bought nothing,
-and ``taxiout.models`` says so where it names the rung. Fitted on the full 2025
+and the holiday calendar. Saturation was built and measured against the ceiling
+in the week of 3 September, when it bought nothing. Under the parameters that
+ship, ``reports/baseline.md`` reads it better than the rung it was added to by
+more than the seed floor on both forward splits, and it has never been measured
+on top of the rung this script fits, so what it would add here is not known and
+it is not in the model. Fitted on the full 2025
 movement files with the rows ``taxiout.tails`` covers excluded, then combined
 with that term on the rows it covers. Nothing here is chosen by a leaderboard
 score; the rung and the hyperparameters are the ones ``reports/baseline.md`` was
@@ -117,7 +121,7 @@ SUBMISSIONS = REPO / "data" / "submissions"
 ID = "MVT_ID_mvt"
 
 # The rung the submission uses. Not the last rung of the ladder: the
-# saturation rung sits above it as a measured negative and is deliberately
+# saturation rung sits above it, has never been fitted on top of it, and is
 # out of the model. ``taxiout.models`` names which rung this is and why.
 #
 # If that rung reads the shrunk encoding, this script computes it -- once over
@@ -424,12 +428,10 @@ def main() -> int:
     # single-seed and this is the one place it would apply -- and whether it
     # applies is ``taxiout.models.SEED_AVERAGE_ADOPTED`` rather than a decision
     # taken here, so that this script cannot ship a model the report says was
-    # measured and not adopted. It is currently False: on 19 September, with the
-    # encoding fitted on the same rows as the booster, averaging five seeds
-    # gains 0.48 s and 0.52 s on the two forward splits, against seed floors of
-    # 0.34 s and 0.23 s. The one-second threshold it was first read against was
-    # retired that day, and the rule that replaced it also asks for the three
-    # July airports and October to be measured before it ships; neither has been.
+    # measured and not adopted. It is True: the rule of 19 September, read in
+    # ``reports/baseline.md`` under the parameters that ship with both further
+    # measurements printed and the guard holding, adopts it, and the constant's
+    # own comment carries the readings.
     if SEED_AVERAGE_ADOPTED:
         model = SeedAverage(RUNG.features).fit(X.loc[fit_rows], y[fit_rows])
         how = f"under {BAGGING_SEEDS} seeds"

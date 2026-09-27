@@ -66,11 +66,11 @@ reports:
 12. **plus runway saturation** -- the cheap Gate 3: from the other departures'
    take-off times on the subject's runway, the share of consecutive gaps
    under ninety seconds, the smallest gap, and the span of the last three.
-   Measured against the ceiling in ``reports/congestion.md``, found to be
-   worth nothing, and therefore **not** in the submission. The rung stays on
-   the ladder because a cheap queue proxy that was built, measured and bought
-   nothing is a result. It is read against the weather rung it was added to,
-   not against whatever rung the submission has since moved to.
+   Measured against the ceiling in ``reports/congestion.md`` in the week of
+   3 September, when it bought nothing, and **not** in the submission; it has
+   never been fitted on top of the submission rung. It stays on the ladder,
+   read against the weather rung it was added to: the report computes each
+   forward split's two ex-flagged scores and whether the change clears the seed floor.
 
 Each rung is scored twice, once plain and once with the record-quality term on
 top. That term lives in ``taxiout.tails`` and is deliberately not reimplemented
@@ -334,40 +334,40 @@ BOOSTER_PARAMS: dict[str, object] = {
     "verbose": -1,
 }
 
-# Seed averaging, measured three times and NOT yet adopted. The submission rung
-# is fitted five times
-# with nothing changed but the seed and the predictions averaged. It is an
-# ESTIMATOR CHOICE and not a rung of the ladder: it changes how the model is
-# fitted and not what it reads, so the ladder stays single-seed -- an ablation
-# is about blocks, and averaging every rung would spend five times the compute
-# to move every number by the same amount.
+# Seed averaging, ADOPTED for the submission. The submission rung is fitted
+# five times with nothing changed but the seed and the predictions averaged.
+# It is an ESTIMATOR CHOICE and not a rung of the ladder: it changes how the
+# model is fitted and not what it reads, so the ladder stays single-seed -- an
+# ablation is about blocks, and averaging every rung would spend five times the
+# compute to move every number by the same amount.
 #
-# Measured three times, against a rule fixed before the first of them: adopt
-# only if the average gains at least one second on BOTH forward splits'
-# ex-flagged RMSE. On the rung below the submission it gained 0.78 and 0.98 and
-# was not adopted. On the submission rung it gained 1.10 and 1.37 and was. And
-# once the recorded-taxi tail came out of every fit
-# (``TAIL_EXCLUSION_ADOPTED_H``) it gained 0.81 and 0.56, and by the same rule
-# it was **not** adopted. Refitted once the booster was made repeatable it
-# gained 0.86 and 0.54, and refitted on 19 September with the encoding on the
-# same rows as the booster it gains 0.48 and 0.52.
+# The rule it was adopted by was fixed on 19 September 2026, before any
+# measurement under it existed: adopt it if, on both forward legs, the
+# five-seed average beats every one of the five single seeds and its gain over
+# the ladder's seed clears that leg's seed floor, and measure it on the three
+# July airports and on October, both printed, before it ships. The
+# pre-registration of 20 September fixed that it is read from
+# ``reports/baseline.md`` after the ladder run that follows the wider sweep,
+# under the parameters that ship. As ``reports/baseline.md`` has printed it
+# since 24 September, under the cell adopted the day before, December gains
+# 1.11 s against a floor of 0.23 and July 1.46 against 0.54, the average beats
+# every single seed on both legs, and the guard holds on the three and on
+# October, so the report computes *Adopted*. The constant below records the
+# decision to ship it, taken on 25 September.
 #
-# The one-second rule was retired on 19 September, before any measurement under
-# the rule that replaced it existed: its basis was the run-to-run variation the
-# ladder showed before the booster was made repeatable, and that no longer
-# holds. The rule now: adopt it if, on both forward legs, the five-seed average
-# beats every one of the five single seeds and its gain over the ladder's seed
-# clears that leg's seed floor, and measure it on the three July airports and
-# on October, both printed, before it ships. On 19 September both legs meet the
-# first half, 0.48 and 0.52 against floors of 0.34 and 0.23, and the second has
-# not been measured, so it is not yet adopted.
-#
-# What came out of the gain between the second measurement and the latest is
-# worth stating at the size it holds: 56% of it in December (1.10 -> 0.48) and
-# 62% in July (1.37 -> 0.52), as ``reports/baseline.md`` prints them on 19
-# September. Three things changed in between -- the tail came out of the fit,
-# the booster was made repeatable, and the encoding was fitted on the booster's
-# rows -- and nothing measured separates them.
+# The earlier readings, kept as history, each read against the rule of its
+# day and on rows or settings the ladder no longer fits. The first rule was to
+# adopt only if the average gained at least one second on BOTH forward splits'
+# ex-flagged RMSE: on the rung below the submission it gained 0.78 and 0.98 and
+# was not adopted; on the submission rung it gained 1.10 and 1.37 and was; once
+# the recorded-taxi tail came out of every fit (``TAIL_EXCLUSION_ADOPTED_H``)
+# it gained 0.81 and 0.56 and was not; refitted once the booster was made
+# repeatable it gained 0.86 and 0.54. That rule was retired on 19 September,
+# because its basis was the run-to-run variation the ladder showed before the
+# booster was made repeatable. Under the rule that replaced it, on 19 September
+# it gained 0.48 and 0.52 against floors of 0.34 and 0.23, with the three and
+# October not yet measured, and under the sweep's cell of 21 September 0.72
+# and 0.63 against 0.26 and 0.61, with the guard holding.
 #
 # ``reports/baseline.md``'s *Seed averaging* section is the measurement and
 # carries a reproducibility check: the first of the seeds is the one the ladder
@@ -379,7 +379,7 @@ BAGGING_SEEDS = 5
 # ``scripts/make_submission.py`` cannot ship a model the report says was not
 # adopted. It came apart once over the fit rows and the fix was the same: name
 # it once and import it.
-SEED_AVERAGE_ADOPTED: bool = False
+SEED_AVERAGE_ADOPTED: bool = True
 
 
 # The top rung's feature block, named once so the rungs that build on it say
@@ -930,12 +930,12 @@ LADDER_BY_KEY: dict[str, Rung] = {r.key: r for r in LADDER}
 #
 # Two rungs of the ladder proper sit above this one.
 #
-# The saturation rung is the older case: it takes none of the ceiling, and with
-# the booster made repeatable it moves the ex-flagged RMSE by -0.21 s in
-# December and +0.29 s in July, at the edge of the seed floor on the first leg
-# and inside it on the second (``reports/baseline.md``, *The noise floor*). A
-# block worth that little belongs in the ladder and the write-up rather than
-# in the model.
+# The saturation rung is the older case: measured against the ceiling in the
+# week of 3 September, it bought nothing, and it stays out of the model.
+# ``scripts/run_baselines.py`` now computes, under the parameters the run fits
+# with, its ex-flagged RMSE against ``+ weather``'s on each forward split and
+# whether each change clears that leg's seed floor (``reports/baseline.md``);
+# it has never been fitted on top of this rung, so what it would add is unknown.
 #
 # ``+ shrunk encoding, replacing stand and runway`` is out too, though it sits
 # below this rung on the ladder and so no longer appears in

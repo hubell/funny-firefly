@@ -44,6 +44,7 @@ sys.path.insert(0, str(REPO / "src"))
 from taxiout.airports import AIRPORTS  # noqa: E402
 from taxiout.graph import attach_stands, build_graph  # noqa: E402
 from taxiout.osm import cache_path  # noqa: E402
+from taxiout.provenance import report_inputs_footer  # noqa: E402
 from taxiout.routing import RUNWAY_PENALTY, route_all  # noqa: E402
 from taxiout.runways import build_runways  # noqa: E402
 
@@ -187,6 +188,8 @@ def main() -> int:
         "a taxiway/runway crossing inserts a junction node, so crossing traverses",
         "no runway edge and costs nothing extra. The penalty acts only on running",
         "*along* a runway, which is the intent.",
+        "",
+        *report_inputs_footer(REPO, [cache_path(CACHE, ap.icao) for ap in airports]),
         "",
         "OSM data (c) OpenStreetMap contributors, ODbL 1.0.",
     ]

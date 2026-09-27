@@ -25,22 +25,22 @@ the gate's job is to prove there is no fifth.
 
 ## The constants
 
-`taxiout.provenance.CONSTANTS` carries **226** entries, one
+`taxiout.provenance.CONSTANTS` carries **228** entries, one
 per module-level numeric assignment the scanner finds outside the
-authored artifact. The scanner finds **280** in all, of which
+authored artifact. The scanner finds **282** in all, of which
 **50** are in `src/taxiout/synthetic.py` and are covered by
 `AUTHORED_ARTIFACTS` as a module rather than one by one.
 
 | class | entries | what it means |
 | --- | ---: | --- |
 | `mechanism` | 90 | definitional or a unit conversion; nobody chose it |
-| `chosen` | 105 | somebody picked it, and the basis says what against |
+| `chosen` | 106 | somebody picked it, and the basis says what against |
 | `derived` | 1 | computed from the data and frozen into the source |
-| `quoted` | 30 | a measurement from a named run or document |
+| `quoted` | 31 | a measurement from a named run or document |
 
-**Of the 105 chosen constants, 14 record
+**Of the 106 chosen constants, 14 record
 no reason at all, and a further
-10 record the method, the convention or a neighbouring
+11 record the method, the convention or a neighbouring
 use and not the value.** That is the finding this register was built to
 produce: `HEADROOM_TRIGGER_S` was chosen with a stated reason and no
 recorded basis, and turned out to be an absolute line on a quantity
@@ -83,23 +83,22 @@ either direction without somebody seeing it.
 | `src/taxiout/validation.py` | `BOOTSTRAP_LEVEL` | method recorded, value not argued |
 | `scripts/report_residual.py` | `PEAK_HOURS` | method recorded, value not argued |
 | `scripts/report_residual.py` | `NAMED_PREFIXES` | method recorded, value not argued |
+| `scripts/review_challenge_data.py` | `FLT_SAME_RATE` | method recorded, value not argued |
 
 ## What a report declares it was generated from
 
-**13** generators write a footer naming every
+**15** generators write a footer naming every
 path the run read, with a sha256 each; check 8 recomputes them and calls
 the report verified, stale or unverifiable. The rule for who carries one
 is the Makefile's own measured time: under five minutes and the generator
 writes a footer.
 
-**2** reports carry none, and are listed here
+**0** reports carry none, and are listed here
 rather than skipped: check 8 fails on a report with no footer that is on
 no list, so the remainder is a decision and not an oversight.
 
 | report | what it costs to rebuild | owner |
 | --- | --- | --- |
-| `reports/penalty_sensitivity.md` | the better part of an hour by its own docstring, still unmeasured here. The Makefile's note used to give `make reports` as two to three minutes, which was this script's two siblings and not this script; that note now says about an hour and names which figure is measured and which is the docstring's | the run that regenerates it |
-| `reports/taxi_routing.md` | not timed here: it rewrites every distance matrix under `data/processed/taxi_distance/`, which is an input to most of the other reports, so it is not run inside a block that fits nothing | the run that regenerates it |
 
 ## What a report quotes from another report
 
@@ -250,14 +249,14 @@ applied, how a rebuild proves it was, and what would make it fail.
 
 **the OSM movement-area geometry for the eleven airports, under `data/raw/*.json.gz`**
 
-Rebuilt by `python scripts/fetch_osm.py --pin-from-register --force`, which pins each airport's Overpass query to its own entry in `OSM_PINS`.
+Rebuilt by `python scripts/fetch_osm.py --pin-from-register --force`, which pins each airport's Overpass query to its own entry in `OSM_PINS`, refuses an answer from a database older than its pin, and records, in the sidecar `data/raw/PINS.json` beside the cache, the pin each airport was fetched at, the instance that answered, the time of the fetch and the database state the answer came from.
 
-Recoverable per airport, and only per airport, and from `OSM_PINS` rather than from the cache. The eleven entries carry **seven** distinct stamps spanning 2026-09-01T13:23:05Z to 13:32:15Z, because the fetch was sequential and unpinned and each airport was answered from whatever state its instance had ingested when it was served; one `--date` would pin eight of the eleven to a state their matrices were not built from. **The cache cannot carry them**: every answer is stamped with the answering instance's own current database state and never with the pin, so a pinned rebuild re-stamps each file with the rebuild day. The mode that read the pins from the cache, `--pin-from-cache`, would have worked exactly once and then pinned every airport to that day with no error, and it now refuses.
+Recoverable per airport, and only per airport, and from `OSM_PINS` rather than from the cache. The eleven entries carry **seven** distinct stamps spanning 2026-09-01T13:23:05Z to 13:32:15Z, because the fetch was sequential and unpinned and each airport was answered from whatever state its instance had ingested when it was served; one `--date` would pin eight of the eleven to a state their matrices were not built from. **The cache cannot carry them**: every answer is stamped with the answering instance's own current database state and never with the pin, so a pinned rebuild re-stamps each file with the rebuild day. The mode that read the pins from the cache, `--pin-from-cache`, would have worked exactly once and then pinned every airport to that day with no error, and it now refuses. What a rebuilt cache carries in place of the header is the sidecar, and `taxiout.osm.pin_agreement` reads a cache by whichever evidence it has: an original answer by its header stamp, a rebuilt one by its sidecar entry, which must equal `OSM_PINS` and the answer's own fetch record, and whose database stamp must not precede its pin.
 
 - attic retention is not guaranteed. An instance may decline a query at a date this old, and one that declines is a failure to report. The mode refuses to fetch an airport the register has no pin for, because **a silently unpinned fetch is a stop**: it would replace an answer whose OSM state is recorded with one whose is not.
 - **nothing in an answer's header proves the pin was applied.** The proof is the elements: `--compare FETCHED REFERENCE` matches each airport's parsed elements on type and id against the cache the matrices were built from and compares every field, and the matrices built from them are compared after that. Not the payload bytes, which differ in the header between any two answers.
 - an airport unchanged since its pin answers the same pinned or not, so a match alone does not show the pin at work. The control does: `--control-date` asks the instance that answered for one airport at a date whose answer is known to differ, and reports whether it does. LIRF at 2020-01-01T00:00:00Z differs, 355 elements against 494, measured on overpass-api.de on 25 September 2026.
-- the client falls back to two other mirrors when the first fails, and neither has been asked an attic query. The fetch record names the mirror that answered each airport, and `--compare` prints it.
+- the client falls back to two other mirrors when the first fails, and **on 26 September 2026 both held databases from May 2026 and could not serve a September pin**: `overpass.private.coffee` stood at 2026-05-06T03:25:00Z and `overpass.kumi.systems` at 2026-05-31T22:37:44Z. An instance cannot serve a state it has not ingested, so an answer whose `osm3s.timestamp_osm_base` precedes its pin is not the pinned answer, whatever was requested; Block 11 took LSZH from the first as it stood in May, and only `--compare` saw it. The header cannot show that a pin was applied, but it can show that one could not have been, so the client now refuses such an answer, says which mirror and which state it refused, asks that mirror nothing more for the airport, and gives the primary as many asks as the whole rotation had; the sidecar records each answer's stamp, and `pin_agreement` fails one that precedes its pin. **A rebuild in which every mirror fails or refuses is a stop and not a fallback**: the pin cannot be served that day.
 
 ### The OSM pins, one per airport
 
@@ -282,16 +281,13 @@ The basis, the same for every entry: each is the `osm3s.timestamp_osm_base` of t
 
 ## What is still open
 
-**3** items. `--strict` fails while this is not
+**0** items. `--strict` fails while this is not
 empty and is the freeze condition; the ordinary run prints it and passes,
 because a gate that fails today cannot be wired into a commit path. Emptied
 by the work and never by editing the tuple.
 
 | what | owner |
 | --- | --- |
-| `docs/paper.md` quotes the reports as they stood on 24 September, and the freeze regenerates them | Block 11: `scripts/check_paper.py --strict` after the regenerations, and the paper moved with any figure that moved |
-| two reports still have no declared inputs | the runs that regenerate them, at Block 11 |
-| the per-airport OSM pin has been exercised on one airport on one instance, and not on the eleven | Block 11: `--pin-from-register --force` for all eleven, `--compare` against the cache the matrices were built from, one `--control-date` probe on the instance that answered, and the matrices compared after that |
 
 ## What this does not reach
 
@@ -307,7 +303,7 @@ Stated so its silence is not read as a pass.
 | `src/taxiout/synthetic.py` | covered once by `AUTHORED_ARTIFACTS` rather than constant by constant, with the condition that makes it safe proved by check 4 |
 | decimal figures in generator prose strings | covered by check 7: each is computed from the data or registered as deliberate prose |
 | decimal figures in code comments | NOT covered by an automated check. A comment is not read by any run and cannot reach a report, so a stale figure in one misleads a reader of the source and nothing else. The census counts them |
-| `docs/` and `README.md` | the two frozen documents are covered by check 5, which is an immutability digest and not a currency check. `docs/paper.md` is covered by check 14, and the pending list says what the freeze's regenerations owe it; the rest carries no model figure |
+| `docs/` and `README.md` | the two frozen documents are covered by check 5, which is an immutability digest and not a currency check. `docs/paper.md` is covered by check 14, whose `--strict` passed against every report the freeze regenerated on 26 September 2026; the rest carries no model figure |
 | cross-report citation | covered by check 11, scoped to the citation's own sentence and to decimal figures. Bare integers are out: a report says *the three airports* and *5 folds* in words a gate cannot tell from a measurement. A frozen dated record is out as a citing document, because its figures were true on its date and the file it cites has moved since, which is what makes it a record; check 5 holds it to a digest instead |
 | `docs/paper.md` as a citing document | covered by check 14 and not by check 11. The paper names its sources once per section, in a `Source:` line, where a report names them in the sentence, so `scripts/check_paper.py` reads each figure against the files its section cites and the sections of them it names. `--strict` passes on it since the figure pass of 25 September and is run again after every regeneration; `--report` prints every figure with where it was found |
 | integers under a thousand in `docs/paper.md` | NOT covered by check 14. A figure there is a decimal, a percentage, or an integer of four or more digits, and a count or a whole number of seconds below a thousand is neither: the rows a term covers, a rounded gain in seconds. The paper writes them as numerals, so they can go stale, and no check here will say so |

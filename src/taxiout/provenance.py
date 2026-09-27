@@ -356,9 +356,11 @@ _SCRIPTS: tuple[Constant, ...] = (
             QUOTED,
             "`reports/preregistered-2026-09-20.md` line 39, read from"
             " `reports/baseline.md` *The noise floor* as that file stood on"
-            " 20 September. **That report now prints 0.26 for this leg**: the"
-            " sweep of 21 September moved every floor, and the constant is a"
-            " dated quotation rather than a reading of the current file",
+            " 20 September. **On 21 September, under the sweep's cell, that"
+            " report printed 0.26 for this leg, and on 24 September, under the"
+            " cell adopted the day before, 0.23**: every change of parameters"
+            " moves every floor, and the constant is a dated quotation rather"
+            " than a reading of the current file",
         ),
         (
             "FLOOR_JULY_ALL",
@@ -366,14 +368,16 @@ _SCRIPTS: tuple[Constant, ...] = (
             QUOTED,
             "`reports/preregistered-2026-09-20.md` line 49, read from"
             " `reports/baseline.md` *The noise floor* as that file stood on"
-            " 20 September. **That report now prints 0.61 for this leg, and"
-            " the verdict is not in question.** Both figures are right about"
-            " their own moment: the rule is re-read under the parameters in"
-            " force, and under the sweep's cell July gains 0.63 s against that"
-            " 0.61 and clears it, which is why `reports/baseline.md` computes"
-            " *Adopted*. Reading the 20 September gain against the"
-            " 21 September floor would mix two moments. What was wrong here"
-            " was the citation and not the figure",
+            " 20 September. **On 21 September, under the sweep's cell, that"
+            " report printed 0.61 for this leg, and the verdict was not in"
+            " question:** July gained 0.63 s against that 0.61 and cleared it,"
+            " which is why `reports/baseline.md` computed *Adopted* then. On"
+            " 24 September, under the cell adopted the day before, it printed"
+            " 0.54, against a July gain of 1.46 s. Each figure is right about"
+            " its own moment, because the rule is re-read under the parameters"
+            " in force, and reading the 20 September gain against a later floor"
+            " would mix two moments. What was wrong here was the citation and"
+            " not the figure",
         ),
         (
             "FLOOR_JULY_THREE",
@@ -381,7 +385,10 @@ _SCRIPTS: tuple[Constant, ...] = (
             QUOTED,
             "`reports/preregistered-2026-09-20.md` line 50, read from"
             " `reports/baseline.md` *The noise floor* as that file stood on"
-            " 20 September. **That report now prints 0.63 for this leg**",
+            " 20 September. **On 21 September, under the sweep's cell, that"
+            " report printed 0.63 for this leg, and on 24 September, under the"
+            " cell adopted the day before, 1.02**, the figure quoted here from"
+            " 20 September: two moments that happen to agree, not one reading",
         ),
         (
             "JULY_SINGLES_POOLED",
@@ -704,17 +711,31 @@ _SCRIPTS: tuple[Constant, ...] = (
         ("HOUR", (3600,), MECHANISM, "seconds in an hour"),
         ("DAY", (86400,), MECHANISM, "seconds in a day"),
         (
+            "FLT_SAME_RATE",
+            (0.0002,),
+            CHOSEN,
+            f"{VALUE_NOT_JUSTIFIED}: how far apart, as a share, the `_flt`"
+            " columns' null rates may sit on every side of the data before"
+            " `reports/data_review.md`'s *Null rates* stops calling them the"
+            " same rate. It was written inside the function as a bare"
+            " threshold with the prose restating it as a separate figure, two"
+            " copies of one number; the prose is now formatted from it. The"
+            " table beside the sentence prints the rates as percentages to two"
+            " decimals, so the threshold is two steps of its last digit, and"
+            " no reason for two rather than one or five is recorded",
+        ),
+        (
             "DISRUPTION_MIN_ROWS",
             (20,),
             CHOSEN,
-            "line 557 states the rule both sides of the data are read at, so the"
+            "line 565 states the rule both sides of the data are read at, so the"
             " two tables can be set against each other",
         ),
         (
             "DISRUPTION_RATE_MULTIPLE",
             (10,),
             CHOSEN,
-            "line 557, covering this too: a share this many times the airport's"
+            "line 565, covering this too: a share this many times the airport's"
             " own training-year rate before the day is called out",
         ),
     ),
@@ -724,7 +745,7 @@ _SCRIPTS: tuple[Constant, ...] = (
             "FAMILYWISE_ALPHA",
             (0.05,),
             CHOSEN,
-            "lines 1174 to 1185: three shots at a 5% test is a 14% chance of one"
+            "lines 1234 to 1245: three shots at a 5% test is a 14% chance of one"
             " clearing zero by luck, and Bonferroni is the crude correction"
             " because it assumes nothing about how the arms' errors are related",
         ),
@@ -752,14 +773,16 @@ _SCRIPTS: tuple[Constant, ...] = (
             " held outside this repository. NOT regenerable as it stood;"
             " `scripts/report_headroom.py` recomputes the quantity at a named"
             " capacity and prints it beside this constant rather than in place"
-            " of it, reproducing the July-three figure to 0.05 s",
+            " of it. On 22 September, on the residuals of 21 September, it came"
+            " within 0.05 s of the July-three figure; on 25 September, on those"
+            " of 23 September, it read +10.00, 0.30 s under it",
         ),
         (
             "HEADROOM_TRIGGER_S",
             (5.0,),
             CHOSEN,
-            "a line on a DIAGNOSTIC and not a leakage criterion. Lines 2521 to"
-            " 2526 give the reason for an absolute figure and"
+            "a line on a DIAGNOSTIC and not a leakage criterion. Lines 2581 to"
+            " 2586 give the reason for an absolute figure and"
             " `docs/prior_art.md` records that absolute thresholds transfer"
             " badly between targets. An absolute line on a quantity that scales"
             " with the measured side is why this went from missing to firing"
@@ -774,7 +797,7 @@ _SCRIPTS: tuple[Constant, ...] = (
             "HEADROOM_NEAR_MISS_S",
             (1.0,),
             CHOSEN,
-            "lines 2552 to 2556: a threshold test reported only as pass or fail"
+            "lines 2612 to 2616: a threshold test reported only as pass or fail"
             " hides the case that missed by a hundredth, and this report already"
             " has a subsection about a rule that turned on nine thousandths",
         ),
@@ -808,7 +831,7 @@ _SCRIPTS: tuple[Constant, ...] = (
             "HEADROOM_UNCOMMITTED_S",
             (15.43,),
             QUOTED,
-            "lines 2621 to 2623: the first run on the reference machine,"
+            "lines 2681 to 2683: the first run on the reference machine,"
             " 10 September, under the booster's earlier setting and never"
             " committed. The migration record gives its gain and nothing finer",
         ),
@@ -816,15 +839,27 @@ _SCRIPTS: tuple[Constant, ...] = (
             "HEADROOM_FLOOR_BEFORE_S",
             (1.28,),
             QUOTED,
-            "lines 2625 to 2628: the seed floor on the July three under the"
+            "lines 2685 to 2688: the seed floor on the July three under the"
             " reference configuration, from the migration record's noise-floor"
             " table of 11 September",
+        ),
+        (
+            "HEADROOM_RECOMPUTED",
+            (10.0,),
+            QUOTED,
+            "lines 2690 to 2696: `reports/headroom.md`, *The recomputed"
+            " headroom, beside the quoted figures*, the stand-occupancy row on"
+            " July, the three, as `make headroom` regenerated it on"
+            " 25 September 2026 on the residuals the ladder wrote on"
+            " 23 September. A dated quotation with its date in the constant;"
+            " check 11 fails the sentence that quotes it if that report stops"
+            " carrying the figure",
         ),
         (
             "EXPECTED_DID_S",
             (1.0,),
             CHOSEN,
-            "lines 2720 to 2726: none of the four blocks is a property of the"
+            "lines 2792 to 2798: none of the four blocks is a property of the"
             " (airport, stand, runway) pair, so each should be within about a"
             " second of zero on the held-out-pair contrast. Not a gate, and the"
             " section says so",
@@ -833,7 +868,7 @@ _SCRIPTS: tuple[Constant, ...] = (
             "PRINTED_PRECISION_S",
             (0.1,),
             CHOSEN,
-            "lines 2729 to 2741: two rungs printing the same number are a tie,"
+            "lines 2801 to 2813: two rungs printing the same number are a tie,"
             " and a rule that ranks them is ranking the random-number generator."
             " The comment also records that adopting it there was decided after"
             " seeing the number it turns on, and that `_tolerance_audit` prints"
@@ -843,7 +878,7 @@ _SCRIPTS: tuple[Constant, ...] = (
             "GAIN_BAND_EDGES_MIN",
             (0, 20, 30, 45, 60, 120),
             CHOSEN,
-            "lines 2800 to 2804: wider than the five-minute bands"
+            "lines 2872 to 2876: wider than the five-minute bands"
             " `reports/occupancy.md` uses, because the question here is where"
             " the gain lands and a band must hold enough rows for a sum of"
             " squares to mean anything",
@@ -852,7 +887,7 @@ _SCRIPTS: tuple[Constant, ...] = (
             "PER_AIRPORT_INTERVAL_S",
             (2.0,),
             CHOSEN,
-            "lines 2895 to 2897: below this a per-airport step is printed but"
+            "lines 2967 to 2969: below this a per-airport step is printed but"
             " not bracketed, a thousand draws on a difference of a second or two"
             " being a thousand draws spent on noise",
         ),
@@ -860,7 +895,7 @@ _SCRIPTS: tuple[Constant, ...] = (
             "BAGGING_GAIN_S",
             (1.0,),
             CHOSEN,
-            "lines 4028 to 4038: one second on a 230-second error is four tenths"
+            "lines 4101 to 4111: one second on a 230-second error is four tenths"
             " of a percent, about the run-to-run variation the ladder showed"
             " when the rule was set. The comment records that the basis no"
             " longer holds and that the rule was retired on 19 September",
@@ -870,7 +905,7 @@ _SCRIPTS: tuple[Constant, ...] = (
             "BAGGING_BEFORE_TAIL_GAINS_S",
             (1.1, 1.37),
             QUOTED,
-            "lines 4079 to 4083: the same measurement on this rung before the"
+            "lines 4152 to 4156: the same measurement on this rung before the"
             " recorded-taxi tail came out of the fit, when it cleared the"
             " threshold. The run that made it fitted rows this report no longer"
             " fits, under the booster's earlier setting",
@@ -879,7 +914,7 @@ _SCRIPTS: tuple[Constant, ...] = (
             "BAGGING_EARLIER_GAINS_S",
             (0.78, 0.98),
             QUOTED,
-            "lines 4086 to 4093: the same measurement on the rung below, which"
+            "lines 4159 to 4166: the same measurement on the rung below, which"
             " did not clear the threshold. Recorded in `docs/plan.md` and"
             " `taxiout.models`; recomputing it would cost ten fits to reproduce"
             " a number already on the record",
@@ -888,7 +923,7 @@ _SCRIPTS: tuple[Constant, ...] = (
             "TAIL_EXCLUSION_H",
             (4.0, 2.0),
             CHOSEN,
-            "lines 4246 to 4252: both thresholds fixed before the run and both"
+            "lines 4319 to 4325: both thresholds fixed before the run and both"
             " reported, so that reporting the one that came out better is not"
             " available as a move. Four hours is the mechanism, two the wider"
             " reading",
@@ -1421,8 +1456,9 @@ CONSTANTS: tuple[Constant, ...] = (
             (5,),
             CHOSEN,
             "lines 337 to 374: five fits of one rung with nothing changed but the"
-            " seed, measured three times against a rule fixed before the first"
-            " of them",
+            " seed, adopted for the submission by the rule of 19 September as"
+            " `reports/baseline.md` reads it under the parameters that ship, with"
+            " the earlier readings against the rule of their day kept as history",
         ),
         (
             "TAIL_EXCLUSION_ADOPTED_H",
@@ -1465,7 +1501,7 @@ CONSTANTS: tuple[Constant, ...] = (
             "POLITE_DELAY_S",
             (5.0,),
             CHOSEN,
-            "line 49: the Overpass free tier allows about two concurrent slots"
+            "line 51: the Overpass free tier allows about two concurrent slots"
             " per address and throttles hard, and a short pause is cheaper than"
             " absorbing backoffs",
         ),
@@ -1942,14 +1978,20 @@ class Pinned(NamedTuple):
 # **A pin is a claim about what a rebuild would return.** Exercising one costs
 # the network and an Overpass instance willing to answer an attic query, so the
 # record says how the pin is applied, how a rebuild proves it was, and what
-# would make it fail. The OSM pin has been exercised once, on one airport and
-# one instance; what that showed and what is left are on the pending list.
+# would make it fail. The OSM pin was exercised on LIRF on 25 September 2026,
+# and on all eleven airports on 26 September under the rule the fourth caveat
+# states, when every answer came back identical to the cache the matrices were
+# built from and the matrices came out byte for byte.
 REBUILD_PINS: tuple[Pinned, ...] = (
     Pinned(
         "the OSM movement-area geometry for the eleven airports, under"
         " `data/raw/*.json.gz`",
         "`python scripts/fetch_osm.py --pin-from-register --force`, which pins"
-        " each airport's Overpass query to its own entry in `OSM_PINS`",
+        " each airport's Overpass query to its own entry in `OSM_PINS`, refuses"
+        " an answer from a database older than its pin, and records, in the"
+        " sidecar `data/raw/PINS.json` beside the cache, the pin each airport"
+        " was fetched at, the instance that answered, the time of the fetch and"
+        " the database state the answer came from",
         "per airport, and only per airport, and from `OSM_PINS` rather than"
         " from the cache. The eleven entries carry **seven** distinct stamps"
         " spanning 2026-09-01T13:23:05Z to 13:32:15Z, because the fetch was"
@@ -1961,7 +2003,12 @@ REBUILD_PINS: tuple[Pinned, ...] = (
         " pin, so a pinned rebuild re-stamps each file with the rebuild day. The"
         " mode that read the pins from the cache, `--pin-from-cache`, would have"
         " worked exactly once and then pinned every airport to that day with no"
-        " error, and it now refuses",
+        " error, and it now refuses. What a rebuilt cache carries in place of"
+        " the header is the sidecar, and `taxiout.osm.pin_agreement` reads a"
+        " cache by whichever evidence it has: an original answer by its header"
+        " stamp, a rebuilt one by its sidecar entry, which must equal"
+        " `OSM_PINS` and the answer's own fetch record, and whose database"
+        " stamp must not precede its pin",
         (
             "attic retention is not guaranteed. An instance may decline a query"
             " at a date this old, and one that declines is a failure to report."
@@ -1981,8 +2028,21 @@ REBUILD_PINS: tuple[Pinned, ...] = (
             " does. LIRF at 2020-01-01T00:00:00Z differs, 355 elements against"
             " 494, measured on overpass-api.de on 25 September 2026.",
             "the client falls back to two other mirrors when the first fails,"
-            " and neither has been asked an attic query. The fetch record names"
-            " the mirror that answered each airport, and `--compare` prints it.",
+            " and **on 26 September 2026 both held databases from May 2026 and"
+            " could not serve a September pin**: `overpass.private.coffee` stood"
+            " at 2026-05-06T03:25:00Z and `overpass.kumi.systems` at"
+            " 2026-05-31T22:37:44Z. An instance cannot serve a state it has not"
+            " ingested, so an answer whose `osm3s.timestamp_osm_base` precedes"
+            " its pin is not the pinned answer, whatever was requested; Block 11"
+            " took LSZH from the first as it stood in May, and only `--compare`"
+            " saw it. The header cannot show that a pin was applied, but it can"
+            " show that one could not have been, so the client now refuses such"
+            " an answer, says which mirror and which state it refused, asks that"
+            " mirror nothing more for the airport, and gives the primary as many"
+            " asks as the whole rotation had; the sidecar records each answer's"
+            " stamp, and `pin_agreement` fails one that precedes its pin. **A"
+            " rebuild in which every mirror fails or refuses is a stop and not a"
+            " fallback**: the pin cannot be served that day.",
         ),
     ),
 )
@@ -1991,7 +2051,7 @@ REBUILD_PINS: tuple[Pinned, ...] = (
 class Pending(NamedTuple):
     """One excursion not yet resolved, with a reason and an owning block.
 
-    The same instrument as ``taxiout.models.SEED_AVERAGE_PENDING``: **emptied
+    The same instrument as ``run_baselines.py``'s ``SEED_AVERAGE_PENDING``: **emptied
     by the work and never by editing the tuple**, and empty is the freeze
     condition. ``scripts/check_provenance.py --strict`` fails while it is not
     empty, and the ordinary run prints it and passes, because a gate that fails
@@ -2003,57 +2063,7 @@ class Pending(NamedTuple):
     owner: str
 
 
-PROVENANCE_PENDING: tuple[Pending, ...] = (
-    Pending(
-        "`docs/paper.md` quotes the reports as they stood on 24 September, and"
-        " the freeze regenerates them",
-        "the figure pass of 25 September brought every figure in the paper to"
-        " the reports of 23 and 24 September, and `scripts/check_paper.py"
-        " --strict` passes on it: every figure is in the section of the file"
-        " its source line names, listed as history with a reason, or computed"
-        " by an arithmetic the check verifies. The freeze then rebuilds the"
-        " geometry from pinned fetches and regenerates every report under the"
-        " parameters that ship, and a report that prints a figure differently"
-        " afterwards leaves the paper quoting the old one, which the check"
-        " will say",
-        "Block 11: `scripts/check_paper.py --strict` after the regenerations,"
-        " and the paper moved with any figure that moved",
-    ),
-    Pending(
-        "two reports still have no declared inputs",
-        "thirteen of the fifteen generators now carry the footer. Four of them"
-        " gained one on 23 September, when a run regenerated each: the ladder"
-        " wrote `baseline.md` and `transfer.md`, and `geometry_gaps.md` and"
-        " `determinism.md` were regenerated in the same block, the first once"
-        " its negative-zero cells were fixed in the generator and the second"
-        " because it was stale against residuals the ladder had rewritten."
-        " `REPORTS_WITHOUT_FOOTER` names the other two with what each costs and"
-        " who owns it, and check 8 fails on a report that carries no footer and"
-        " is not on that list, so the remainder is a decision rather than an"
-        " oversight. Both are geometry runs that rewrite inputs to other"
-        " reports, which is why they are not run inside a block that fits"
-        " models",
-        "the runs that regenerate them, at Block 11",
-    ),
-    Pending(
-        "the per-airport OSM pin has been exercised on one airport on one"
-        " instance, and not on the eleven",
-        "Block 09h pinned LIRF to its own stamp, 2026-09-01T13:29:10Z, on"
-        " overpass-api.de on 25 September 2026, and the pin serves: all 494"
-        " elements matched the cache in every field and in order, the matrix"
-        " came out byte for byte, and the same instance pinned to 2020-01-01"
-        " returned 355, so it applies `[date:]`. That is one airport on one"
-        " instance. LIRF has not changed"
-        " since 1 September, so a match there cannot by itself tell a pinned"
-        " fetch from an unpinned one, and the ten other airports, where a pin"
-        " would matter for any that changed after its own stamp, have never"
-        " been fetched pinned. Nor has either fallback mirror",
-        "Block 11: `--pin-from-register --force` for all eleven, `--compare`"
-        " against the cache the matrices were built from, one `--control-date`"
-        " probe on the instance that answered, and the matrices compared after"
-        " that",
-    ),
-)
+PROVENANCE_PENDING: tuple[Pending, ...] = ()
 
 
 # --------------------------------------------------------------------------
@@ -2113,8 +2123,9 @@ SCOPE: tuple[tuple[str, str], ...] = (
         "`docs/` and `README.md`",
         "the two frozen documents are covered by check 5, which is an"
         " immutability digest and not a currency check. `docs/paper.md` is"
-        " covered by check 14, and the pending list says what the freeze's"
-        " regenerations owe it; the rest carries no model figure",
+        " covered by check 14, whose `--strict` passed against every report the"
+        " freeze regenerated on 26 September 2026; the rest carries no model"
+        " figure",
     ),
     (
         "cross-report citation",
@@ -2202,11 +2213,14 @@ REPORT_INPUTS_HEADING = "## What this report was generated from"
 # report nobody rebuilds is a report nobody can footer. What replaced it is
 # simpler. A run that regenerates a report writes its footer while it is there,
 # whatever the report cost, and the four that cost hours went in on 23 September
-# with the ladder run that rewrote them. The rule now only decides who is left:
-# ``REPORTS_WITHOUT_FOOTER`` holds the reports no run in this tree regenerates,
-# with what each costs and who owns it.
+# with the ladder run that rewrote them. The last two, the routing report and
+# the penalty sensitivity, went in on 26 September with the pinned rebuild that
+# regenerated them, so every live report is here and ``REPORTS_WITHOUT_FOOTER``
+# is empty; it stays, for any report a later run cannot regenerate.
 REPORT_INPUTS_DECLARED: tuple[tuple[str, str], ...] = (
+    ("scripts/build_taxi_graph.py", "reports/taxi_routing.md"),
     ("scripts/check_determinism.py", "reports/determinism.md"),
+    ("scripts/check_penalty_sensitivity.py", "reports/penalty_sensitivity.md"),
     ("scripts/check_runways_ourairports.py", "reports/runway_crosscheck.md"),
     ("scripts/report_congestion.py", "reports/congestion.md"),
     ("scripts/report_coverage.py", "reports/stand_coverage.md"),
@@ -2233,6 +2247,56 @@ def digest(path) -> str:
     return hashlib.sha256(p.read_bytes()).hexdigest()
 
 
+# The mark a footer writes beside an input it digests by content rather than by
+# bytes. **The cached Overpass answers, and only they.** Every answer's bytes
+# change on every fetch, because its header carries the answering instance's
+# own database stamp and the client adds the time of the fetch, so a byte
+# digest goes stale after any refetch even where every element is the same,
+# and a clean checkout that rebuilt the cache could never verify a report that
+# read it. What a report reads from an answer is its elements, so that is what
+# is digested.
+ELEMENTS_MARK = "(parsed elements)"
+
+
+def is_overpass_answer(rel: str) -> bool:
+    """Whether a repository-relative path is a cached Overpass answer.
+
+    ``data/raw/<ICAO>.json.gz``, which is where ``taxiout.osm.cache_path``
+    puts one; nothing else under ``data/raw/`` is one.
+    """
+    from pathlib import PurePosixPath
+
+    p = PurePosixPath(rel)
+    return p.parent == PurePosixPath("data/raw") and p.name.endswith(".json.gz")
+
+
+def elements_digest(path) -> str:
+    """The sha256 of one cached Overpass answer's elements, or ``"absent"``.
+
+    **The one function a footer writes with and check 8 reads with.** The
+    canonical form: the payload's ``elements`` and nothing else, so the header
+    (``osm3s``, the generator, the version) and the ``taxiout:fetch`` record are
+    left out; sorted by type and then id; each serialized as JSON with its keys
+    sorted and no whitespace, the list hashed as UTF-8. Two answers that
+    ``taxiout.osm.compare_elements`` finds to hold the same elements digest the
+    same whatever their headers say; the order they were served in does not
+    count here, and ``--compare`` is what holds the order.
+    """
+    import gzip
+    import hashlib
+    import json
+    from pathlib import Path
+
+    p = Path(path)
+    if not p.exists():
+        return "absent"
+    with gzip.open(p, "rt", encoding="utf-8") as fh:
+        elements = json.load(fh).get("elements", [])
+    ordered = sorted(elements, key=lambda e: (str(e.get("type", "")), e.get("id", 0)))
+    canonical = json.dumps(ordered, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
 def report_inputs_footer(repo, paths) -> list[str]:
     """The footer naming every input a report was generated from, with digests.
 
@@ -2240,6 +2304,11 @@ def report_inputs_footer(repo, paths) -> list[str]:
     point.** Block 11 reproduces from a clean checkout, where every file
     carries the checkout time, so an mtime ordering is meaningless exactly
     where the check matters most. A digest is not.
+
+    A cached Overpass answer is digested by its parsed elements and marked so
+    beside its path, because its bytes change with every fetch and its
+    elements need not; every other input by its bytes. See
+    ``elements_digest``.
 
     An input under a gitignored directory is the ordinary case on a clean
     checkout, and it reads ``absent`` rather than being left out: a footer that
@@ -2251,7 +2320,11 @@ def report_inputs_footer(repo, paths) -> list[str]:
     rows = []
     for p in paths:
         rel = Path(p).resolve().relative_to(Path(repo).resolve()).as_posix()
-        rows.append(f"| `{rel}` | `{digest(p)}` |")
+        if is_overpass_answer(rel):
+            rows.append(f"| `{rel}` {ELEMENTS_MARK} | `{elements_digest(p)}` |")
+        else:
+            rows.append(f"| `{rel}` | `{digest(p)}` |")
+    marked = any(ELEMENTS_MARK in row for row in rows)
     return [
         REPORT_INPUTS_HEADING,
         "",
@@ -2260,6 +2333,18 @@ def report_inputs_footer(repo, paths) -> list[str]:
         "verified, stale or unverifiable; a digest reading `absent` is the",
         "ordinary case on a clean checkout, where the data this repository does",
         "not redistribute is not present.",
+        *(
+            [
+                "",
+                f"A path marked {ELEMENTS_MARK} is a cached Overpass answer, and its",
+                "digest is of the answer's elements in canonical form and not of the",
+                "file's bytes: every answer's header carries the answering instance's",
+                "own database stamp and the time of the fetch, so a refetch changes",
+                "every byte of a file whose elements are all the same.",
+            ]
+            if marked
+            else []
+        ),
         "",
         "| input | sha256 |",
         "| --- | --- |",
@@ -2274,10 +2359,10 @@ def report_inputs_footer(repo, paths) -> list[str]:
 # Reports whose generator writes no provenance footer, each with what it costs
 # to rebuild and who owns it. **Listed and not silently skipped**: check 8
 # fails if a report carries no footer and is not named here, so the set of
-# undeclared reports is a decision and not an oversight. The rule for who
-# belongs here is the Makefile's own measured time: a generator under five
-# minutes carries a footer, and the rest wait for a run that regenerates them,
-# because a footer is worth nothing in a file that does not carry it.
+# undeclared reports is a decision and not an oversight. A report belongs here
+# only while no run regenerates it, because a footer is worth nothing in a file
+# that does not carry it. Empty since 26 September 2026, when the pinned
+# rebuild regenerated the last two.
 class Unfootered(NamedTuple):
     report: str
     generator: str
@@ -2285,26 +2370,7 @@ class Unfootered(NamedTuple):
     owner: str
 
 
-REPORTS_WITHOUT_FOOTER: tuple[Unfootered, ...] = (
-    Unfootered(
-        "reports/penalty_sensitivity.md",
-        "scripts/check_penalty_sensitivity.py",
-        "the better part of an hour by its own docstring, still unmeasured"
-        " here. The Makefile's note used to give `make reports` as two to"
-        " three minutes, which was this script's two siblings and not this"
-        " script; that note now says about an hour and names which figure is"
-        " measured and which is the docstring's",
-        "the run that regenerates it",
-    ),
-    Unfootered(
-        "reports/taxi_routing.md",
-        "scripts/build_taxi_graph.py",
-        "not timed here: it rewrites every distance matrix under"
-        " `data/processed/taxi_distance/`, which is an input to most of the"
-        " other reports, so it is not run inside a block that fits nothing",
-        "the run that regenerates it",
-    ),
-)
+REPORTS_WITHOUT_FOOTER: tuple[Unfootered, ...] = ()
 
 
 # A figure in a citation's sentence that the cited report does not carry, and
@@ -2612,16 +2678,34 @@ PAPER_FIGURE_EXEMPTIONS: tuple[PaperFigure, ...] = (
 )
 
 
-def parse_report_inputs(text: str) -> tuple[tuple[str, str], ...]:
-    """The (path, digest) pairs a report's footer declares; empty if it has none."""
+class DeclaredInput(NamedTuple):
+    """One row of a report's footer: the path, its digest, and which digest.
+
+    ``by_elements`` is true where the row carries ``ELEMENTS_MARK``, so the
+    digest is ``elements_digest``'s. A footer written before that mark existed
+    carries the byte digest of every input, cached answers included, and reads
+    with ``by_elements`` false: identical bytes are identical elements, so the
+    older form verifies the file it was taken from and a footer from either era
+    reads.
+    """
+
+    path: str
+    digest: str
+    by_elements: bool = False
+
+
+def parse_report_inputs(text: str) -> tuple[DeclaredInput, ...]:
+    """The inputs a report's footer declares; empty if it has none."""
     import re
 
     if REPORT_INPUTS_HEADING not in text:
         return ()
     body = text[text.index(REPORT_INPUTS_HEADING) :]
+    mark = re.escape(ELEMENTS_MARK)
+    row = rf"^\| `([^`]+)`( {mark})? \| `([0-9a-f]{{64}}|absent)` \|$"
     return tuple(
-        (m.group(1), m.group(2))
-        for m in re.finditer(r"^\| `([^`]+)` \| `([0-9a-f]{64}|absent)` \|$", body, re.M)
+        DeclaredInput(m.group(1), m.group(3), bool(m.group(2)))
+        for m in re.finditer(row, body, re.M)
     )
 
 

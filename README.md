@@ -293,6 +293,16 @@ answered for a date whose answer is known to differ, which shows that it
 applies a pin at all. `--force` writes in place, so run the rebuild in a clean
 checkout or copy the cache aside first.
 
+What a header can show is that a pin could not have been applied. An instance
+cannot serve a state it has not yet ingested, so an answer whose
+`osm3s.timestamp_osm_base` is earlier than its pin is not the pinned answer. On
+26 September 2026 both fallback mirrors held databases from May 2026 and could
+not serve a September pin. The client refuses such an answer, prints which
+mirror it refused and the state that mirror stood at, and does not ask that
+mirror again for the airport; the sidecar `data/raw/PINS.json` records each
+answer's database state beside its pin. A rebuild in which every mirror fails
+or refuses is a stop and not a fallback: the pin cannot be served that day.
+
 ## Data sources
 
 - **Challenge datasets** — EUROCONTROL PRC / OpenSky Network, under the terms of

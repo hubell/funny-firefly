@@ -339,3 +339,48 @@ def test_the_submission_cannot_seed_average_against_the_rule():
     for line in text.splitlines():
         if "SeedAverage(" in line and "import" not in line:
             assert "if SEED_AVERAGE_ADOPTED" in text, line
+
+
+def test_the_submission_averages_the_five_seeds_the_rule_adopted():
+    """The decision the freeze records: the constant is True, and the script
+    fits the five-seed average when it is.
+
+    ``reports/baseline.md``'s *Seed averaging* computes *Adopted* under the
+    parameters that ship, and the paper describes the submitted model as the
+    five-seed average. ``make_submission`` reads the constant, so the constant
+    has to say the same. The script is read structurally, because its ``main``
+    needs the challenge data and this runs without it.
+    """
+    import ast
+    import pathlib
+
+    from taxiout.models import BAGGING_SEEDS, SEED_AVERAGE_ADOPTED, SeedAverage
+
+    assert SEED_AVERAGE_ADOPTED is True
+    assert BAGGING_SEEDS == 5
+    assert SeedAverage(("x",)).seeds == BAGGING_SEEDS
+
+    root = pathlib.Path(__file__).resolve().parents[1]
+    tree = ast.parse((root / "scripts" / "make_submission.py").read_text())
+    decides = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.If)
+        and isinstance(node.test, ast.Name)
+        and node.test.id == "SEED_AVERAGE_ADOPTED"
+    ]
+    assert len(decides) == 1, "one place decides how the submission is fitted"
+    taken = ast.unparse(ast.Module(body=decides[0].body, type_ignores=[]))
+    assert "SeedAverage(RUNG.features)" in taken
+    assert "BAGGING_SEEDS" in taken
+    # and the manifest records the seeds the file was fitted under
+    seeds = [
+        value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Dict)
+        for key, value in zip(node.keys, node.values)
+        if isinstance(key, ast.Constant) and key.value == "seeds"
+    ]
+    assert [ast.unparse(v) for v in seeds] == [
+        "BAGGING_SEEDS if SEED_AVERAGE_ADOPTED else 1"
+    ]

@@ -7,7 +7,7 @@ term predicts for them, and what it is worth.
 
 **This report has two generators, and each section says which wrote it.**
 Everything above *The pooled record-quality rule, measured* is written by
-`scripts/report_tails.py` from the data under `data/challenge/` on 2026-09-22,
+`scripts/report_tails.py` from the data under `data/challenge/` on 2026-09-26,
 and every figure in it is computed there. That section is written into this
 file afterwards by `scripts/pooled_tails.py --report`, carries its own date,
 and its figures are computed there; `make tails` runs the two in that order.

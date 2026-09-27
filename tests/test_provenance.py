@@ -330,6 +330,12 @@ def test_the_frozen_digests_are_the_documents_on_disk():
 def test_strict_fails_on_a_non_empty_pending_list_and_passes_on_an_empty_one(
     monkeypatch,
 ):
+    """On a constructed item, since the real list is empty from the freeze on."""
+    monkeypatch.setattr(
+        cp,
+        "PROVENANCE_PENDING",
+        (Pending("an excursion", "the reason it is open", "the block that owns it"),),
+    )
     ok, lines = cp.check_pending(strict=False)
     assert ok, "the ordinary run prints the list and passes"
     assert any("not a failure outside --strict" in line for line in lines)
@@ -438,8 +444,211 @@ def test_a_report_declaring_no_inputs_fails_check_8(monkeypatch, tmp_path):
 def test_the_footer_round_trips():
     footer = "\n".join(report_inputs_footer(REPO, [REPO / "README.md"]))
     got = parse_report_inputs(footer)
-    assert got == (("README.md", digest(REPO / "README.md")),)
+    assert got == (("README.md", digest(REPO / "README.md"), False),)
     assert parse_report_inputs("# a report with no footer") == ()
+    assert "parsed elements" not in footer, "no cached answer, no mark and no note"
+
+
+# --------------------------------------------------------------------------
+# a cached Overpass answer, digested by its elements: Block 11a
+
+
+def _overpass(elements, *, stamp, fetched=None):
+    """An invented Overpass answer as the client stores it."""
+    payload = {
+        "version": 0.6,
+        "generator": "Overpass API, invented",
+        "osm3s": {"timestamp_osm_base": stamp, "copyright": "invented"},
+        "elements": elements,
+    }
+    if fetched:
+        payload["taxiout:fetch"] = {
+            "mirror": "https://instance.invalid/api/interpreter",
+            "date_pin": "2026-09-01T13:32:15Z",
+            "fetched_utc": fetched,
+            "timestamp_osm_base": stamp,
+        }
+    return payload
+
+
+def _elements_of_an_airport():
+    return [
+        {"type": "node", "id": 7, "lat": 47.45, "lon": 8.56, "tags": {"ref": "A"}},
+        {"type": "way", "id": 70, "nodes": [7, 8], "tags": {"aeroway": "taxiway"}},
+        {"type": "node", "id": 8, "lat": 47.46, "lon": 8.57},
+    ]
+
+
+def _store(path, payload):
+    import gzip
+    import json
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with gzip.open(path, "wt", encoding="utf-8") as fh:
+        json.dump(payload, fh)
+    return path
+
+
+def test_two_answers_differing_only_in_header_and_fetch_record_digest_the_same(
+    tmp_path,
+):
+    """The header and the fetch record are left out; so are order and key order."""
+    from taxiout.provenance import elements_digest
+
+    first = _store(
+        tmp_path / "a.json.gz",
+        _overpass(_elements_of_an_airport(), stamp="2026-09-01T13:32:15Z"),
+    )
+    again = _store(
+        tmp_path / "b.json.gz",
+        _overpass(
+            _elements_of_an_airport(),
+            stamp="2026-09-26T07:36:11Z",
+            fetched="2026-09-26T07:36:22Z",
+        ),
+    )
+    assert digest(first) != digest(again), "the bytes differ, as every refetch's do"
+    assert elements_digest(first) == elements_digest(again)
+
+    shuffled = [dict(reversed(list(e.items()))) for e in _elements_of_an_airport()[::-1]]
+    third = _store(
+        tmp_path / "c.json.gz", _overpass(shuffled, stamp="2020-01-01T00:00:00Z")
+    )
+    assert elements_digest(third) == elements_digest(first)
+    assert elements_digest(tmp_path / "gone.json.gz") == "absent"
+
+
+def test_a_single_changed_tag_digests_differently(tmp_path):
+    """One `alt_name` gone is what LSZH's May answer looked like, thirteen times."""
+    from taxiout.provenance import elements_digest
+
+    base = _store(
+        tmp_path / "a.json.gz",
+        _overpass(_elements_of_an_airport(), stamp="2026-09-01T13:32:15Z"),
+    )
+    elements = _elements_of_an_airport()
+    elements[1]["tags"] = {"aeroway": "taxiway", "alt_name": "B"}
+    moved = _store(
+        tmp_path / "b.json.gz", _overpass(elements, stamp="2026-09-01T13:32:15Z")
+    )
+    assert elements_digest(moved) != elements_digest(base)
+
+
+def _constructed_repo(monkeypatch, tmp_path, footer_lines):
+    """A repository of one report reading one cached answer, for check 8."""
+    (tmp_path / "reports").mkdir(exist_ok=True)
+    (tmp_path / "reports" / "r.md").write_text("\n".join(footer_lines), encoding="utf-8")
+    monkeypatch.setattr(cp, "REPO", tmp_path)
+    monkeypatch.setattr(cp, "REPORT_INPUTS_DECLARED", (("scripts/g.py", "reports/r.md"),))
+    # check 8 also lists the reports carrying no footer, which reads the
+    # tracked tree; this constructed one is not a repository.
+    monkeypatch.setattr(cp, "report_writers", lambda: {"reports/r.md": {"scripts/g.py"}})
+
+
+def test_a_refetched_answer_verifies_against_a_footer_written_from_the_other(
+    monkeypatch, tmp_path
+):
+    """The same elements under another header verify, both ways; a moved tag does not.
+
+    This is what a clean checkout that rebuilt the cache sees: every byte of
+    every answer differs from the one the footer was written from, and every
+    element is the same.
+    """
+    answer = tmp_path / "data" / "raw" / "LSZH.json.gz"
+    first = _overpass(_elements_of_an_airport(), stamp="2026-09-01T13:32:15Z")
+    again = _overpass(
+        _elements_of_an_airport(),
+        stamp="2026-09-26T07:36:11Z",
+        fetched="2026-09-26T07:36:22Z",
+    )
+    for written, found in ((first, again), (again, first)):
+        _store(answer, written)
+        footer = report_inputs_footer(tmp_path, [answer])
+        assert any("`data/raw/LSZH.json.gz` (parsed elements)" in row for row in footer)
+        assert any("is a cached Overpass answer" in row for row in footer)
+        _constructed_repo(monkeypatch, tmp_path, footer)
+        (declared,) = parse_report_inputs("\n".join(footer))
+        assert declared.path == "data/raw/LSZH.json.gz" and declared.by_elements
+
+        _store(answer, found)
+        ok, lines = cp.check_report_inputs(strict=True)
+        assert ok, lines
+        assert any(
+            "1 verified" in line and "by their parsed elements" in line for line in lines
+        )
+
+    elements = _elements_of_an_airport()
+    del elements[0]["tags"]
+    _store(answer, _overpass(elements, stamp="2026-09-26T07:36:11Z"))
+    ok, lines = cp.check_report_inputs(strict=False)
+    assert not ok
+    assert any("STALE" in line and "LSZH.json.gz" in line for line in lines)
+
+
+def test_a_byte_digest_still_verifies_the_file_it_was_taken_from(monkeypatch, tmp_path):
+    """A footer written before the mark: the byte digest of a cached answer.
+
+    Identical bytes are identical elements, so it verifies the file it was
+    taken from, and a footer of either era reads. After a refetch its bytes
+    are gone, and it reads stale until the report is regenerated.
+    """
+    answer = _store(
+        tmp_path / "data" / "raw" / "LSZH.json.gz",
+        _overpass(_elements_of_an_airport(), stamp="2026-09-01T13:32:15Z"),
+    )
+    footer = [
+        "## What this report was generated from",
+        "",
+        "| input | sha256 |",
+        "| --- | --- |",
+        f"| `data/raw/LSZH.json.gz` | `{digest(answer)}` |",
+    ]
+    (declared,) = parse_report_inputs("\n".join(footer))
+    assert not declared.by_elements and declared.digest == digest(answer)
+    _constructed_repo(monkeypatch, tmp_path, footer)
+    ok, lines = cp.check_report_inputs(strict=True)
+    assert ok, lines
+    assert not any("by their parsed elements" in line for line in lines)
+
+    _store(
+        answer,
+        _overpass(
+            _elements_of_an_airport(),
+            stamp="2026-09-26T07:36:11Z",
+            fetched="2026-09-26T07:36:22Z",
+        ),
+    )
+    ok, lines = cp.check_report_inputs(strict=False)
+    assert not ok
+    assert any("STALE" in line for line in lines)
+
+
+def test_the_last_two_footers_parse_and_declare_the_cache_by_its_elements():
+    """The routing report and the penalty sensitivity, footered by the rebuild.
+
+    Both read the eleven cached answers and nothing else, so each declares
+    eleven inputs, every one a cached answer in the marked form. Read from the
+    committed reports, so it holds in a clean checkout too, where the cache is
+    absent and check 8 can only call the inputs unverifiable.
+    """
+    from taxiout.airports import AIRPORTS
+    from taxiout.provenance import (
+        REPORT_INPUTS_DECLARED,
+        REPORTS_WITHOUT_FOOTER,
+        is_overpass_answer,
+    )
+
+    declared = {report: generator for generator, report in REPORT_INPUTS_DECLARED}
+    for report, generator in (
+        ("reports/taxi_routing.md", "scripts/build_taxi_graph.py"),
+        ("reports/penalty_sensitivity.md", "scripts/check_penalty_sensitivity.py"),
+    ):
+        assert declared.get(report) == generator, report
+        rows = parse_report_inputs((REPO / report).read_text(encoding="utf-8"))
+        assert [r.path for r in rows] == [f"data/raw/{a.icao}.json.gz" for a in AIRPORTS]
+        assert all(r.by_elements and is_overpass_answer(r.path) for r in rows), report
+        assert all(re.fullmatch(r"[0-9a-f]{64}", r.digest) for r in rows), report
+    assert REPORTS_WITHOUT_FOOTER == ()
 
 
 def test_a_report_carrying_a_section_from_an_unnamed_generator_fails_check_9(
@@ -896,35 +1105,171 @@ def test_the_register_carries_one_osm_pin_per_airport_at_the_seven_stamps():
     assert stamps == sorted(stamps)
 
 
-def test_the_osm_pins_equal_the_cache_stamps_while_the_original_cache_exists():
-    """The register against the cache it was read from, wherever that exists.
+def test_the_osm_pins_hold_for_whatever_cache_this_checkout_has():
+    """The register against the cache, by the evidence that kind of cache carries.
 
-    **This passes on the cache fetched on 1 September and fails after any
-    rebuild, and failing then is correct.** Overpass stamps every answer with
-    its own database state on the day and never with the pin, so a rebuilt
-    file carries the rebuild day: from then on the register is right and the
-    cache is not. The test's job is to have caught a transcription error while
-    the original cache still existed to catch it against.
+    Three branches, each for its own reason. **An original cache**, fetched
+    unpinned on 1 September, carries in each header the state it was served
+    from, so each header must equal its pin. **A rebuilt cache** carries the
+    rebuild day in every header, because Overpass stamps an answer with its own
+    database state and never with the pin, so the header proves nothing there;
+    the sidecar ``scripts/fetch_osm.py`` writes must record each airport as
+    fetched at its pin, and each answer's own fetch record must equal its entry.
+    **No cache**, which is every clean checkout because ``data/raw/`` is
+    gitignored, is skipped: there the register is the only record of the pins.
     """
-    from taxiout.osm import cached_osm_base
+    from taxiout.osm import pin_agreement
     from taxiout.provenance import OSM_PINS
 
-    cache = REPO / "data" / "raw"
-    present = [p for p in OSM_PINS if (cache / f"{p.icao}.json.gz").exists()]
-    if not present:
+    got = pin_agreement(
+        REPO / "data" / "raw", {p.icao: p.timestamp_osm_base for p in OSM_PINS}
+    )
+    if not got:
         pytest.skip(
             "no OSM cache in this checkout: data/raw/ is gitignored, so a clean"
             " checkout has none, and there the register is the only record of"
             " the pins"
         )
-    read = {p.icao: cached_osm_base(cache, p.icao) for p in present}
-    recorded = {p.icao: p.timestamp_osm_base for p in present}
-    assert read == recorded, (
-        "a cache stamp differs from its pin in OSM_PINS. Either the register was"
-        " transcribed wrongly, or this cache was re-fetched and carries the day"
-        " of the re-fetch, in which case the register is right and this test"
-        " has done its job"
+    bad = [f"{c.icao}, {c.branch}: {c.problem}" for c in got if c.problem]
+    assert not bad, (
+        "a cached answer does not show it was fetched at its pin in OSM_PINS:"
+        f" {bad}. An original answer is read by its header, a rebuilt one by the"
+        " sidecar data/raw/PINS.json, which scripts/fetch_osm.py writes on every"
+        " fetch"
     )
+
+
+def _cached(cache, icao, *, stamp, pin=None, mirror=None, fetched=None):
+    """An invented cached answer: a header stamp and, if fetched here, a record."""
+    import gzip
+    import json
+
+    payload = {"osm3s": {"timestamp_osm_base": stamp}, "elements": [{"id": 1}]}
+    if mirror:
+        payload["taxiout:fetch"] = {
+            "mirror": mirror,
+            "date_pin": pin,
+            "fetched_utc": fetched,
+            "timestamp_osm_base": stamp,
+        }
+    cache.mkdir(parents=True, exist_ok=True)
+    with gzip.open(cache / f"{icao}.json.gz", "wt", encoding="utf-8") as fh:
+        json.dump(payload, fh)
+    return payload
+
+
+def test_the_pin_check_reads_each_kind_of_cache_by_its_own_evidence(tmp_path):
+    """All three branches, on caches constructed under ``tmp_path``.
+
+    Each branch passes on the evidence it should read and fails on a planted
+    disagreement, so a rebuilt cache cannot pass on its header and an original
+    one cannot pass on a sidecar it does not have.
+    """
+    import json
+
+    from taxiout.osm import PINS_SIDECAR, pin_agreement, read_sidecar, record_fetch
+
+    pins = {"EDDF": "2026-09-01T13:23:05Z", "LIRF": "2026-09-01T13:29:10Z"}
+    rebuild_day = "2026-09-26T08:00:00Z"
+    mirror = "https://instance.invalid/api/interpreter"
+
+    # No cache: nothing is read, and the caller skips.
+    assert pin_agreement(tmp_path / "absent", pins) == []
+
+    # An original cache: read by its headers.
+    original = tmp_path / "original"
+    for icao, pin in pins.items():
+        _cached(original, icao, stamp=pin)
+    got = pin_agreement(original, pins)
+    assert [(c.icao, c.branch, c.problem) for c in got] == [
+        ("EDDF", "original", None),
+        ("LIRF", "original", None),
+    ]
+    _cached(original, "LIRF", stamp=rebuild_day)
+    (lirf,) = [c for c in pin_agreement(original, pins) if c.problem]
+    assert lirf.icao == "LIRF" and "no sidecar entry" in lirf.problem
+
+    # A rebuilt cache: every header carries the rebuild day, and the sidecar
+    # carries the pins.
+    rebuilt = tmp_path / "rebuilt"
+    for icao, pin in pins.items():
+        answer = _cached(
+            rebuilt, icao, stamp=rebuild_day, pin=pin, mirror=mirror, fetched=rebuild_day
+        )
+        record_fetch(rebuilt, icao, answer)
+    got = pin_agreement(rebuilt, pins)
+    assert [(c.icao, c.branch, c.problem) for c in got] == [
+        ("EDDF", "rebuilt", None),
+        ("LIRF", "rebuilt", None),
+    ]
+    written = json.loads((rebuilt / PINS_SIDECAR).read_text(encoding="utf-8"))
+    assert sorted(written["airports"]) == ["EDDF", "LIRF"]
+    assert read_sidecar(rebuilt)["LIRF"] == {
+        "date_pin": pins["LIRF"],
+        "mirror": mirror,
+        "fetched_utc": rebuild_day,
+        "timestamp_osm_base": rebuild_day,
+    }
+
+    # A sidecar entry at another pin fails, and so does an answer a later fetch
+    # replaced behind its entry's back.
+    stale = _cached(
+        rebuilt, "EDDF", stamp=rebuild_day, pin=None, mirror=mirror, fetched=rebuild_day
+    )
+    record_fetch(rebuilt, "EDDF", stale)
+    (eddf,) = [c for c in pin_agreement(rebuilt, pins) if c.problem]
+    assert eddf.icao == "EDDF" and "fetched at None" in eddf.problem
+    _cached(
+        rebuilt,
+        "LIRF",
+        stamp=rebuild_day,
+        pin=pins["LIRF"],
+        mirror=mirror,
+        fetched="2026-09-26T09:00:00Z",
+    )
+    lirf = [c for c in pin_agreement(rebuilt, pins) if c.icao == "LIRF"][0]
+    assert lirf.branch == "rebuilt" and "another fetch" in lirf.problem
+
+    # Requested at the pin and answered from a database that predates it, as
+    # a fallback mirror answered LSZH on 26 September: the request is right,
+    # the entry agrees with its file, and the stamp alone fails it.
+    may = "2026-05-31T22:37:44Z"
+    served = _cached(
+        rebuilt, "LIRF", stamp=may, pin=pins["LIRF"], mirror=mirror, fetched=rebuild_day
+    )
+    record_fetch(rebuilt, "LIRF", served)
+    lirf = [c for c in pin_agreement(rebuilt, pins) if c.icao == "LIRF"][0]
+    assert lirf.branch == "rebuilt"
+    assert may in lirf.problem and pins["LIRF"] in lirf.problem
+    assert "cannot have been served at the pin" in lirf.problem
+
+    # An entry written before the sidecar carried a stamp says nothing about
+    # what the answer could have been, and fails for that.
+    sidecar = json.loads((rebuilt / PINS_SIDECAR).read_text(encoding="utf-8"))
+    for airport in ("EDDF", "LIRF"):
+        answer = _cached(
+            rebuilt,
+            airport,
+            stamp=rebuild_day,
+            pin=pins[airport],
+            mirror=mirror,
+            fetched=rebuild_day,
+        )
+        del answer["taxiout:fetch"]["timestamp_osm_base"]
+        _write_payload(rebuilt / f"{airport}.json.gz", answer)
+        sidecar["airports"][airport] = dict(answer["taxiout:fetch"])
+    (rebuilt / PINS_SIDECAR).write_text(json.dumps(sidecar), encoding="utf-8")
+    got = pin_agreement(rebuilt, pins)
+    assert [c.icao for c in got if c.problem] == ["EDDF", "LIRF"]
+    assert all("records no database state" in c.problem for c in got)
+
+
+def _write_payload(path, payload):
+    import gzip
+    import json
+
+    with gzip.open(path, "wt", encoding="utf-8") as fh:
+        json.dump(payload, fh)
 
 
 def test_the_recorded_rebuild_reads_the_register_and_never_the_cache():
@@ -940,21 +1285,25 @@ def test_the_recorded_rebuild_reads_the_register_and_never_the_cache():
         assert "--pin-from-register --force" in k.how
         assert "`OSM_PINS`" in k.how
         assert "--pin-from-cache" not in k.how
+        # and it names what a rebuilt cache carries in place of the header
+        assert "`data/raw/PINS.json`" in k.how
+        assert "pin_agreement" in k.recoverable
 
 
-def test_the_pending_list_closes_the_timing_and_narrows_the_pin():
-    """One item closed by work already done, one rewritten and not closed.
+def test_the_pending_list_is_empty_at_the_freeze():
+    """Emptied by the work of the freeze, and by nothing else.
 
-    A five-seed submission was timed under the current cell on 24 September,
-    at 29 min 20 s, and its entry outlived the measurement. The OSM pin has
-    served on one airport on one instance, which narrows its item and does not
-    discharge it.
+    The three items it owned closed on what its run established on 26 September
+    2026: the paper's by `check_paper.py --strict` against every regenerated
+    report; the footers' by the two reports the pinned rebuild regenerated with
+    theirs; and the pin's by eleven airports fetched at their pins, compared
+    element by element with the cache the matrices were built from, one control
+    and the matrices compared after. Empty is the freeze condition, so anything
+    added fails `--strict` until the work that closes it is done.
     """
-    whats = [p.what for p in PROVENANCE_PENDING]
-    assert not any("five-seed submission" in w for w in whats)
-    assert not any("has never been exercised" in w for w in whats)
-    pin = [p for p in PROVENANCE_PENDING if "OSM pin" in p.what]
-    assert len(pin) == 1
-    assert "Block 11" in pin[0].owner
-    for mode in ("--pin-from-register", "--compare", "--control-date"):
-        assert mode in pin[0].owner, mode
+    from taxiout.provenance import REPORTS_WITHOUT_FOOTER
+
+    assert PROVENANCE_PENDING == ()
+    assert REPORTS_WITHOUT_FOOTER == ()
+    ok, lines = cp.check_pending(strict=True)
+    assert ok, lines
