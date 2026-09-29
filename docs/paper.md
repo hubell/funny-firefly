@@ -1,16 +1,16 @@
 # Recovering the airport surface: taxi-out prediction from OpenStreetMap geometry
 
-*Working draft. Sections marked **[settled]** are written from reports that
-are regenerated and will change only if their generator's numbers change.
-Sections marked **[pending]** wait on the final model run and the submission.
-Every figure is quoted from a named report, never retyped from memory, and
-the freeze on 4 October 2026 is the date after which no figure moves.*
+*Every figure is quoted from a named report or a dated record, never
+retyped from memory, and `scripts/check_paper.py` holds it there. The model
+froze at the commit tagged `freeze-2026-10-04`, made on 27 September 2026:
+no figure moves after it, and the one figure that arrives later, the
+organizers' score, is marked where it goes.*
 
 Team `funny-firefly`. PRC Data Challenge 2026.
 
 ---
 
-## Abstract [settled; one figure waits on the organizers]
+## Abstract
 
 Taxi-out at ten European airports, predicted from a physical decomposition:
 unimpeded time recovered from OpenStreetMap taxiway geometry, excess from
@@ -43,7 +43,7 @@ figure is **[score]**.
 
 ## 1. Introduction
 
-### 1.1 The problem, and the form the challenge gives it [settled]
+### 1.1 The problem, and the form the challenge gives it
 
 Taxi-out is the interval from off-block to take-off. The challenge asks for
 it in a form that inverts the operational one: the take-off time is given
@@ -68,17 +68,15 @@ which it was made:
    more on held-out pairs than on seen ones. The same block is worth 2.27 s
    on the December forward split and nothing the seed floor can see on July,
    and §9.1 argues that this gap between the numbers is the finding rather
-   than a disappointment. **[settled: §7.2.]**
+   than a disappointment (§7.2).
 2. The target's heavy tail is not what it appears to be, and the honest
-   treatment of it is a separate term stated for what it is. **[settled:
-   §4.]**
+   treatment of it is a separate term stated for what it is (§4).
 3. The excess term is small once the flight plan's own delay signal is in
    the model: 7.7 s in December and 5.8 in July against that signal's 79.3
    and 57.4. The queue layer that would model it further is bounded to about
-   eight seconds by a diagnostic that needs no model. **[settled: §6.3,
-   §6.4.]**
+   eight seconds by a diagnostic that needs no model (§6.3, §6.4).
 
-### 1.3 Prior art, and what is new here [settled]
+### 1.3 Prior art, and what is new here
 
 Building a routable graph from OSM `aeroway` geometry is not new; `traffic`
 (Olive, MIT) ships one, and Olive, Waltert & Schultz (ATRD 2025) document
@@ -93,7 +91,7 @@ Source: `docs/prior_art.md`.
 
 ## 2. Data
 
-### 2.1 What the challenge supplies, and what it withholds [settled]
+### 2.1 What the challenge supplies, and what it withholds
 
 Ten airports, not the eleven listed. January 2026 a census of all ten; July
 2026 of three, which are 53% of the test rows. The ranking set blanks
@@ -103,7 +101,7 @@ survives and is excluded by decision.
 
 Source: `reports/data_review.md`, *Airports and months* and *Inventory*.
 
-### 2.2 External data, and the license position [settled]
+### 2.2 External data, and the license position
 
 OpenStreetMap (ODbL), OurAirports (public domain), Iowa Environmental
 Mesonet METAR (public domain). Each is openly licensed, documented, and
@@ -119,18 +117,21 @@ records each verdict.
 
 Source: `docs/prior_art.md`, *External data: licence positions*; README.
 
-### 2.3 Reproducibility and the ODbL boundary [settled]
+### 2.3 Reproducibility and the ODbL boundary
 
 The repository ships GPLv3 in totality. The distance matrices it generates
 are a Derivative Database of OSM and carry ODbL, so they are regenerated
-rather than committed; a Zenodo deposit under ODbL gives them a DOI. The
-reports are Produced Works and carry the figures. `make licence-check`
-enforces the boundary, including that no literal stand identifier from
-either source appears in prose.
+rather than committed; the Zenodo deposit **[DOI]** carries them under ODbL,
+with the eleven Overpass answers they derive from, and beside them the two
+public-domain inputs the entry read and a later fetch would not return, the
+METAR observations and the OurAirports tables. The reports are Produced
+Works and carry the figures. `make licence-check` enforces the boundary,
+including that no literal stand identifier from either source appears in
+prose.
 
 Source: `data/processed/taxi_distance/ODbL-NOTICE.md`; README, *Data sources*.
 
-## 3. The model, stated as a decomposition [settled]
+## 3. The model, stated as a decomposition
 
     taxi-out = unimpeded(geometry) + excess(congestion, regime) + record-quality term
 
@@ -141,7 +142,7 @@ the entry.
 
 Source: `docs/modelling_notes.md`, *The model, stated as a decomposition*.
 
-## 4. The tail, and what the scoring rule makes optimal [settled]
+## 4. The tail, and what the scoring rule makes optimal
 
 *This section is deliberately early and deliberately its own: the 2025
 committee praised "a thoughtful analysis of noise in the data", and the
@@ -215,7 +216,7 @@ owns the metric*, *Days in the ranking set that look like disruptions* and
 
 ## 5. The unimpeded term
 
-### 5.1 From OSM to a routable surface [settled]
+### 5.1 From OSM to a routable surface
 
 Three defects repaired to a fixed point: coincident-but-unshared nodes,
 nodes lying on edges they are not joined to, and ways that cross with no
@@ -226,7 +227,7 @@ junction-free running, backtrack) rather than one number.
 Sources: `reports/taxi_routing.md`; `reports/penalty_sensitivity.md`;
 `reports/runway_crosscheck.md`; `docs/modelling_notes.md`, *Graph construction*.
 
-### 5.2 A worked airport: where every number is known [settled]
+### 5.2 A worked airport: where every number is known
 
 A fictional field on which every distance, turn and repair is hand-derived,
 pushed through the pipeline unchanged. All 32 matrix cells agree to 11 mm
@@ -245,7 +246,7 @@ without asking a reader to trust matrices nobody can check by hand.*
 Source: `reports/synthetic_airport.md`, *In one paragraph*, *What the field
 found* and *Worked traffic*, and its figure.
 
-### 5.3 What the geometry recovers, and what it does not [settled]
+### 5.3 What the geometry recovers, and what it does not
 
 Per airport, a pair's fastest decile follows its routed distance with a
 residual of 85–190 s and an intercept of 313–740 s that no distance
@@ -261,7 +262,7 @@ Source: `reports/geometry_gaps.md`, *In one paragraph*, *The fit*, *The
 fastest decile by wake category* and *The intersection signature, per
 designator*.
 
-### 5.4 Where memorization runs out, and what replaces it [settled]
+### 5.4 Where memorization runs out, and what replaces it
 
 *Added 4 September, after §9.1's first draft asserted the opposite of what
 the data says; settled 5 September, when its figures moved from a scratch
@@ -334,7 +335,7 @@ table, likewise.
 
 ## 6. The excess term
 
-### 6.1 What the ranking set allows, and the registry that enforces it [settled]
+### 6.1 What the ranking set allows, and the registry that enforces it
 
 The rule is phase-specific: a feature may read what the ranking set exposes
 *for the rows it reads from*. Every feature column is registered against its
@@ -347,7 +348,7 @@ ever.
 Sources: `reports/congestion.md`, *The leakage audit*; `reports/data_review.md`,
 *Null rates*.
 
-### 6.2 Congestion, corridor, and weather [settled]
+### 6.2 Congestion, corridor, and weather
 
 Throughput, arrivals, demand, runway configuration, shared-corridor load,
 and three weather regime flags per airport-hour. The corridor feature (other
@@ -357,7 +358,7 @@ here no other entry has, and it is reported as it fell.
 
 Source: `reports/congestion.md`.
 
-### 6.3 The flight plan's own delay signal [settled]
+### 6.3 The flight plan's own delay signal
 
 Take-off minus the filed off-block estimate is the strongest single feature
 in the model. As a ladder step it is worth 79.3 s in December (320.2 → 240.9
@@ -383,7 +384,7 @@ it, and the regime exposure is bounded in §7.3.
 Sources: `reports/baseline.md`, *The ablation ladder* and *Held-out pairs*;
 `reports/congestion.md`, *Regime exposure*.
 
-### 6.4 The queue layer that was not built [settled]
+### 6.4 The queue layer that was not built
 
 An oracle diagnostic bounds it: regress a departure's residual on the mean
 residual of its same-runway neighbors, quantities no admissible feature may
@@ -425,7 +426,7 @@ ablation ladder*, *Held-out pairs* and *The noise floor*; `docs/plan.md`,
 *When the data lands*, a dated record, for the measurements of 3 and 4
 September.
 
-### 6.5 The stand's recent history, and the bound inside it [settled]
+### 6.5 The stand's recent history, and the bound inside it
 
 The largest of the four blocks added last reads the arrivals at the
 subject's own stand: the gap from the last arrival's on-block to the
@@ -550,7 +551,7 @@ record of 8 September; `docs/modelling_notes.md`, *Leakage watch*.
 
 ## 7. Validation
 
-### 7.1 The design, fixed before anything was fitted [settled]
+### 7.1 The design, fixed before anything was fitted
 
 Two forward splits (December 2025 at all ten airports, July 2025 at all ten
 with the three the July test set contains read on their own) plus a
@@ -567,7 +568,7 @@ draws, resampling stored residuals; no model is refitted.
 
 Source: `reports/baseline.md`, *Held-out pairs*.
 
-### 7.1.1 What the forward legs cannot see, as measured on 20 September [settled]
+### 7.1.1 What the forward legs cannot see, as measured on 20 September
 
 Three limitations of the design above, measured rather than asserted, on
 20 September under the parameters then in force. None was repeated under the
@@ -635,7 +636,7 @@ limitation that no leg inside one training year can resolve.
 Source: `reports/preregistered-2026-09-20.md`, *What Experiment 2 measured*
 and *What Experiment 3 measured*, a dated record of 20 September.
 
-### 7.1.2 The rules under the parameters that ship, and how those parameters were chosen [settled]
+### 7.1.2 The rules under the parameters that ship, and how those parameters were chosen
 
 *Printed precision, and the seed rule.* Printed precision in this entry is a
 tenth of a second, and every seed floor is larger than that: under the
@@ -731,7 +732,7 @@ step, and the order in which the extension's criteria and its figures were
 fixed are recorded in the header and the message of
 `scripts/commit_extension_probe.sh`.
 
-### 7.2 The ladder, and the claim [settled]
+### 7.2 The ladder, and the claim
 
 Every rung on both splits, ex-flagged and with the record-quality term, plus
 the seen-versus-held-out contrast per rung with its interval. The submission
@@ -762,7 +763,7 @@ carries it.
 
 Source: `reports/baseline.md`, *The ablation ladder* and *Held-out pairs*.
 
-### 7.3 What could go wrong on the ranking months [settled]
+### 7.3 What could go wrong on the ranking months
 
 Three exposures, each stated as a bound rather than an estimate.
 
@@ -814,7 +815,7 @@ Sources: `reports/congestion.md`, *Regime exposure* and *The weather regime*;
 `reports/tails.md`, *The pooled record-quality rule, measured* and *What the
 term is, stated plainly*; `reports/residual.md`, *EGLL's July*.
 
-### 7.4 A block aimed at one place that paid in another: the shrunk encoding [settled]
+### 7.4 A block aimed at one place that paid in another: the shrunk encoding
 
 *The measurement, the decision and the model agree: the arm this section
 chooses is carried into the rung the submission is fitted from, through an
@@ -919,7 +920,7 @@ subsections; `reports/migration-2026-09-10.md`, *The encoding's rows,
 2026-09-19*, a dated record, for the check as it read before that day;
 `tests/test_encoding.py` for the four guards.
 
-## 8. Results [settled; one figure waits on the organizers]
+## 8. Results
 
 *Nothing here is chosen by a leaderboard score. The challenge ranks
 entries on a leaderboard: "Teams will be ranked based on the best Root
@@ -984,7 +985,7 @@ and *Per airport*; `reports/congestion.md`, *What it bounds*.
 
 ## 9. Discussion
 
-### 9.1 What the geometry was worth, and where [settled]
+### 9.1 What the geometry was worth, and where
 
 The geometry block is worth 2.27 s on the December forward split and nothing
 the seed floor can see on July, where it reads 0.14 s worse, and +18.5 s
@@ -1021,7 +1022,7 @@ Sources: `reports/baseline.md`, *Held-out pairs*, *The noise floor* and
 *Where `+ plan differences` spends its splits*; `reports/geometry_gaps.md`,
 *Where memorization runs out*.
 
-### 9.2 What the honest tail treatment costs and buys [settled]
+### 9.2 What the honest tail treatment costs and buys
 
 The term touches 107 ranking rows and is inert on the July half of the test
 set. Its whole effect on the leaderboard runs through those rows. The
@@ -1033,7 +1034,7 @@ scores.
 Source: `reports/tails.md`, *What it touches in the ranking set* and *What
 the term is, stated plainly*.
 
-### 9.3 Limitations [settled, to be assembled]
+### 9.3 Limitations
 
 Assembled from the open questions already recorded: stands OSM does not have
 (the join places 96.3% of training departures on a matrix cell, and most of
@@ -1070,7 +1071,7 @@ contain* and *Open questions*; `reports/data_review.md`, *Stands*;
 `reports/geometry_gaps.md`, *The intersection signature, per designator*;
 `src/taxiout/models.py`, the comment on `BOOSTER_PARAMS`.
 
-### 9.4 A ceiling that measured the wrong thing [settled]
+### 9.4 A ceiling that measured the wrong thing
 
 The headroom estimate of §7.4 was wrong twice, and the two errors are worth
 more than the number they were about.
@@ -1105,7 +1106,7 @@ run, not after.
 Source: `reports/baseline.md`, *The ceiling this was built against* and
 *What the chosen arm is, in its own terms*.
 
-### 9.5 What the residual actually is [settled]
+### 9.5 What the residual actually is
 
 The error the model has left is a thin tail of individual holds. Three
 measurements say so, and none of them is the absence of a queue model. Every
@@ -1204,14 +1205,26 @@ all computed from the submitted rung's stored residuals; `reports/congestion.md`
 *Per airport*; `reports/occupancy.md`, *Where the gain lands*, for the in-band
 before and after; `docs/review_headroom.md` §1–2.
 
-## 10. Reproducing this [settled]
+## 10. Reproducing this
 
-Every figure in this paper is regenerated by a named script from committed
-inputs plus the challenge data, which is not redistributable. The geometry
-reports and the worked airport regenerate on a clean checkout with no
-network and no challenge data. The freeze-week sequence: pinned OSM rebuild,
-Zenodo deposit, clean-checkout reproduction of every report, final
-submission.
+A reader brings four things to the repository at the tag: the challenge
+data, from the organizers, which is not redistributable; the eleven Overpass
+answers, fetched at their pins as described below or taken from the deposit;
+and, from the deposit, the METAR observations and the two OurAirports tables
+the entry read, cached fetches recorded with their requests and terms, which
+a fetch made later would not return because OurAirports is rebuilt nightly.
+From those and the committed inputs, every figure in this paper is
+regenerated by a named script, or is quoted from a dated record that the
+register holds to its digest, and `scripts/check_paper.py` tells the two
+apart. One report is of the second kind by necessity:
+`reports/determinism.md` is a measurement campaign under the parameters of
+its day, whose records hold arrays derived from the challenge data and are
+not redistributed, so a clean checkout cannot regenerate it and is not asked
+to. The worked airport of §5.2 needs none of the four: it regenerates on a
+bare checkout with no network and no data. The freeze ran in this order: the
+pinned rebuild, every report regenerated and compared with the committed
+one, the submission built, the commit tagged, then the reproduction from a
+clean checkout and the deposit.
 
 **What repeats.** The booster is fitted in LightGBM's deterministic mode
 with column-wise histograms at a pinned thread count, and a fit repeats to
@@ -1222,22 +1235,34 @@ October seed floors that the parameter search of §7.1.2 was read against came
 back identical to six places in two separate runs with a commit between
 them, and all five single-seed fits of the sweep's cell reproduced to the
 last digit; the headers of `scripts/commit_extension_probe.sh` and
-`scripts/commit_equivalence.sh` are the record of those two runs.
+`scripts/commit_equivalence.sh` are the record of those two runs. And on
+27 September 2026 a fresh clone at the tag, with the challenge data and the
+two tables brought in and the geometry fetched at its pins, rebuilt the 35
+matrix files and the 52 residual files byte for byte, regenerated fourteen
+reports in which no figure moved, passed this paper's own check against
+them, and built the submission byte for byte, three times over between the
+working copy and the clone; `reports/reproduction-2026-09-27.md` is the
+dated record of that run.
 
 **The geometry is rebuilt, not shipped.** The distance matrices are a
 Derivative Database of OpenStreetMap under ODbL and are not in the
-repository: a clean checkout rebuilds them from a fresh fetch, and the Zenodo
-deposit made at the freeze is the other route to the same files. A fresh
-fetch returns today's map, so the rebuild is pinned. The committed figures
-were built from a fetch on 1 September 2026 in which each airport was
-answered from the map as it stood at its own moment, those moments are
-recorded per airport in `taxiout.provenance.OSM_PINS`, and
-`scripts/fetch_osm.py --pin-from-register --force` fetches each airport at
-its own. An Overpass answer's header never shows whether a pin was applied,
-so the rebuild is verified by its effect: `--compare` checks each airport's
-parsed elements against the cache the matrices were built from, and
-`--control-date` asks the instance that answered for a date whose answer is
-known to differ, which shows that it applies a pin at all.
+repository: a clean checkout rebuilds them from a pinned fetch, and the
+deposit is the other route to the same files. A fresh fetch returns today's
+map, so the rebuild is pinned. The committed figures were built from a fetch
+on 1 September 2026 in which each airport was answered from the map as it
+stood at its own moment, those moments are recorded per airport in
+`taxiout.provenance.OSM_PINS`, and `scripts/fetch_osm.py --pin-from-register
+--force` fetches each airport at its own. An Overpass answer's header never
+shows whether a pin was applied, so the rebuild is verified by its effect:
+`--compare` checks each airport's parsed elements against the answers the
+matrices were built from, of which the deposit's copy is identical element
+for element, and `--control-date` asks the instance that answered for a date
+whose answer is known to differ, which shows that it applies a pin at all.
+A header can show the opposite, that a pin could not have been applied,
+because an instance cannot serve a state it has not ingested; the client
+refuses an answer whose database state precedes the pin, and on 26 and
+27 September the two fallback instances it knows answered from databases of
+May to July and were refused, every accepted answer coming from the primary.
 
 **The paper checks itself.** `scripts/check_paper.py` reads every figure in
 this paper and requires it to appear, at the paper's own precision, in the
@@ -1250,9 +1275,11 @@ check certifies that every figure appears where its section says it comes
 from, and the match it prints for each figure is how a reader tells the
 right number from a coincidence.
 
-Sources: README, *Reproducing*; `reports/determinism.md`, *The booster*;
-`scripts/check_paper.py`; `docs/plan.md`, freeze section.
+Sources: README, *Reproducing* and *Data sources*;
+`reports/reproduction-2026-09-27.md`, a dated record; `reports/determinism.md`,
+*The booster*, a dated record; `scripts/check_paper.py`; `docs/plan.md`,
+freeze section.
 
-## References [settled]
+## References
 
 From `docs/prior_art.md`, *Sources*.

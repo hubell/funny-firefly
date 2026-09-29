@@ -178,14 +178,18 @@ available proxy cannot detect it. `snap_max_m` is carried into the matrix so
 those cells can be identified and the interaction tested against the target,
 which is the only test that will settle it.
 
-**The committed matrices were built from an unpinned OSM snapshot.** Pinning is
-now available — `scripts/fetch_osm.py --date 2026-01-01T00:00:00Z` issues an
-attic query and records the pin inside the cache — but the shipped cache predates
-it. Two costs remain until it is rebuilt: a mild anachronism where a stand or
-taxiway was remapped mid-period, and, worse for a challenge judged on
-reproducibility, a rebuild months from now disagreeing with the committed
-matrices with nothing to explain why. Not every Overpass mirror answers attic
-queries, so a pinned fetch may exercise the mirror rotation harder.
+**The committed matrices were built from an unpinned fetch on 1 September
+2026, and have since been rebuilt at its pins.** Each airport was answered
+from the map as it stood at its own moment, and those eleven moments are
+recorded in `taxiout.provenance.OSM_PINS`; `scripts/fetch_osm.py
+--pin-from-register --force` fetches each airport at its own, and the rebuilds
+of 26 and 27 September 2026 returned every airport identical element for
+element and every matrix byte for byte (`reports/reproduction-2026-09-27.md`).
+The mild anachronism remains, where a stand or taxiway was remapped during
+the training year, and is the price of one fixed map. Not every Overpass
+instance can answer an attic query at a given date: one whose database
+predates the pin cannot serve it, and the client refuses such an answer
+rather than caching it.
 
 **Should aprons be re-added to the Overpass query?** They were excluded as
 slow and useless for routing. The routing measurements are the first evidence

@@ -2,14 +2,14 @@
 
 Taxi-out time prediction for the [EUROCONTROL PRC Data Challenge 2026](https://ansperformance.eu/study/data-challenge/dc2026/).
 
-Predicts `TAXITIME_SEC_mvt` for departures at major European airports — the
+Predicts `TAXITIME_SEC_mvt` for departures at major European airports: the
 challenge lists 11, the data supplied contains 10 (Antalya has no rows; see
 [`reports/data_review.md`](reports/data_review.md)). Ranked by RMSE over
 January and July 2026 movements.
 
 **Licence: GNU GPL v3.0 only.** Copyright (C) 2026 Hunter Bell. Every file in
-this repository is GPLv3, from the first commit, as prize eligibility requires
-— there is no second licence anywhere in it. The distance matrices the pipeline
+this repository is GPLv3, from the first commit, as prize eligibility requires;
+there is no second licence anywhere in it. The distance matrices the pipeline
 *generates* are a Derivative Database of OpenStreetMap and carry ODbL, which is
 why they are gitignored rather than committed; see
 [Data sources](#data-sources).
@@ -22,22 +22,22 @@ mean taxi time per pair. That works, but it throws away the fact that taxi-out
 is a *physical* process: an aircraft traverses actual distance across an actual
 taxiway network, then queues for an actual runway.
 
-This entry recovers that structure from OpenStreetMap — stand and runway
-geometry, taxiway topology — and derives distance and layout features whose
+This entry recovers that structure from OpenStreetMap, stand and runway
+geometry and taxiway topology, and derives distance and layout features whose
 purpose is to carry over to stand/runway pairs the model has never seen
 together. Whether they do is the hypothesis the held-out-pair validation in
 [`docs/modelling_notes.md`](docs/modelling_notes.md) exists to test, and it is
 reported as measured, not assumed.
 
 The model is stated as a decomposition, because that is how the organisers
-frame the use of a taxi-out estimate — post-operations analysis of "excess
+frame the use of a taxi-out estimate, post-operations analysis of "excess
 fuel burnt … compared to unconstrained status"
 ([rationale](https://ansperformance.eu/study/data-challenge/dc2026/rationale.html)):
 
     taxi-out = unimpeded(geometry) + excess(congestion, regime) + record-quality term
 
 The unimpeded term is what the geometry supplies, and it generalises the PRU's
-own reference — the 10th percentile per (stand, runway) pair — to pairs never
+own reference, the 10th percentile per (stand, runway) pair, to pairs never
 observed. The excess term is built from what the ranking set exposes about
 surrounding traffic and conditions. The record-quality term exists because the
 data carries day-long record-matching artefacts that the stated scoring rule
@@ -55,8 +55,8 @@ The physical layer is therefore the core of the approach rather than an
 add-on, and the write-up is a deliverable, not an afterthought.
 
 Distance is not the only thing the geometry gives. Ravizza et al. (2013) found
-that decomposing a taxi route — distance, cumulative turn angle, junction-free
-running — explains materially more of the variation in taxi speed than distance
+that decomposing a taxi route (distance, cumulative turn angle, junction-free
+running) explains materially more of the variation in taxi speed than distance
 alone, and that turn angle by itself is nearly as predictive as distance. Each
 route is therefore described by a small vector of physical quantities rather
 than a single number, and which of them earn their place is a question for the
@@ -65,30 +65,30 @@ modelling stage, measured against the target.
 ## Status
 
 - [x] OSM movement-area extraction for all 11 airports
-- [x] Stand-identifier coverage audit — [`reports/stand_coverage.md`](reports/stand_coverage.md)
-- [x] Routable taxiway graph + stand→runway distance matrices —
+- [x] Stand-identifier coverage audit: [`reports/stand_coverage.md`](reports/stand_coverage.md)
+- [x] Routable taxiway graph + stand→runway distance matrices:
       [`reports/taxi_routing.md`](reports/taxi_routing.md)
 - [x] Challenge data review: what the ranking set exposes, target tails,
-      identifier join — [`reports/data_review.md`](reports/data_review.md)
+      identifier join: [`reports/data_review.md`](reports/data_review.md)
 - [x] Join of OSM identifiers against `STAND_mvt` / `RUNWAY_mvt`
       (`taxiout.join`; 87–99.9% of departures by airport, 96% overall)
-- [x] Baseline model, the ablation ladder and a valid submission —
+- [x] Baseline model, the ablation ladder and a valid submission:
       [`reports/baseline.md`](reports/baseline.md)
-- [x] The record-quality term — [`reports/tails.md`](reports/tails.md)
-- [x] A worked airport where every number is known —
+- [x] The record-quality term: [`reports/tails.md`](reports/tails.md)
+- [x] A worked airport where every number is known:
       [`reports/synthetic_airport.md`](reports/synthetic_airport.md)
-- [x] The unimpeded term measured against the training year —
+- [x] The unimpeded term measured against the training year:
       [`reports/geometry_gaps.md`](reports/geometry_gaps.md)
 - [x] Congestion features from what the ranking set exposes (take-offs,
-      schedules, arrivals, configuration, the shared corridor — not
-      off-block times, which are blanked) —
+      schedules, arrivals, configuration, the shared corridor, and not
+      off-block times, which are blanked):
       [`reports/congestion.md`](reports/congestion.md)
 - [x] Weather as a regime indicator, from a scripted, cached, attributed
       METAR fetch
-- [x] Plan lags — take-off against the planning values fixed before
+- [x] Plan lags: take-off against the planning values fixed before
       departure, the subject's own and its runway's; the ladder read net of
       them and kept without them
-- [x] The ceiling — an oracle bound on what any queue model could add,
+- [x] The ceiling: an oracle bound on what any queue model could add,
       in [`reports/congestion.md`](reports/congestion.md)
 - [x] Runway saturation, the cheap Gate 3, measured against the ceiling on
       3 September: worth nothing then; the simulation is not started without
@@ -97,18 +97,18 @@ modelling stage, measured against the target.
       recorded in `src/taxiout/models.py` with the numbers that chose the cell
 - [x] An identifier encoding shrunk toward the geometry rather than toward a
       group mean, with the shrinkage weight estimated per airport and not
-      tuned — the arms and the leakage guards in
+      tuned; the arms and the leakage guards in
       [`reports/baseline.md`](reports/baseline.md)
 - [x] Leave one airport out, all ten: train on nine, predict the tenth, with
-      no identifier of the tenth in the frame — the question the challenge's
+      no identifier of the tenth in the frame, the question the challenge's
       test set cannot pose, and the one no identifier-based entry can answer
-      at all — [`reports/transfer.md`](reports/transfer.md)
+      at all: [`reports/transfer.md`](reports/transfer.md)
 - [x] The stand as a shared resource: an arrival that on-blocks at the
       subject's stand before it takes off bounds its taxi-out from below, from
-      fields the ranking set exposes in full —
+      fields the ranking set exposes in full:
       [`reports/occupancy.md`](reports/occupancy.md)
 - [x] The operator as the callsign carries it, the destination as a bearing and
-      a distance, the public-holiday calendar, and the plan's own differences —
+      a distance, the public-holiday calendar, and the plan's own differences:
       four blocks read against the submission rung in
       [`reports/baseline.md`](reports/baseline.md)
 - [ ] Write-up
@@ -124,7 +124,7 @@ from it and carries every figure. Four findings shape everything after:
   theirs. The geometry for it stays in the pipeline and is unused.
 - **The ranking set blanks the off-block time, not just the target.** A test
   departure carries its take-off time, its schedule and the flight plan's
-  estimates, and nothing else that is actual — and because the block time is
+  estimates, and nothing else that is actual; and because the block time is
   blanked for *every* departure in the ranking months, no feature may count
   other departures' pushbacks either. Congestion has to be built from
   take-offs, schedules and arrivals, which the ranking set does expose.
@@ -137,7 +137,7 @@ from it and carries every figure. Four findings shape everything after:
   departures recorded above two hours are at Rome Fiumicino, and for nine in
   ten of those the recorded off-block time sits within a minute of the
   *scheduled* departure while the take-off is hours later. The block time was
-  defaulted to the schedule, so the recorded taxi-out is the schedule lag —
+  defaulted to the schedule, so the recorded taxi-out is the schedule lag,
   which every ranking departure exposes. The ranking page states that the
   score is RMSE over the January and July 2026 movements, with no row
   excluded; five such rows predicted as ordinary taxi-outs would raise a
@@ -162,10 +162,10 @@ airport. Measured rather than assumed:
 
 Full table with per-airport counts and identifier *formats*:
 [`reports/stand_coverage.md`](reports/stand_coverage.md). Formats are given as
-shapes rather than examples — a shape describes what the join will need, where a
+shapes rather than examples: a shape describes what the join will need, where a
 list of examples would put an extract of OSM into a GPLv3 repository.
 
-Antalya (LTAI) is the one genuine gap at 45% — moot in practice, since the
+Antalya (LTAI) is the one genuine gap at 45%, moot in practice, since the
 challenge data contains no Antalya movements. Everything else is workable, and
 the join against the real identifiers confirmed it:
 [`reports/data_review.md`](reports/data_review.md).
@@ -175,11 +175,11 @@ the join against the real identifiers confirmed it:
 The second gate check: once a stand resolves to a location, can it be routed to
 a runway, and is the distance credible? Full results in
 [`reports/taxi_routing.md`](reports/taxi_routing.md); the matrices themselves
-are regenerated into `data/processed/taxi_distance/` by the build — not
+are regenerated into `data/processed/taxi_distance/` by the build, not
 committed, for the licensing reason in [Data sources](#data-sources).
 
 Across the 11 airports, 95–100% of (attached stand × runway designator) pairs
-route — 91–100% counted against every mapped stand, including those too far from
+route, 91–100% counted against every mapped stand, including those too far from
 any mapped taxiway to attach at all. Median taxi distances run 2.6–5.5 km, with
 a median detour ratio of 1.26–1.42 against the straight line.
 
@@ -192,7 +192,7 @@ repairing, so they run to a fixed point.
 
 Two caveats belong next to those numbers rather than buried in the report. The
 medians are unweighted over the full cross-product, so they include designators
-that never see a departure — within a single airport the spread between
+that never see a departure; within a single airport the spread between
 designators is larger than the spread between airports, and these figures should
 be read as "did the geometry resolve", not "how far do aircraft taxi here". And
 the joinable identifier count is well below the stand count everywhere (484 of
@@ -201,7 +201,7 @@ one identifier; the coverage table above, which counts tagged *features*,
 overstates what can actually be joined.
 
 Antalya is the outlier again, for reasons independent of the identifier coverage
-above — its apron lead-ins are largely unmapped, and 168 of its 576 stands are
+above: its apron lead-ins are largely unmapped, and 168 of its 576 stands are
 drawn as footprint polygons rather than centrelines, a convention no other
 airport in scope uses.
 
@@ -231,7 +231,7 @@ make provenance     # verify every number is categorised; writes docs/provenance
 
 `make test` works on a clean checkout with nothing installed but `pytest`
 (the join tests additionally need `pandas`, and skip without it). For the
-geometry, `pip install -e .` — the only runtime dependency is `networkx`. The
+geometry, `pip install -e .`; the only runtime dependency is `networkx`. The
 data review and everything after it need `pip install -e ".[modelling]"`.
 
 | stage | reads | writes |
@@ -243,7 +243,7 @@ data review and everything after it need `pip install -e ".[modelling]"`.
 | `scripts/build_taxi_graph.py` | `data/raw/` | `data/processed/taxi_distance/`, `reports/taxi_routing.md` |
 | `scripts/check_penalty_sensitivity.py` | `data/raw/` | `reports/penalty_sensitivity.md` |
 | `scripts/check_runways_ourairports.py` | `data/raw/`, OurAirports | `reports/runway_crosscheck.md` |
-| `scripts/report_synthetic_airport.py` | nothing — the field is authored in `taxiout.synthetic` | `reports/synthetic_airport.md`, `reports/synthetic_airport.svg` |
+| `scripts/report_synthetic_airport.py` | nothing; the field is authored in `taxiout.synthetic` | `reports/synthetic_airport.md`, `reports/synthetic_airport.svg` |
 | `scripts/review_challenge_data.py` | `data/challenge/`, `data/processed/taxi_distance/` | `reports/data_review.md` |
 | `scripts/report_tails.py` | `data/challenge/` | `reports/tails.md`, end to end |
 | `scripts/pooled_tails.py` | `data/challenge/` | one section of `reports/tails.md`, written into the file above (`--report`) |
@@ -266,7 +266,7 @@ deterministic: repeated runs produce byte-identical files.
 `scripts/fetch_osm.py` is resumable and caches one gzipped Overpass response per
 airport under `data/raw/`. Overpass mirrors fail transiently and often; the
 client rotates mirrors and backs off. Delete a cache file to refetch that
-airport. The cache is gitignored — the repository stays reproducible from source
+airport. The cache is gitignored; the repository stays reproducible from source
 rather than shipping a copy of OSM.
 
 `--date 2026-01-01T00:00:00Z` pins a fetch to a moment in OSM's history, which
@@ -291,7 +291,9 @@ parsed elements with the cache the matrices were built from, and
 `--control-date 2020-01-01T00:00:00Z --only LIRF` asks the instance that
 answered for a date whose answer is known to differ, which shows that it
 applies a pin at all. `--force` writes in place, so run the rebuild in a clean
-checkout or copy the cache aside first.
+checkout or copy the cache aside first. A reader's reference for `--compare`
+is the deposit's `osm_answers/` (below), which is identical element for
+element to the cache the committed matrices were built from.
 
 What a header can show is that a pin could not have been applied. An instance
 cannot serve a state it has not yet ingested, so an answer whose
@@ -303,16 +305,46 @@ mirror again for the airport; the sidecar `data/raw/PINS.json` records each
 answer's database state beside its pin. A rebuild in which every mirror fails
 or refuses is a stop and not a fallback: the pin cannot be served that day.
 
+**What a reader brings, and what a clean checkout reproduces.** The
+repository at the tag `freeze-2026-10-04` tracks three files under `data/`
+and nothing else there. A reader brings the challenge data, from the
+organizers, into `data/challenge/`; the eleven Overpass answers, fetched at
+their pins as above or copied from the deposit into `data/raw/`; and, from
+the deposit, the METAR cache into `data/raw/metar/` and the two OurAirports
+tables into `data/raw/`. Those two are cached fetches recorded with their
+requests and terms, and OurAirports is rebuilt nightly, so a fetch made later
+would not return the files the committed figures were computed from. From
+those inputs, on 27 September 2026, a fresh clone at the tag rebuilt the 35
+matrix files and the 52 residual files byte for byte, regenerated fourteen
+reports with no figure moved, passed the paper's own check
+(`scripts/check_paper.py --strict`) and every declared-input check but one,
+and built the submission byte for byte;
+[`reports/reproduction-2026-09-27.md`](reports/reproduction-2026-09-27.md) is
+the dated record. The one report a clean checkout cannot regenerate is
+`reports/determinism.md`, a measurement campaign under the parameters of its
+day whose records under `data/processed/determinism/` hold arrays derived from
+the challenge data and are not redistributed. Since that run it is a dated
+record held to its digest, like the others under `reports/` that carry a date
+in their name, so `make provenance` no longer asks a clean checkout for
+records it cannot have. `make synthetic` needs nothing at all and runs on a
+bare checkout.
+
+**The deposit.** The Zenodo deposit **[DOI]** holds, under ODbL, the 35
+matrix files and the eleven Overpass answers with their `PINS.json`, and,
+public domain, the METAR cache and the two OurAirports tables, each with the
+manifest the fetcher wrote. Its `README.md` says how each part is verified
+against this repository at the tag, and `SHA256SUMS` covers every file in it.
+
 ## Data sources
 
-- **Challenge datasets** — EUROCONTROL PRC / OpenSky Network, under the terms of
+- **Challenge datasets**: EUROCONTROL PRC / OpenSky Network, under the terms of
   the challenge. Not redistributable under any licence, so they live in
   `data/challenge/` and are gitignored in full; see
   [`data/challenge/README.md`](data/challenge/README.md).
-- **OpenStreetMap** — © OpenStreetMap contributors, available under the
+- **OpenStreetMap**: © OpenStreetMap contributors, available under the
   [Open Database License](https://www.openstreetmap.org/copyright). Retrieved
   via the Overpass API.
-- **OurAirports** — two files, and it is now a **model input** as well as a
+- **OurAirports**: two files, and it is now a **model input** as well as a
   cross-check. `runways.csv` verifies OSM-derived runway designators and
   lengths (`scripts/check_runways_ourairports.py`); `airports.csv`, fetched by
   `scripts/fetch_ourairports.py` and cached, gitignored, under `data/raw/`
@@ -321,7 +353,7 @@ or refuses is a stop and not a fallback: the pin cannot be served that day.
   bearing and a great-circle distance and nothing else. OurAirports states the
   terms on its data page: "All data is released to the Public Domain, and
   comes with no guarantee of accuracy or fitness for use."
-- **Iowa Environmental Mesonet, Iowa State University** — the ASOS/METAR
+- **Iowa Environmental Mesonet, Iowa State University**: the ASOS/METAR
   archive, fetched by `scripts/fetch_metar.py` for the training year and the
   two ranking months at every listed airport and cached, gitignored, under
   `data/raw/metar/` with the request parameters recorded in
@@ -330,18 +362,21 @@ or refuses is a stop and not a fallback: the pin cannot be served that day.
   the terms: the materials "are in the public domain and may be used freely by
   anyone for any lawful purpose", provided "without any warranty of accuracy",
   and "Attributing the Iowa Environmental Mesonet of Iowa State University
-  would be appreciated" — which this line does. The observations themselves are
+  would be appreciated", which this line does. The observations themselves are
   METARs the airports publish; the archive is where a reader can re-fetch
   them from the recorded request.
 
-Those two are the additional *datasets*. One further external input is not a
-dataset at all and is listed separately so the distinction is not blurred:
+Those two are the additional *datasets*. Both, as the entry read them, are in
+the Zenodo deposit **[DOI]** beside the OSM-derived matrices and answers, so a
+reader has the exact inputs and not only the request that fetched them. One
+further external input is not a dataset at all and is listed separately so
+the distinction is not blurred:
 
-- **`holidays` (python-holidays), MIT** — a code dependency, pinned in
+- **`holidays` (python-holidays), MIT**: a code dependency, pinned in
   `pyproject.toml` under `modelling` and used at version 0.104 for the
   committed reports. It computes each country's public-holiday calendar from
   published rules; nothing is fetched and nothing is cached, so there is no
-  manifest to record and no archive for a reader to re-fetch — reinstalling
+  manifest to record and no archive for a reader to re-fetch; reinstalling
   the pinned package is the reproduction. The model reads two flags from it:
   whether the take-off date is a public holiday in the airport's country, and
   whether the day either side is.
@@ -356,7 +391,7 @@ source and it is not used for commercial purposes" and states that the
 information "may not be modified without prior written permission", which is
 non-commercial and no-derivatives, and this entry reads that as failing the
 prize rules' requirement that additional datasets be "openly available under
-an open source license" — the same reading that excluded OPDI in
+an open source license", the same reading that excluded OPDI in
 [`docs/prior_art.md`](docs/prior_art.md). ERA5 (Copernicus, CC-BY since July
 2025) clears the rule and was not pursued: the nearest test, the METAR's own
 wind, ceiling, temperature and thunderstorm fields, bought nothing.
@@ -375,8 +410,8 @@ operations. The row-by-row reading is in
 [`docs/prior_art.md`](docs/prior_art.md).
 
 ODbL sorts derived artefacts into two kinds, and the difference decides what
-ships. A **Derivative Database** carries share-alike; a **Produced Work** — a
-report, an image, an analysis in another medium — needs attribution only.
+ships. A **Derivative Database** carries share-alike; a **Produced Work**, a
+report, an image or an analysis in another medium, needs attribution only.
 
 The matrices the build writes are a Derivative Database, so they carry ODbL.
 That obligation is not this project's to waive, and a second licence inside a
@@ -399,8 +434,8 @@ Building a routable graph from OSM `aeroway` geometry is not new. `traffic`
 (Olive, MIT) ships an `AirportGraph` that performs the same class of topology
 repair, and Olive, Waltert & Schultz (ATRD 2025) document the same OSM defects
 this pipeline works around. The graph builder here is an independent
-implementation rather than a port — it keeps the dependency surface small and
-every geometric decision auditable in-repo — and the reasoning is recorded in
+implementation rather than a port, which keeps the dependency surface small and
+every geometric decision auditable in the repository, and the reasoning is recorded in
 [`docs/modelling_notes.md`](docs/modelling_notes.md).
 
 What appears not to have been done before is the downstream half: using these
@@ -409,7 +444,7 @@ competition. No entry in the 2024 or 2025 editions appears to have used OSM at
 all.
 
 Full literature summary, the licence position of every external source
-considered — including the ones ruled out — and the error magnitudes published
+considered, including the ones ruled out, and the error magnitudes published
 work actually achieves: [`docs/prior_art.md`](docs/prior_art.md).
 
 ## Layout

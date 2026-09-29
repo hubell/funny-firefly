@@ -810,6 +810,35 @@ def section_worth(dep: pd.DataFrame, sp: list[Split]) -> tuple[list[str], dict]:
     return lines, facts
 
 
+def _names(items: list[str]) -> str:
+    """``A``, ``A and B``, ``A, B and C``."""
+    return items[0] if len(items) == 1 else ", ".join(items[:-1]) + " and " + items[-1]
+
+
+def _july_reach(f: dict) -> str:
+    """Where the term reaches in July, read from the ranking set itself.
+
+    Until the organizers re-issued the ranking files on 4 September 2026 this
+    was a fixed clause, "whose three airports have no covered cell", true of
+    the three airports the July month then held and false once it held ten.
+    """
+    if f["rk_flagged_jul"]:
+        return f"all at {_names(f['rk_flagged_jul_airports'])}"
+    if not f["rk_jul_covered"]:
+        return f"whose {f['rk_jul_airports']} airports have no covered cell"
+    has = "has" if len(f["rk_jul_covered"]) == 1 else "have"
+    return f"although {_names(f['rk_jul_covered'])} {has} a covered cell"
+
+
+def _month_split(f: dict) -> str:
+    """The term's ranking rows by month, in the words the counts decide."""
+    if not f["rk_flagged_jul"]:
+        return "all in January"
+    if not f["rk_flagged_jan"]:
+        return "all in July"
+    return f"{f['rk_flagged_jan']:,} in January and {f['rk_flagged_jul']:,} in July"
+
+
 def section_ranking(
     dep: pd.DataFrame, rk: pd.DataFrame, model: TailModel
 ) -> tuple[list[str], dict]:
@@ -842,12 +871,17 @@ def section_ranking(
     by_month = flagged.groupby(rk["month"]).sum()
     facts["rk_flagged_jan"] = int(by_month.get(1, 0))
     facts["rk_flagged_jul"] = int(by_month.get(7, 0))
+    jul = rk["month"] == 7
+    jul_airports = set(rk.loc[jul, "ADEP_mvt"])
+    facts["rk_jul_airports"] = len(jul_airports)
+    facts["rk_jul_covered"] = sorted(jul_airports & set(cov_index.get_level_values(0)))
+    facts["rk_flagged_jul_airports"] = sorted(set(rk.loc[flagged & jul, "ADEP_mvt"]))
     lines = [
         "## What it touches in the ranking set",
         "",
         f"Fitted on the full training year, the term predicts for {facts['rk_flagged']:,} of the",
         f"{facts['rk_rows']:,} ranking departures: {facts['rk_flagged_jan']:,} in January 2026 and",
-        f"{facts['rk_flagged_jul']:,} in July, whose three airports have no covered cell.",
+        f"{facts['rk_flagged_jul']:,} in July, {_july_reach(facts)}.",
         "Rows per covered cell, against the 2025 monthly rate:",
         "",
         *table(
@@ -1077,9 +1111,15 @@ def section_statement(f_mech: dict, f_worth: dict, f_rank: dict) -> list[str]:
         f"Second, it is small: {dec['flagged']:,} rows of {dec['rows']:,} in the December",
         f"validation month, carrying {pct(dec['sse_share'])} of the airport-mean predictor's",
         f"squared error; {jul['flagged']:,} of {jul['rows']:,} in July, carrying {pct(jul['sse_share'])};",
-        f"and {f_rank['rk_flagged']:,} of {f_rank['rk_rows']:,} ranking rows, all in January. Its",
-        "whole effect on the leaderboard runs through those rows, and the July",
-        "half of the test set does not see it at all.",
+        f"and {f_rank['rk_flagged']:,} of {f_rank['rk_rows']:,} ranking rows, {_month_split(f_rank)}. Its",
+        *(
+            [
+                "whole effect on the leaderboard runs through those rows, and the July",
+                "half of the test set does not see it at all.",
+            ]
+            if not f_rank["rk_flagged_jul"]
+            else ["whole effect on the leaderboard runs through those rows."]
+        ),
     ]
 
 
@@ -1162,9 +1202,18 @@ def main() -> int:
         f"{pct(dec['sse_share'])} of the airport-mean squared error, and the stand-in physical",
         f"model scores {secs(dec['rmse_without'])} without the term and {secs(dec['rmse_with'])} with it;",
         f"on July, {jul['flagged']:,} rows of {jul['rows']:,} carrying {pct(jul['sse_share'])}, and",
-        f"{secs(jul['rmse_without'])} against {secs(jul['rmse_with'])}. The three July test airports",
-        "have no covered cell, so the term is inert on that half of the test set.",
-        f"In the ranking set it predicts for {f_rank['rk_flagged']:,} rows, all in January.",
+        f"{secs(jul['rmse_without'])} against {secs(jul['rmse_with'])}."
+        + (
+            f" The {f_rank['rk_jul_airports']} July test airports"
+            if not f_rank["rk_jul_covered"]
+            else ""
+        ),
+        *(
+            ["have no covered cell, so the term is inert on that half of the test set."]
+            if not f_rank["rk_jul_covered"]
+            else []
+        ),
+        f"In the ranking set it predicts for {f_rank['rk_flagged']:,} rows, {_month_split(f_rank)}.",
         "It is the RMSE-optimal prediction under the stated scoring rule for",
         "rows whose recorded value no aircraft produced, and nothing else.",
         "",

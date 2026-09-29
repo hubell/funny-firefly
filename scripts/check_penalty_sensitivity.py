@@ -13,10 +13,12 @@ of the parameter. What should move is the amount of *other* runways' pavement
 the routes use, which is the behaviour the penalty exists to suppress. A value
 sitting on the plateau of the second curve is chosen, not tuned.
 
-Runtime is the one unfriendly thing about this script: every penalty re-routes
-every stand at every airport, so the default sweep takes the
-better part of an hour. Graphs are built once and reused, which is the only
-large saving that does not cost fidelity. Use ``--airports`` for a quick check.
+Every penalty re-routes every stand at every airport, so the default sweep is
+the costliest of the three geometry steps: 1 min 21 s on eight cores on
+27 September 2026 (``reports/reproduction-2026-09-27.md``), where an earlier
+version of this note estimated the better part of an hour. Graphs are built
+once and reused, which is the only large saving that does not cost fidelity.
+Use ``--airports`` for a quick check.
 
 Every route descriptor is reported, not just distance. The penalty changes which
 route is chosen, so it changes turn angle and crossing counts too -- and those

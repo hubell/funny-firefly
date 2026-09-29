@@ -310,13 +310,28 @@ def section_both_sides(train: pd.DataFrame, rank: pd.DataFrame) -> list[str]:
                     )
                 )
     worse = [s for s in shifts if s[3] - s[2] > 0.02]
+    # Until the organizers re-issued the ranking files on 4 September 2026 the
+    # sentence below said "July 2026 contains three airports", fixed text that
+    # was true of the month as it then stood and false once it held ten.
+    july = set(rank.loc[rank["month"] == MONTH_PAIRS[-1][1], "icao"])
+    every = set(rank["icao"])
+    july_rows = sum(1 for r in rows if r[1].endswith(MONTH_PAIRS[-1][1].split("-")[1]))
     return [
         "## The gap, on both sides",
         "",
         "The minutes from the last arrival's on-block at the subject's stand to the",
         "subject's take-off, per airport, the same calendar month a year apart. The",
-        "training side is 2025 and the ranking side 2026; July 2026 contains three",
-        "airports, so only those three have a July row.",
+        *(
+            [
+                f"training side is 2025 and the ranking side 2026; July 2026 contains {len(july)}",
+                f"airports, so only those {len(july)} have a July row.",
+            ]
+            if len(july) < len(every)
+            else [
+                "training side is 2025 and the ranking side 2026; both months contain all",
+                f"{len(every)} airports, and {july_rows} of them have a July row.",
+            ]
+        ),
         "",
         f"`under {PRESSURE_MIN} min` is the share of subjects whose stand was taken by an",
         "arrival within that time -- the share where the bound is sound and therefore",

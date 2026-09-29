@@ -929,14 +929,17 @@ def section_thin_pairs(
 
     per_month = {}
     month_rows = []
+    partial = []
     for m, label in RANKING_MONTHS:
         g = rk[rk["month"] == m]
         per_month[label] = shares(g)
         month_rows.append(share_row(label, g))
         if g["ADEP_mvt"].nunique() < rk["ADEP_mvt"].nunique():
+            partial.append(int(g["ADEP_mvt"].nunique()))
             for a, ga in g.groupby("ADEP_mvt", sort=True):
                 month_rows.append(share_row(f"{label}, {a}", ga))
     facts["per_month"] = per_month
+    facts["partial_month_airports"] = partial
 
     # Stands and designators the training year never saw, by airport. A null
     # stand is neither new nor seen; it is unmatched by construction and is
@@ -1089,8 +1092,22 @@ def section_thin_pairs(
             "-rrrrrr",
         ),
         "",
-        "Per ranking month, and per airport within the month that contains only",
-        "three:",
+        # Until the organizers re-issued the ranking files on 4 September 2026
+        # this was fixed text naming "the month that contains only three",
+        # true of July as it then stood and false once it held all ten.
+        *(
+            [
+                "Per ranking month, and per airport within the month that contains only",
+                f"{facts['partial_month_airports'][0]}:",
+            ]
+            if len(facts["partial_month_airports"]) == 1
+            else [
+                "Per ranking month, and per airport within each month that does not"
+                " hold every airport:"
+            ]
+            if facts["partial_month_airports"]
+            else ["Per ranking month; each holds every airport:"]
+        ),
         "",
         *table(
             ["month", "rows"] + list(FREQUENCY_BUCKETS) + ["a hundred or fewer"],
@@ -1104,12 +1121,17 @@ def section_thin_pairs(
         f"training departure, at {facts['new_stand_airports']} airports, carrying",
         f"{facts['new_stand_rows']:,} ranking rows between them; {facts['new_placed_rows']:,} of those",
         "rows are on a stand the OpenStreetMap join can place, so the geometry",
-        "has a cell for them and the identifier model has nothing. No runway",
-        "designator is new"
-        + (
-            "."
-            if facts["new_runways"] == 0
-            else f" -- {facts['new_runways']} are, on {facts['new_runway_rows']:,} rows."
+        # The branch for a new designator first ran on the ranking files
+        # re-issued on 4 September 2026, and read "No runway designator is new
+        # -- 1 are": both halves are now decided by the count.
+        "has a cell for them and the identifier model has nothing."
+        + (" No runway" if facts["new_runways"] == 0 else ""),
+        "designator is new."
+        if facts["new_runways"] == 0
+        else (
+            f"{facts['new_runways']} runway designator"
+            + (" is" if facts["new_runways"] == 1 else "s are")
+            + f" new, on {facts['new_runway_rows']:,} ranking rows."
         ),
         "The stands are described by the shape of their identifier -- a digit is",
         "`#`, a letter `@` -- and never by the identifier itself.",

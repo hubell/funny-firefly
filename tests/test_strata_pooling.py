@@ -56,8 +56,8 @@ CONTROL_POOLED = 235.7
 
 # The ranking set, as reports/geometry_gaps.md counts it in *How much of the
 # ranking set is thin*: rows per frequency bucket, and their total.
-RANKING_ROWS = (1115.0, 2946.0, 17153.0, 194662.0)
-RANKING_DEPARTURES = 215876
+RANKING_ROWS = (2496.0, 4126.0, 31299.0, 306920.0)
+RANKING_DEPARTURES = 344841
 
 
 def test_pooling_at_a_splits_own_mix_reproduces_that_splits_rmse():

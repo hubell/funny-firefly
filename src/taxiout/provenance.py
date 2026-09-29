@@ -728,14 +728,14 @@ _SCRIPTS: tuple[Constant, ...] = (
             "DISRUPTION_MIN_ROWS",
             (20,),
             CHOSEN,
-            "line 565 states the rule both sides of the data are read at, so the"
+            "line 577 states the rule both sides of the data are read at, so the"
             " two tables can be set against each other",
         ),
         (
             "DISRUPTION_RATE_MULTIPLE",
             (10,),
             CHOSEN,
-            "line 565, covering this too: a share this many times the airport's"
+            "line 577, covering this too: a share this many times the airport's"
             " own training-year rate before the day is called out",
         ),
     ),
@@ -759,11 +759,14 @@ _SCRIPTS: tuple[Constant, ...] = (
         ),
         (
             "RANKING_MIX",
-            (1115.0, 2946.0, 17153.0, 194662.0),
+            (2496.0, 4126.0, 31299.0, 306920.0),
             DERIVED,
             "the ranking set's own pair-frequency mix, as ranking rows per"
-            " bucket, counted in `reports/data_review.md` and summing to the"
-            " 215,876 ranking departures. Recomputable from the challenge data",
+            " bucket, counted in `reports/geometry_gaps.md` under *How much of"
+            " the ranking set is thin* and summing to the 344,841 ranking"
+            " departures of the files the organizers re-issued on 4 September"
+            " 2026 (`reports/ranking-refresh-2026-09-28.md`). Recomputable from"
+            " the challenge data",
         ),
         (
             "EXPECTED_HEADROOM_S",
@@ -1909,6 +1912,36 @@ FROZEN_DOCUMENTS: tuple[Frozen, ...] = (
         " `sweep_params.BLOCK_07_OCTOBER_*`. Its criteria were fixed before its"
         " numbers existed and the document is the proof of that order",
     ),
+    Frozen(
+        "reports/determinism.md",
+        "a576502fb1d97665b76099c0d2d3bdc82d2f81de2855d8f7281ba988f3fd1906",
+        "a measurement campaign of 59 fits on one rung and one split, made under"
+        " the parameters of its day and reported as such. Its 90 records under"
+        " `data/processed/determinism/` hold arrays derived from the challenge"
+        " data, are not redistributed, and no target reruns the campaign, so a"
+        " clean checkout cannot regenerate it and must not be asked to. Moved"
+        " here on 27 September 2026, from the live set, after the clean-checkout"
+        " reproduction found it the one report it could not regenerate; the file"
+        " itself is unchanged since the freeze commit",
+    ),
+    Frozen(
+        "reports/reproduction-2026-09-27.md",
+        "6b1578f7173ea03f477b86588ec07cb3538dd231055ba086f8718c9e8b05d60e",
+        "the dated record of the frozen commit reproduced from a clean clone at"
+        " the tag: the pinned fetch, the matrices, the residuals, fourteen"
+        " reports and the submission, each compared with what the commit"
+        " carries. Its value is that it was measured once, on its date, against"
+        " that commit",
+    ),
+    Frozen(
+        "reports/ranking-refresh-2026-09-28.md",
+        "03e2d6ca4e42c7f8443044dca37804a6711ed140f16428dbd39f67762d11b8b8",
+        "the dated record of the ranking files the organizers re-issued on 4"
+        " September 2026, set beside the copies of 2 September the entry was"
+        " built on: the rows July gained at seven airports, the timestamps"
+        " moved in the rows both hold, and the training files unchanged. Its"
+        " value is that it was measured once, on its date, against both",
+    ),
 )
 
 
@@ -2217,9 +2250,12 @@ REPORT_INPUTS_HEADING = "## What this report was generated from"
 # the penalty sensitivity, went in on 26 September with the pinned rebuild that
 # regenerated them, so every live report is here and ``REPORTS_WITHOUT_FOOTER``
 # is empty; it stays, for any report a later run cannot regenerate.
+# ``reports/determinism.md`` left this list on 27 September for
+# ``FROZEN_DOCUMENTS``: its footer still declares the campaign's records, but a
+# clean checkout has none of them, and a dated record is held to its digest
+# rather than to inputs it cannot have.
 REPORT_INPUTS_DECLARED: tuple[tuple[str, str], ...] = (
     ("scripts/build_taxi_graph.py", "reports/taxi_routing.md"),
-    ("scripts/check_determinism.py", "reports/determinism.md"),
     ("scripts/check_penalty_sensitivity.py", "reports/penalty_sensitivity.md"),
     ("scripts/check_runways_ourairports.py", "reports/runway_crosscheck.md"),
     ("scripts/report_congestion.py", "reports/congestion.md"),

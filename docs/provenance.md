@@ -87,7 +87,7 @@ either direction without somebody seeing it.
 
 ## What a report declares it was generated from
 
-**15** generators write a footer naming every
+**14** generators write a footer naming every
 path the run read, with a sha256 each; check 8 recomputes them and calls
 the report verified, stale or unverifiable. The rule for who carries one
 is the Makefile's own measured time: under five minutes and the generator
@@ -223,7 +223,7 @@ than this record claiming it.
 
 ## Frozen documents
 
-**9** dated records, each with a sha256. These need
+**12** dated records, each with a sha256. These need
 the opposite gate from every other file here: the risk is not that they go
 stale, it is that somebody edits them. A currency check over one would
 demand destroying the record.
@@ -239,6 +239,9 @@ demand destroying the record.
 | `reports/container-2026-09-12.md` | a dated record of the reference container's pins |
 | `reports/submission-2026-09-19.md` | a dated record of one scored file, written at the tree it was built from |
 | `reports/preregistered-2026-09-20.md` | the pre-registered experiments and their verdicts, and the source of `sweep_params.BLOCK_07_OCTOBER_*`. Its criteria were fixed before its numbers existed and the document is the proof of that order |
+| `reports/determinism.md` | a measurement campaign of 59 fits on one rung and one split, made under the parameters of its day and reported as such. Its 90 records under `data/processed/determinism/` hold arrays derived from the challenge data, are not redistributed, and no target reruns the campaign, so a clean checkout cannot regenerate it and must not be asked to. Moved here on 27 September 2026, from the live set, after the clean-checkout reproduction found it the one report it could not regenerate; the file itself is unchanged since the freeze commit |
+| `reports/reproduction-2026-09-27.md` | the dated record of the frozen commit reproduced from a clean clone at the tag: the pinned fetch, the matrices, the residuals, fourteen reports and the submission, each compared with what the commit carries. Its value is that it was measured once, on its date, against that commit |
+| `reports/ranking-refresh-2026-09-28.md` | the dated record of the ranking files the organizers re-issued on 4 September 2026, set beside the copies of 2 September the entry was built on: the rows July gained at seven airports, the timestamps moved in the rows both hold, and the training files unchanged. Its value is that it was measured once, on its date, against both |
 
 ## What a rebuild of an external input is pinned to
 

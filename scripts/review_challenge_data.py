@@ -307,11 +307,23 @@ def section_airports(dep: pd.DataFrame, rk_dep: pd.DataFrame) -> tuple[list[str]
         ),
         "Two consequences. Congestion counts",
         "built from the ranking set need no normalising for coverage, because",
-        "within each (airport, month) present every movement is there. And the",
-        "three July airports account for "
-        + pct(facts["jul_share_of_test"])
-        + " of the test departures, so the",
-        "pooled leaderboard RMSE is weighted towards them.",
+        # Until the organizers re-issued the ranking files on 4 September 2026
+        # the next sentence was fixed text about "the three July airports",
+        # true of the month as it then stood and false once it held ten.
+        *(
+            [
+                "within each (airport, month) present every movement is there. And the",
+                f"{len(jul_airports)} July airports account for "
+                + pct(facts["jul_share_of_test"])
+                + " of the test departures, so the",
+                "pooled leaderboard RMSE is weighted towards them.",
+            ]
+            if len(jul_airports) < len(present)
+            else [
+                "within each (airport, month) present every movement is there. And",
+                f"July 2026 holds all {len(present)} airports, as January does.",
+            ]
+        ),
     ]
     return lines, facts
 

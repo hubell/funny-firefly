@@ -1280,7 +1280,7 @@ K_SENSITIVITY_SCALES: tuple[float, ...] = (0.5, 2.0)
 #
 # Row counts, and not the percentages that report prints beside them. The
 # percentages are rounded to two figures and a weight set assembled from them
-# need not sum to one; the counts do, to that report's 215,876 ranking
+# need not sum to one; the counts do, to that report's 344,841 ranking
 # departures, and they are what its shares are computed from. Nothing here
 # turns on the difference -- it moves a pooled figure by a hundredth of a
 # second -- but a normalisation that is exact for a stated reason beats one
@@ -1293,7 +1293,7 @@ K_SENSITIVITY_SCALES: tuple[float, ...] = (0.5, 2.0)
 # than on the split it was measured on, and a report that only ever pools at
 # December's weights cannot say so.
 RANKING_MIX: dict[str, float] = dict(
-    zip(FREQUENCY_BUCKETS, (1115.0, 2946.0, 17153.0, 194662.0))
+    zip(FREQUENCY_BUCKETS, (2496.0, 4126.0, 31299.0, 306920.0))
 )
 
 

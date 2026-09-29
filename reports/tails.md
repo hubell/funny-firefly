@@ -7,7 +7,7 @@ term predicts for them, and what it is worth.
 
 **This report has two generators, and each section says which wrote it.**
 Everything above *The pooled record-quality rule, measured* is written by
-`scripts/report_tails.py` from the data under `data/challenge/` on 2026-09-26,
+`scripts/report_tails.py` from the data under `data/challenge/` on 2026-09-28,
 and every figure in it is computed there. That section is written into this
 file afterwards by `scripts/pooled_tails.py --report`, carries its own date,
 and its figures are computed there; `make tails` runs the two in that order.
@@ -38,9 +38,8 @@ validation month those are 88 rows of 165,677 carrying
 39.2% of the airport-mean squared error, and the stand-in physical
 model scores 447 s without the term and 341 s with it;
 on July, 335 rows of 190,713 carrying 57.8%, and
-689 s against 461 s. The three July test airports
-have no covered cell, so the term is inert on that half of the test set.
-In the ranking set it predicts for 107 rows, all in January.
+689 s against 461 s.
+In the ranking set it predicts for 383 rows, 107 in January and 276 in July.
 It is the RMSE-optimal prediction under the stated scoring rule for
 rows whose recorded value no aircraft produced, and nothing else.
 
@@ -261,14 +260,15 @@ Per airport, Jul 2025, all (`*` marks the July test airports):
 
 ## What it touches in the ranking set
 
-Fitted on the full training year, the term predicts for 107 of the
-215,876 ranking departures: 107 in January 2026 and
-0 in July, whose three airports have no covered cell.
+Fitted on the full training year, the term predicts for 383 of the
+344,841 ranking departures: 107 in January 2026 and
+276 in July, all at LIRF.
 Rows per covered cell, against the 2025 monthly rate:
 
 | ICAO | month | departures | flagged | covered cells |
 | --- | --- | ---: | ---: | --- |
 | LIRF | 2026-01 | 11,061 | 107 | `noflt:normal` 92 (113/month in 2025); `noflt:4-12h` 12 (8/month in 2025); `noflt:>12h` 3 (2/month in 2025) |
+| LIRF | 2026-07 | 15,838 | 276 | `noflt:normal` 248 (113/month in 2025); `noflt:4-12h` 20 (8/month in 2025); `noflt:>12h` 8 (2/month in 2025) |
 
 ## The callsign-prefix reading, at LIRF
 
@@ -378,7 +378,7 @@ lies outside.
 
 1 cell over
 13 training rows, touching 1 of the
-11,061 LIRF ranking departures.
+26,899 LIRF ranking departures.
 
 **What the two readings say.** The note's arithmetic holds and its reading of
 it does not. The taxi time does equal the lag in most of the rows of several
@@ -430,9 +430,8 @@ design table shows what it costs on the splits that were run.
 Second, it is small: 88 rows of 165,677 in the December
 validation month, carrying 39.2% of the airport-mean predictor's
 squared error; 335 of 190,713 in July, carrying 57.8%;
-and 107 of 215,876 ranking rows, all in January. Its
-whole effect on the leaderboard runs through those rows, and the July
-half of the test set does not see it at all.
+and 383 of 344,841 ranking rows, 107 in January and 276 in July. Its
+whole effect on the leaderboard runs through those rows.
 
 ## What this report was generated from
 
@@ -456,8 +455,8 @@ not redistribute is not present.
 | `data/challenge/movements/training_2025-10-01_2025-11-01.parquet` | `4a31a35601c1bdcd74b8cd6379231ba516a48324e4c2478bf1c9360cd23e687f` |
 | `data/challenge/movements/training_2025-11-01_2025-12-01.parquet` | `ac36b17db7a537e3baeb682fa4763dacaa1fcc5d9bfa6bf32b3ee5d9f91300b0` |
 | `data/challenge/movements/training_2025-12-01_2026-01-01.parquet` | `2d357f2f403a86778a69e93f72d8754effe77f1ac0942399b3d1b7728241f724` |
-| `data/challenge/ranking.parquet` | `25556e61c5f71020287ca130377ce079dc22d2fa7f7f1eaf4a2f22acafab463d` |
-| `data/challenge/submitting.parquet` | `241724d8c234d2c34c96519ef1b6891646e694b142bff2c3504e83a394ee8f73` |
+| `data/challenge/ranking.parquet` | `9db75e3a56fa09b87aab72e191a53da3fe763d9887ad2b23aea9cde6a6325f86` |
+| `data/challenge/submitting.parquet` | `0d383408ed5ac27bfcfd12d6b961cee77c8a6364b10dad9fe3ec81115c79652b` |
 
 ## The pooled record-quality rule, measured
 
@@ -599,28 +598,35 @@ full-year cell table alone, reading no field outside `PREDICT_INPUTS`:
 | EDDF | 2026-07 | `noflt:4-12h` | 3 |
 | EDDF | 2026-07 | `noflt:>12h` | 1 |
 | EDDM | 2026-01 | `noflt:4-12h` | 6 |
+| EDDM | 2026-07 | `noflt:4-12h` | 4 |
 | EGLL | 2026-01 | `noflt:4-12h` | 10 |
-| EGLL | 2026-07 | `noflt:4-12h` | 6 |
+| EGLL | 2026-07 | `noflt:4-12h` | 7 |
 | EHAM | 2026-01 | `noflt:4-12h` | 133 |
 | EHAM | 2026-01 | `noflt:>12h` | 5 |
 | EHAM | 2026-07 | `noflt:4-12h` | 7 |
 | EHAM | 2026-07 | `noflt:>12h` | 3 |
 | LEBL | 2026-01 | `noflt:4-12h` | 8 |
+| LEBL | 2026-07 | `noflt:4-12h` | 16 |
 | LEMD | 2026-01 | `noflt:4-12h` | 2 |
+| LEMD | 2026-07 | `noflt:4-12h` | 4 |
 | LFPG | 2026-01 | `noflt:4-12h` | 22 |
 | LFPG | 2026-01 | `noflt:>12h` | 1 |
+| LFPG | 2026-07 | `noflt:4-12h` | 12 |
+| LFPG | 2026-07 | `noflt:>12h` | 1 |
 | LSZH | 2026-01 | `noflt:4-12h` | 10 |
+| LSZH | 2026-07 | `noflt:4-12h` | 3 |
 | LTFM | 2026-01 | `noflt:4-12h` | 6 |
+| LTFM | 2026-07 | `noflt:4-12h` | 3 |
 
-235 rows in all, against the 107 of
-215,876 ranking rows the term covers today.
+279 rows in all, against the 383 of
+344,841 ranking rows the term covers today.
 The stake is not zero, so it is the premise and not the stake that
 settles this.
 
 The population at EHAM in 2026-01, counted here rather than read off
 a column heading in [`data_review.md`](data_review.md): of
 16,232 departures, 805 have no flight-side record,
-417 have a lag over four hours, 26 over twelve, and
+418 have a lag over four hours, 26 over twelve, and
 138 have no record *and* a lag over four hours. Those last are
 exactly the late no-record buckets, `noflt:4-12h` at 133, `noflt:>12h` at 5.
 

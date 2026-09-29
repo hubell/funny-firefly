@@ -35,15 +35,12 @@ help:
 	@echo ""
 	@echo "'make data' calls the Overpass API and takes a few minutes; it is"
 	@echo "resumable and skips airports already cached. 'make reports' is"
-	@echo "offline and takes ABOUT AN HOUR, dominated by one of its three"
-	@echo "scripts. The two to three minutes this line used to give is"
-	@echo "build_taxi_graph.py alone; report_coverage.py is 0.1 s; and"
-	@echo "check_penalty_sensitivity.py re-routes every stand at every"
-	@echo "airport for each penalty and takes the better part of an hour by"
-	@echo "its own docstring. That last figure is NOT measured here and is"
-	@echo "the script's own estimate: it rewrites a report, and the two graph"
-	@echo "steps rewrite the distance matrices most other reports read, so"
-	@echo "neither is run inside a block that fits models."
+	@echo "offline and takes about two minutes, measured at 1 min 49 s on"
+	@echo "27 September 2026 in a clean clone (reports/reproduction-2026-09-27.md):"
+	@echo "report_coverage.py 0.2 s, build_taxi_graph.py 27 s, and"
+	@echo "check_penalty_sensitivity.py 1 min 21 s, which re-routes every stand"
+	@echo "at every airport for each penalty. Until that measurement this line"
+	@echo "said about an hour, from the script's own estimate."
 	@echo "'make synthetic' needs neither, and is the one geometry report a"
 	@echo "clean checkout can regenerate. The four targets below it need the"
 	@echo "challenge data under data/challenge/, which is never committed."
@@ -69,7 +66,9 @@ help:
 	@echo "'make baseline' took about two hours until 21 September 2026, when"
 	@echo "the one permitted wider sweep moved the booster to 3,000 trees and"
 	@echo "255 leaves, and 7 h 11 min until 23 September, when the extension"
-	@echo "moved it to 6,000 trees and 127 leaves. Every target that fits the"
+	@echo "moved it to 6,000 trees and 127 leaves; under the parameters that"
+	@echo "ship it is 9 h 36 min 30 s (27 September, in a clean clone,"
+	@echo "reports/reproduction-2026-09-27.md). Every target that fits the"
 	@echo "submission rung scales with it."
 	@echo ""
 	@echo "THESE ARE MONOTONIC-CLOCK FIGURES, from /usr/bin/time, and a host"
@@ -177,8 +176,9 @@ baseline:
 # Reads data/challenge/ and the matrices from 'make reports'. Ten fits: train
 # on nine airports, predict the tenth, with no identifier of the tenth in the
 # frame. Answers the question the challenge's test set cannot pose, and the one
-# no identifier-based entry can answer at all. About a quarter of an hour on
-# eight cores.
+# no identifier-based entry can answer at all. About fifty minutes on eight
+# cores under the parameters that ship: 49 min 22 s on 27 September 2026
+# (reports/reproduction-2026-09-27.md).
 transfer:
 	$(PYTHON) -u scripts/report_transfer.py
 
