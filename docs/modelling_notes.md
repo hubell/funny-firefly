@@ -135,6 +135,14 @@ marginalised.
 covers all ten airports at the same daily volumes as January 2025; July 2026
 covers Frankfurt, Heathrow and Schiphol only. Congestion counts need no
 coverage normalisation, and those three airports are 53% of the test rows.
+*Revised 29 September.* The files read on 2 September were replaced by the
+organisers on 4 September, and the entry found the replacement on
+28 September: July 2026 covers all ten airports in the files the scorer
+uses, 192,122 departures beside January's 152,719, and the template lists
+344,841 rows. The census property holds as before, and there is no
+three-airport subset of the test rows any longer; the three keep a place in
+the validation design because it was fixed to read them on their own.
+`reports/ranking-refresh-2026-09-28.md` records the two versions.
 
 **The off-block time is blanked, and that changes the feature rules.** See
 *Leakage watch* below, which was rewritten for it.
@@ -499,8 +507,10 @@ the block time was defaulted and what the remaining rows average, and
 predicts for a row in a covered cell `share × lag + (1 − share) × rest_mean`
 — the conditional mean, computed knowing the mechanism. A cell is covered
 when it has at least five rows and a defaulted share of at least five
-percent; at the full-year fit that is three cells, all at Fiumicino, and 107
-of the 215,876 ranking rows, all in January. Every other row falls through
+percent; at the full-year fit that is three cells, all at Fiumicino, and 383
+of the 344,841 ranking rows in the files of 4 September, 107 in January and
+276 in July (on the files of 2 September, which held no Fiumicino row in
+July, it was 107 of 215,876, all in January). Every other row falls through
 to the physical model, which is fitted with the covered rows excluded and
 validated on every row, with RMSE reported with and without the term.
 
@@ -567,6 +577,14 @@ The validation therefore needs to be, at minimum:
 - **RMSE with and without the flagged artifact rows**, per *Tail handling*
   above, so the physical model's contribution is visible underneath the
   record-quality component's.
+
+*Note of 29 September.* The three-airport reading above was fixed when the
+ranking files of 2 September held July 2026 at Frankfurt, Heathrow and
+Schiphol alone. The files the organisers re-issued on 4 September hold all
+ten airports in July, so the ten-airport July figure is the one that stands
+in for the test month; the three-airport columns are kept as they were
+fixed, and the paper says which July figure it quotes and why (§8 and
+§9.5 there).
 
 The ablation ladder that settles the question: airport mean; the PRU
 10th-percentile-per-(stand, runway) reference; a tuned model on one-hot

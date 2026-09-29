@@ -642,46 +642,35 @@ def test_the_checker_holds_no_constant_and_no_prose_figure():
     assert ok, lines
 
 
-# What the paper owes the ranking set the organizers re-issued on 4 September
-# 2026, as the checker counted it when every report that reads that set was
-# regenerated on 28 September: figures the paper quotes that no cited source
-# carries any longer, and figures that now match only in a frozen record
-# without being listed as history. The paper pass brings both to nothing and
-# turns the test below back into test_strict_passes_on_the_paper_as_it_stands.
-PAPER_UNMATCHED_OWED = 20
-PAPER_UNLISTED_HISTORICAL_OWED = (("§7.4", "0.19"),)
+def test_strict_passes_on_the_paper_as_it_stands(capsys):
+    """The freeze condition, held from the figure pass on.
 
+    Before 25 September this test asserted the opposite: the paper was stale
+    and a checker that passed it could not see. The figure pass brought every
+    figure to the reports, and every one is now matched in the section its
+    source line names, listed as history with a reason, or computed by an
+    arithmetic the check verifies. A regeneration that moves a figure the
+    paper quotes fails this test, which is what it is for.
 
-def test_strict_fails_on_the_paper_until_the_paper_pass(capsys):
-    """The freeze condition, owed, and pinned at exactly what is owed.
-
-    Before 25 September this test asserted that the paper was stale; from the
-    figure pass of that day it was test_strict_passes_on_the_paper_as_it_stands
-    and asserted the freeze condition. On 28 September every report that reads
-    the ranking set was regenerated against the files the organizers re-issued
-    on 4 September (`reports/ranking-refresh-2026-09-28.md`), and figures the
-    paper quotes from the set of 2 September moved. So the paper is stale again
-    for a reason the record names, and this asserts the stale state as exactly
-    as the fresh one: --strict fails, the ordinary run passes, 20 figures are
-    unmatched, one figure matches only in a frozen record without being listed
-    (0.19, in §7.4), and nothing is broken. A count that moves either way fails
-    it. The paper pass brings both counts to nothing and flips the test back,
-    which makes the flip a debt the suite itself carries.
+    It did so once. On 28 September every report that reads the ranking set
+    was regenerated against the files the organizers re-issued on 4 September
+    (`reports/ranking-refresh-2026-09-28.md`), and figures the paper quoted
+    from the set of 2 September moved: 20 unmatched and one figure matching
+    only in a frozen record without being listed (0.19, in §7.4). From that
+    day until the paper pass of 29 September this test was
+    test_strict_fails_on_the_paper_until_the_paper_pass and pinned that debt
+    at exactly those counts; the pass brought both to nothing and flipped it
+    back to this form.
     """
-    assert chk.main(["--strict"]) != 0
+    assert chk.main(["--strict"]) == 0
     assert chk.main([]) == 0
     ok, _lines = cp.check_paper_figures(strict=True)
-    assert not ok
+    assert ok
     result = chk.check()
     counts = {s: 0 for s in chk.STATUSES}
     for _r, v in chk._verdicts(result):
         counts[v.status] += 1
-    assert counts[chk.UNMATCHED] == PAPER_UNMATCHED_OWED
-    unlisted = tuple(
-        (r.section.key, v.number.figure)
-        for r, v in chk._verdicts(result, chk.HISTORICAL)
-        if not v.listed
-    )
-    assert unlisted == PAPER_UNLISTED_HISTORICAL_OWED
+    assert counts[chk.UNMATCHED] == 0
+    assert all(v.listed for _r, v in chk._verdicts(result, chk.HISTORICAL))
     assert not any(r.broken for r in result.sections)
     capsys.readouterr()

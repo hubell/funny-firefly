@@ -30,7 +30,7 @@ feature, the booster learns the band it holds in.
 
 **Most of what the block buys is not the bound.** The band above carries 22%
 of the block's reduction in squared error in December and 36% on the three
-airports July 2026 contains -- a minority on every leg measured, and the
+of ``JULY_AIRPORTS`` -- a minority on every leg measured, and the
 figures are in ``reports/occupancy.md`` rather than here. What the rest is,
 is the stand's recent history: the previous arrival's lateness and taxi-in,
 and whether it was the subject's own aircraft returning. At gaps past an hour

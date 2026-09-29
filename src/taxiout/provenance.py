@@ -616,33 +616,33 @@ _SCRIPTS: tuple[Constant, ...] = (
             "TAIL_CUTS_S",
             (600.0, 1200.0),
             CHOSEN,
-            "line 128 names them as where the tail is cut, in seconds of"
+            "line 132 names them as where the tail is cut, in seconds of"
             " absolute residual",
         ),
         (
             "REOCCUPIED_BAND_MIN",
             (20.0, 45.0),
             CHOSEN,
-            "line 131: the band where the stand-occupancy bound is the"
+            "line 135: the band where the stand-occupancy bound is the"
             " mechanism, the same band `reports/baseline.md` decomposes on",
         ),
         (
             "LAG_EDGES_MIN",
             (0, 15, 30, 45, 60, 120),
             CHOSEN,
-            "line 135: plan-lag bands in minutes, the last open and nulls their own row",
+            "line 139: plan-lag bands in minutes, the last open and nulls their own row",
         ),
         (
             "LARGEST_ROWS",
             (5,),
             CHOSEN,
-            "line 139: how many of the largest rows to print per leg",
+            "line 143: how many of the largest rows to print per leg",
         ),
         (
             "WORST_QUANTILE",
             (0.99,),
             CHOSEN,
-            "line 142: the share of absolute residual that counts as the worst"
+            "line 146: the share of absolute residual that counts as the worst"
             " one percent",
         ),
         (
@@ -650,8 +650,8 @@ _SCRIPTS: tuple[Constant, ...] = (
             (6,),
             CHOSEN,
             VALUE_NOT_JUSTIFIED + ": how many take-off hours the section"
-            " names. The method is recorded in the comment above it, lines 158"
-            " to 160: both counts are read off the leg's own squared error"
+            " names. The method is recorded in the comment above it, lines 162"
+            " to 164: both counts are read off the leg's own squared error"
             " rather than fixed in advance, and `reports/residual.md` prints"
             " the hours it found. That is how the figure is used; no reason"
             " for six rather than five or eight is recorded",
@@ -661,14 +661,14 @@ _SCRIPTS: tuple[Constant, ...] = (
             (10,),
             CHOSEN,
             VALUE_NOT_JUSTIFIED + ": how many callsign prefixes are named"
-            " before pooling the rest. The same comment at lines 158 to 160"
+            " before pooling the rest. The same comment at lines 162 to 164"
             " covers it on the same terms as `PEAK_HOURS` above",
         ),
         (
             "MIN_INTERVAL_DAYS",
             (5,),
             CHOSEN,
-            "line 169: below this many distinct take-off days a day-clustered"
+            "line 173: below this many distinct take-off days a day-clustered"
             " resample has too few clusters to say anything, and reports no"
             " variation at all, which prints as a narrow interval and means the"
             " opposite",
@@ -2157,7 +2157,9 @@ SCOPE: tuple[tuple[str, str], ...] = (
         "the two frozen documents are covered by check 5, which is an"
         " immutability digest and not a currency check. `docs/paper.md` is"
         " covered by check 14, whose `--strict` passed against every report the"
-        " freeze regenerated on 26 September 2026; the rest carries no model"
+        " freeze regenerated on 26 September 2026 and, from the paper pass of"
+        " 29 September, against the nine regenerated on 28 September under the"
+        " ranking set re-issued on 4 September; the rest carries no model"
         " figure",
     ),
     (
@@ -2594,8 +2596,29 @@ _PREREGISTERED = (
 # once the same way and never a magnitude and a signed bound that share their
 # digits. Transcribed on
 # 25 September from the figure pass's report and checked against the checker's
-# own verdicts, which reach every entry; an entry nothing reaches fails.
+# own verdicts, which reach every entry; an entry nothing reaches fails. The
+# two entries of §2.1 were added on 29 September, when the paper was brought
+# to the ranking set the organizers re-issued on 4 September: they describe
+# the files the entry was first built on, which no live report reads any
+# longer, and the dated record of 28 September is the only place they stand.
 PAPER_HISTORICAL_FIGURES: tuple[PaperFigure, ...] = (
+    PaperFigure(
+        "§2.1",
+        "215,876",
+        "the row count of the template of 2 September, which the entry was"
+        " built on until 28 September and which no live report reads any"
+        " longer: the live reports count the template of 4 September, 344,841"
+        " rows, and the record of 28 September carries both counts side by"
+        " side. The sentence dates the file it counts",
+    ),
+    PaperFigure(
+        "§2.1",
+        "92%",
+        "the share of the departures both versions of the ranking file hold"
+        " whose movement time differs between them, 91.9%, measured once in the"
+        " comparison of 28 September and recorded there: a fact about two"
+        " files, not about the model, and no live report compares them",
+    ),
     PaperFigure(
         "§6.4",
         "10.0",

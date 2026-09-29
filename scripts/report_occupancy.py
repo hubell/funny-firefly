@@ -113,8 +113,8 @@ BOUND_BAND_LABEL = "20-45"
 LONG_GAP_MIN = 60.0
 
 # Which legs the gain is decomposed on. The July split is over all ten airports
-# and July 2026 contains three, so the three are reported separately for the
-# same reason ``baseline.md`` reports them separately.
+# and the three airports the ranking file of 2 September held in July 2026 are
+# reported separately, for the same reason ``baseline.md`` reports them so.
 GAIN_LEGS: tuple[tuple[str, str, str, tuple[str, ...] | None, str], ...] = (
     ("december", "2025-12", "2026-01", None, "December, all ten airports"),
     ("july", "2025-07", "2026-07", None, "July, all ten airports"),

@@ -327,7 +327,15 @@ the challenge data and are not redistributed. Since that run it is a dated
 record held to its digest, like the others under `reports/` that carry a date
 in their name, so `make provenance` no longer asks a clean checkout for
 records it cannot have. `make synthetic` needs nothing at all and runs on a
-bare checkout.
+bare checkout. The two ranking files a reader brings are the versions the
+organizers published on 4 September 2026, which replaced the versions of
+2 September that the tag's reports were computed from; on 28 September the
+entry took up the later versions, regenerated the nine reports that read
+them and rebuilt the submission on the later template, with the model, the
+matrices and the residuals unchanged.
+[`reports/ranking-refresh-2026-09-28.md`](reports/ranking-refresh-2026-09-28.md)
+records both versions by size and digest, so a copy in hand can be told
+from the other.
 
 **The deposit.** The Zenodo deposit **[DOI]** holds, under ODbL, the 35
 matrix files and the eleven Overpass answers with their `PINS.json`, and,

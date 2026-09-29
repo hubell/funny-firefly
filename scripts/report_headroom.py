@@ -192,7 +192,7 @@ HEADROOM_BLOCKS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
 
 # The columns the table is read on. The first two are what
 # ``EXPECTED_HEADROOM_S`` is keyed on -- December over all ten airports, July
-# over the three July 2026 contains -- and the third is §2's own middle column,
+# over the three of ``JULY_AIRPORTS`` -- and the third is §2's own middle column,
 # printed so that every cell §2 filled in has a recomputed counterpart. The
 # index is the position in ``EXPECTED_HEADROOM_S``'s pair, or ``None`` where
 # the constant carries no figure for the column.

@@ -163,11 +163,13 @@ reported with their figure count rather than skipped.
 | section | why |
 | --- | --- |
 
-**26** historical figures stand, each with
+**28** historical figures stand, each with
 its reason.
 
 | section | figure | why |
 | --- | --- | --- |
+| §2.1 | 215,876 | the row count of the template of 2 September, which the entry was built on until 28 September and which no live report reads any longer: the live reports count the template of 4 September, 344,841 rows, and the record of 28 September carries both counts side by side. The sentence dates the file it counts |
+| §2.1 | 92% | the share of the departures both versions of the ranking file hold whose movement time differs between them, 91.9%, measured once in the comparison of 28 September and recorded there: a fact about two files, not about the model, and no live report compares them |
 | §6.4 | 10.0 | the saturation rung's oracle ceiling on December as measured on 3 and 4 September under the parameters then in force, from the entry of 4 September in `docs/plan.md`: the measurement Gate 3 was stopped on. The sentence dates it, and the rung's ceiling under the parameters that ship is given two sentences later from `reports/congestion.md` |
 | §6.4 | 8.5 | the same rung's ceiling on July on the same day, from the same entry; dated in the same sentence |
 | §7.4 | 1.29 | the route-length check's ratio before 19 September, with the encoding fitted on the unflagged training rows, from the dated record of 10 September. The sentence dates it and gives beside it the reading since then, 1.56, from the live ladder report |
@@ -306,7 +308,7 @@ Stated so its silence is not read as a pass.
 | `src/taxiout/synthetic.py` | covered once by `AUTHORED_ARTIFACTS` rather than constant by constant, with the condition that makes it safe proved by check 4 |
 | decimal figures in generator prose strings | covered by check 7: each is computed from the data or registered as deliberate prose |
 | decimal figures in code comments | NOT covered by an automated check. A comment is not read by any run and cannot reach a report, so a stale figure in one misleads a reader of the source and nothing else. The census counts them |
-| `docs/` and `README.md` | the two frozen documents are covered by check 5, which is an immutability digest and not a currency check. `docs/paper.md` is covered by check 14, whose `--strict` passed against every report the freeze regenerated on 26 September 2026; the rest carries no model figure |
+| `docs/` and `README.md` | the two frozen documents are covered by check 5, which is an immutability digest and not a currency check. `docs/paper.md` is covered by check 14, whose `--strict` passed against every report the freeze regenerated on 26 September 2026 and, from the paper pass of 29 September, against the nine regenerated on 28 September under the ranking set re-issued on 4 September; the rest carries no model figure |
 | cross-report citation | covered by check 11, scoped to the citation's own sentence and to decimal figures. Bare integers are out: a report says *the three airports* and *5 folds* in words a gate cannot tell from a measurement. A frozen dated record is out as a citing document, because its figures were true on its date and the file it cites has moved since, which is what makes it a record; check 5 holds it to a digest instead |
 | `docs/paper.md` as a citing document | covered by check 14 and not by check 11. The paper names its sources once per section, in a `Source:` line, where a report names them in the sentence, so `scripts/check_paper.py` reads each figure against the files its section cites and the sections of them it names. `--strict` passes on it since the figure pass of 25 September and is run again after every regeneration; `--report` prints every figure with where it was found |
 | integers under a thousand in `docs/paper.md` | NOT covered by check 14. A figure there is a decimal, a percentage, or an integer of four or more digits, and a count or a whole number of seconds below a thousand is neither: the rows a term covers, a rounded gain in seconds. The paper writes them as numerals, so they can go stale, and no check here will say so |

@@ -77,7 +77,7 @@ from run_baselines import (  # noqa: E402
 )
 from taxiout.provenance import challenge_inputs, report_inputs_footer  # noqa: E402
 from taxiout.callsign import callsign_features  # noqa: E402
-from taxiout.challenge import load_movements, to_pandas  # noqa: E402
+from taxiout.challenge import load_movements, load_ranking, to_pandas  # noqa: E402
 from taxiout.features import TARGET  # noqa: E402
 from taxiout.metar import load_metar, regime_by_hour  # noqa: E402
 from taxiout.models import SUBMISSION_KEY  # noqa: E402
@@ -116,9 +116,13 @@ OUT = REPO / "reports" / "residual.md"
 RUNG = SUBMISSION_KEY
 
 # The legs, and the reason there are three. The July split is over all ten
-# airports and July 2026 contains three, so the pooled July figure answers a
-# question the ranking month does not ask -- and on this rung one Fiumicino row
-# carries a third of it, which the *largest rows* section shows.
+# airports; the third leg reads the three airports the ranking file of
+# 2 September held in July 2026 (``JULY_AIRPORTS``), which was the whole of
+# the July test month until the organizers re-issued the file on 4 September
+# with all ten. The leg is kept as it was fixed. On this rung one Fiumicino row
+# carries a third of the pooled July figure, which the *largest rows* section
+# shows, and since 28 September that section says whether the scored month
+# holds rows of that airport rather than asserting that it does not.
 LEGS: tuple[tuple[str, tuple[str, ...] | None, str], ...] = (
     ("december", None, "December, all ten airports"),
     ("july", None, "July, all ten airports"),
@@ -151,8 +155,8 @@ BEFORE_ESTIMATE = "before the estimate"
 
 # The airport the July section is about. Its July figure is the one that stands
 # out on the ten-airport leg once the one Fiumicino day-shift is set aside, and
-# it is one of the three airports July 2026 contains, so what July does to it
-# is a question about the test set and not only about the training year.
+# it is in the July test month under both issues of the ranking file, so what
+# July does to it is a question about the test set, not only the training year.
 HEATHROW = "EGLL"
 
 # How many take-off hours that section names as the ones the error sits in, and
@@ -427,6 +431,61 @@ def section_lag(legs: dict) -> list[str]:
     ]
 
 
+def ranking_july_departures(icao: str) -> int:
+    """How many July 2026 departures the ranking set holds at ``icao``.
+
+    Read from the ranking file, which this report declares among its inputs.
+    Until 28 September 2026 the sentence this feeds was fixed text, "July 2026
+    contains no LIRF rows": true of the ranking file of 2 September, which
+    held July at three airports, and false of the file the organizers
+    re-issued on 4 September, which holds all ten. The count is computed so
+    the sentence follows the file.
+    """
+    frame = to_pandas(load_ranking(DATA, ["ADEP_mvt", "MVT_TIME_UTC_mvt"], phase="DEP"))
+    at = frame[frame["ADEP_mvt"].astype(str) == icao]
+    return int((month_of(at["MVT_TIME_UTC_mvt"]) == "2026-07").sum())
+
+
+def _july_note(first, sse: float) -> list[str]:
+    """The paragraph under the largest-rows table, on the one July row.
+
+    What it says about the scored month is computed from the ranking file:
+    whether July 2026 holds departures of the row's airport decides which
+    July figure the paper quotes, and the sentence says so either way.
+    """
+    icao = str(first["icao"])
+    held = ranking_july_departures(icao)
+    if held:
+        scored = (
+            f" **July 2026 holds {held:,} {icao} departures** in the ranking set the"
+            " organizers re-issued on 4 September 2026, so a row of this kind can"
+            " occur in the scored month and would be scored at its recorded value"
+            " exactly as this one is. That is why the paper quotes the ten-airport"
+            " July figure for the submitted model and keeps the three-airport one,"
+            " read on the airports the file of 2 September held in July, beside it."
+        )
+    else:
+        scored = (
+            f" **July 2026 contains no {icao} rows.** That is why the paper quotes"
+            " the three-airport July figure for the submitted model and why the"
+            " pooled one stays in [`baseline.md`](baseline.md) with this reason"
+            " beside it."
+        )
+    return [
+        "",
+        f"**One row is {pct(float(first['sq']) / sse, 0)} of the July split's"
+        f" squared error.** A departure at {icao} recording a taxi-out"
+        f" of {float(first[TARGET]):,.0f} seconds -- a day-shift in a cell the"
+        " record-quality term does not cover, so no term touches it. The"
+        " four-hour exclusion does not reach it either: that rule is"
+        " **fit-side only**, keeping day-shifts out of the fitting sample and"
+        " never out of the scoring set, and this is a validation row. So it is"
+        " scored at its recorded value." + scored + " The rule that admitted the"
+        " Gate 2c blocks was read on the pooled figure as it was fixed, and is"
+        " not re-read here.",
+    ]
+
+
 def section_largest(legs: dict) -> list[str]:
     """The handful of rows that carry a tenth of a split each."""
     rows = []
@@ -450,22 +509,7 @@ def section_largest(legs: dict) -> list[str]:
             )
         first = top.iloc[0] if len(top) else None
         if first is not None and label == "July, all ten airports":
-            note = [
-                "",
-                f"**One row is {pct(float(first['sq']) / sse, 0)} of the July split's"
-                f" squared error.** A departure at {first['icao']} recording a taxi-out"
-                f" of {float(first[TARGET]):,.0f} seconds -- a day-shift in a cell the"
-                " record-quality term does not cover, so no term touches it. The"
-                " four-hour exclusion does not reach it either: that rule is"
-                " **fit-side only**, keeping day-shifts out of the fitting sample and"
-                " never out of the scoring set, and this is a validation row. So it is"
-                " scored at its recorded value. **July 2026 contains no"
-                f" {first['icao']} rows.** That is why the paper quotes the"
-                " three-airport July figure for the submitted model and why the pooled"
-                " one stays in [`baseline.md`](baseline.md) with this reason beside"
-                " it. The rule that admitted the Gate 2c blocks was read on the pooled"
-                " figure as it was fixed, and is not re-read here.",
-            ]
+            note = _july_note(first, sse)
     return [
         "## The largest rows",
         "",

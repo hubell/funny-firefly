@@ -72,8 +72,8 @@ DECEMBER_VALID = ("2025-12",)
 JULY_TRAIN = tuple(f"2025-{m:02d}" for m in range(1, 7))
 JULY_VALID = ("2025-07",)
 
-# The three airports July 2026 contains, and so the only ones the July split
-# reports separately.
+# The three airports the ranking file of 2 September held in July 2026 (the
+# re-issue of 4 September holds all ten); the July split reports them apart.
 JULY_AIRPORTS = ("EDDF", "EGLL", "EHAM")
 
 PAIR_FOLDS = 3

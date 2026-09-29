@@ -241,3 +241,29 @@ def test_the_peak_hours_are_read_off_the_squared_error():
     assert rr._peak_hours(frame, 2) == ["06", "07"]
     assert rr._hours_label(["06", "07"]) == "06:00 to 07:59 UTC"
     assert rr._hours_label(["06", "08"]) == "06:00, 08:00 UTC"
+
+
+def test_the_july_note_says_what_the_ranking_file_holds(monkeypatch):
+    """The sentence on the one July row follows the ranking file, not a fixed text.
+
+    Until 28 September 2026 it read "July 2026 contains no LIRF rows", true of
+    the ranking file of 2 September and false of the one re-issued on
+    4 September. Both branches are asserted: the count is printed when the
+    scored month holds the airport, and the earlier sentence stands when it
+    does not. Neither prints a stand.
+    """
+    first = pd.Series({"icao": "LIRF", TARGET: 87002.0, "sq": 1.0e9, "stand": "A12"})
+
+    monkeypatch.setattr(rr, "ranking_july_departures", lambda icao: 15838)
+    text = "\n".join(rr._july_note(first, 3.0e9))
+    assert "**One row is 33% of the July split's squared error.**" in text
+    assert "**July 2026 holds 15,838 LIRF departures**" in text
+    assert "ten-airport July figure" in text
+    assert "contains no" not in text
+    assert "A12" not in text
+
+    monkeypatch.setattr(rr, "ranking_july_departures", lambda icao: 0)
+    text = "\n".join(rr._july_note(first, 3.0e9))
+    assert "**July 2026 contains no LIRF rows.**" in text
+    assert "three-airport July figure" in text
+    assert "holds" not in text
