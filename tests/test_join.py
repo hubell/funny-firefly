@@ -22,7 +22,7 @@ from taxiout.routing import AGGREGATED_FIELDS  # noqa: E402
 @pytest.mark.parametrize(
     ("value", "stage", "expected"),
     [
-        ("v 117", 1, "V117"),
+        ("w 998", 1, "W998"),
         (" b05 ", 1, "B05"),
         ("B05", 2, "B5"),
         ("B005", 2, "B5"),
@@ -31,7 +31,7 @@ from taxiout.routing import AGGREGATED_FIELDS  # noqa: E402
         ("101L", 3, "101"),
         ("A1L", 3, "A1"),
         ("A1", 3, "A1"),
-        ("GA6", 3, "GA6"),  # letter before the digit is a prefix, kept
+        ("QZ6", 3, "QZ6"),  # letter before the digit is a prefix, kept
         ("AB", 3, "AB"),
     ],
 )
@@ -42,10 +42,10 @@ def test_normalise_stages(value, stage, expected):
 @pytest.mark.parametrize(
     ("value", "expected"),
     [
-        ("1 1A", ["1", "1A"]),
-        ("Y01;Y02", ["Y01", "Y02"]),
-        ("V 117", ["V 117"]),  # a pier letter alone is not an identifier
-        ("A26 A28", ["A26", "A28"]),
+        ("9 9Z", ["9", "9Z"]),
+        ("Q98;Q99", ["Q98", "Q99"]),
+        ("W 998", ["W 998"]),  # a pier letter alone is not an identifier
+        ("Q97 Q99", ["Q97", "Q99"]),
         ("Link W", ["Link W"]),
         ("B05", ["B05"]),
     ],
@@ -74,9 +74,9 @@ def _matrix(rows: list[tuple[str, str, float]]) -> pd.DataFrame:
 
 
 def test_expand_compound_duplicates_the_cell():
-    m = _matrix([("1 1A", "27", 1000.0)])
+    m = _matrix([("9 9Z", "27", 1000.0)])
     e = expand_compound(m)
-    assert sorted(e["stand_id"]) == ["1", "1A"]
+    assert sorted(e["stand_id"]) == ["9", "9Z"]
     assert (e["taxi_m"] == 1000.0).all()
 
 

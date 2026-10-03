@@ -222,8 +222,11 @@ echo "ok  suite, ruff, licence and provenance all pass with data/ absent"
 tail -3 "$work/replica.txt" | sed 's/^/  /'
 
 say "this script names nothing it must not, and carries no trailer"
-if grep -n -i -E '[c]laude|[a]nthropic|[c]hatgpt|[c]opilot|[a]ssistant|[c]o-authored-by|[c]owork' \
-        scripts/commit_equivalence.sh; then
+# The words the licence gate holds as digests, read by the gate's own function,
+# and the one more word this script refuses.
+if "$PY" -c 'import importlib.util, sys; s = importlib.util.spec_from_file_location("h", "scripts/check_licence_hygiene.py"); h = importlib.util.module_from_spec(s); s.loader.exec_module(h); sys.exit(not h.attribution_in(open(sys.argv[1], encoding="utf-8").read()))' \
+        scripts/commit_equivalence.sh \
+   || grep -n -i -E '[a]ssistant' scripts/commit_equivalence.sh; then
     echo "the script names something it must not"
     exit 1
 fi

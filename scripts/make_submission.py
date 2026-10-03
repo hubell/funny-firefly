@@ -54,7 +54,9 @@ edge sets under ``data/processed/taxi_distance/`` (``make reports``), the METAR
 cache under ``data/raw/metar/`` (``make metar``) and the OurAirports table under
 ``data/raw/`` (``make ourairports``), which the weather and destination blocks
 read and without either of which this refuses to write, and the modelling
-extras. Takes a few minutes.
+extras. Takes about half an hour on eight cores: v7, the five-seed file, took
+32 min 26 s on 2 October 2026 by ``/usr/bin/time``, and its second build that
+day, byte for byte the same file, 31 min 2 s.
 
 Usage
 -----

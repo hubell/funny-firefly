@@ -13,6 +13,7 @@ either, and by the copy's words for the other side.
 from __future__ import annotations
 
 import hashlib
+import os
 import re
 import sys
 from pathlib import Path
@@ -20,7 +21,9 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).resolve().parents[1]
-NOTES = Path("/mnt/data2tb/linux_handover/notes")
+# The working notes are on hand where the environment variable names their
+# directory; there is no default, and without it each copy is checked alone.
+NOTES = os.environ.get("PREREGISTRATION_NOTES")
 PUBLISHED_TAIL = "\n## What differs from the note\n"
 # A numbered work block, with or without a letter after its number; and a dated
 # working note's file name, ``preregistered.NOTE_REFERENCE_TOKEN`` held here so
@@ -33,7 +36,7 @@ NOTE_1003 = "91e3306ef2b5e0efd6ab8d0a5c0ed9e2fc29ed0b0015bb4af8e96c6a2a601662"
 
 COPIES = {
     "reports/preregistered-2026-09-28.md": (
-        NOTES / "preregistration_2026-09-28.md",
+        "preregistration_2026-09-28.md",
         NOTE_0928,
         (
             (
@@ -52,7 +55,7 @@ COPIES = {
         ),
     ),
     "reports/preregistered-2026-10-03.md": (
-        NOTES / "preregistration_2026-10-03_candidates.md",
+        "preregistration_2026-10-03_candidates.md",
         NOTE_1003,
         (
             (
@@ -73,9 +76,13 @@ def test_the_note_with_the_listed_substitutions_is_the_published_copy(path):
     """Where the note is on hand: its digest first, then each listed
     substitution applied once, and the result is the published copy up to its
     closing section byte for byte, which is all the copy adds after it."""
-    note, note_sha, substitutions = COPIES[path]
-    if not note.exists():
-        pytest.skip("the working note is not on this machine; the copy is checked alone")
+    name, note_sha, substitutions = COPIES[path]
+    note = Path(NOTES or ".") / name
+    if not NOTES or not note.exists():
+        pytest.skip(
+            "the working note is not on hand; the copy is checked alone"
+            " (PREREGISTRATION_NOTES names the notes' directory)"
+        )
     raw = note.read_bytes()
     assert hashlib.sha256(raw).hexdigest() == note_sha
     text = raw.decode("utf-8")
@@ -97,7 +104,7 @@ def test_the_published_copy_names_no_work_block_and_credits_openstreetmap(path):
     assert not re.search(r"\bblock\d+[a-z]*\b", copy)
     assert not re.search(r"\bcha[t]\b|\bsessio[n]\b", copy, re.IGNORECASE)
     assert not re.search(NOTE_REFERENCE_TOKEN, copy)
-    assert not re.search(hygiene.ATTRIBUTION_PATTERN, copy, re.IGNORECASE)
+    assert not hygiene.attribution_in(copy)
     assert copy.count(hygiene.ATTRIBUTION) == 1
     # and the note's digest, which fixed the order, is the one it names in full
     assert set(re.findall(r"`([0-9a-f]{64})`", copy)) == {COPIES[path][1]}

@@ -25,22 +25,22 @@ the gate's job is to prove there is no fifth.
 
 ## The constants
 
-`taxiout.provenance.CONSTANTS` carries **229** entries, one
+`taxiout.provenance.CONSTANTS` carries **258** entries, one
 per module-level numeric assignment the scanner finds outside the
-authored artifact. The scanner finds **283** in all, of which
+authored artifact. The scanner finds **312** in all, of which
 **50** are in `src/taxiout/synthetic.py` and are covered by
 `AUTHORED_ARTIFACTS` as a module rather than one by one.
 
 | class | entries | what it means |
 | --- | ---: | --- |
-| `mechanism` | 91 | definitional or a unit conversion; nobody chose it |
-| `chosen` | 106 | somebody picked it, and the basis says what against |
+| `mechanism` | 113 | definitional or a unit conversion; nobody chose it |
+| `chosen` | 110 | somebody picked it, and the basis says what against |
 | `derived` | 1 | computed from the data and frozen into the source |
-| `quoted` | 31 | a measurement from a named run or document |
+| `quoted` | 34 | a measurement from a named run or document |
 
-**Of the 106 chosen constants, 14 record
+**Of the 110 chosen constants, 14 record
 no reason at all, and a further
-11 record the method, the convention or a neighbouring
+15 record the method, the convention or a neighbouring
 use and not the value.** That is the finding this register was built to
 produce: `HEADROOM_TRIGGER_S` was chosen with a stated reason and no
 recorded basis, and turned out to be an absolute line on a quantity
@@ -81,13 +81,17 @@ either direction without somebody seeing it.
 | `src/taxiout/validation.py` | `PAIR_FOLDS` | method recorded, value not argued |
 | `src/taxiout/validation.py` | `SEEN_FRACTION` | method recorded, value not argued |
 | `src/taxiout/validation.py` | `BOOTSTRAP_LEVEL` | method recorded, value not argued |
+| `scripts/fetch_metar_history.py` | `FIRST_YEAR` | method recorded, value not argued |
+| `scripts/monthly.py` | `MIN_CELL_ROWS` | method recorded, value not argued |
+| `scripts/report_fiumicino.py` | `NAMED` | method recorded, value not argued |
+| `scripts/report_monthly_ladder.py` | `MIN_CELL_ROWS` | method recorded, value not argued |
 | `scripts/report_residual.py` | `PEAK_HOURS` | method recorded, value not argued |
 | `scripts/report_residual.py` | `NAMED_PREFIXES` | method recorded, value not argued |
 | `scripts/review_challenge_data.py` | `FLT_SAME_RATE` | method recorded, value not argued |
 
 ## What a report declares it was generated from
 
-**15** generators write a footer naming every
+**22** generators write a footer naming every
 path the run read, with a sha256 each; check 8 recomputes them and calls
 the report verified, stale or unverifiable. The rule for who carries one
 is the Makefile's own measured time: under five minutes and the generator
@@ -197,12 +201,18 @@ its reason.
 | §7.1.1 | +0.37 | Experiment 2 or 3 of 20 September, run under the parameters then in force and not repeated under the parameters that ship, so the figure is that day's and matches only the dated record the experiments wrote. The subsection's heading, its first paragraph and the sentence quoting the figure all say so |
 | §7.1.1 | 0.19 | Experiment 2 or 3 of 20 September, run under the parameters then in force and not repeated under the parameters that ship, so the figure is that day's and matches only the dated record the experiments wrote. The subsection's heading, its first paragraph and the sentence quoting the figure all say so |
 
-**11** figures are computed from report
+**22** figures are computed from report
 figures rather than quoted, each with the arithmetic the check verifies,
 the operands it reads from the cited sections, and the reason.
 
 | section | figure | arithmetic | operands | why |
 | --- | --- | --- | --- | --- |
+| §7.2 | -1.5 | `320.2 - 321.7` | 320.2, 321.7 | the aircraft block's change on the December split: `identifiers + time + geometry + aircraft` against `identifiers + time + geometry`, ex-flagged |
+| §7.2 | -3.8 | `407.3 - 411.1` | 407.3, 411.1 | the same change on the July split |
+| §7.2 | -79.3 | `240.9 - 320.2` | 240.9, 320.2 | the plan-lag block's step on the December split: `identifiers + time + geometry + aircraft` to `+ plan lags`, ex-flagged |
+| §7.2 | -57.4 | `349.9 - 407.3` | 349.9, 407.3 | the same step on the July split, ex-flagged |
+| §7.2 | -7.7 | `233.2 - 240.9` | 233.2, 240.9 | what every congestion and weather block is worth net of the plan lags on the December split: `+ plan lags` to `+ weather`, ex-flagged |
+| §7.2 | -5.8 | `344.1 - 349.9` | 344.1, 349.9 | the same, on the July split |
 | §1.2 | 79.3 | `320.2 - 240.9` | 320.2, 240.9 | the plan-lag block's step on the December split: `identifiers + time + geometry + aircraft` to `+ plan lags`, ex-flagged |
 | §1.2 | 57.4 | `407.3 - 349.9` | 407.3, 349.9 | the same step on the July split, ex-flagged |
 | §1.2 | 7.7 | `240.9 - 233.2` | 240.9, 233.2 | what every congestion and weather block is worth net of the plan lags on the December split: `+ plan lags` to `+ weather`, ex-flagged |
@@ -214,18 +224,23 @@ the operands it reads from the cited sections, and the reason.
 | §6.3 | 7.7 | `240.9 - 233.2` | 240.9, 233.2 | what every congestion and weather block is worth net of the plan lags on the December split: `+ plan lags` to `+ weather`, ex-flagged |
 | §6.3 | 5.8 | `349.9 - 344.1` | 349.9, 344.1 | the same, on the July split |
 | §7.1.2 | 0.27 | `0.19 / 2 ** (1 / 2) * 1.998` | 0.19 | the winner's curse of the sweep, an expectation and not a measurement, as the sentence says: the standard deviation one seed carries, the floor of 0.19 s divided by root two, times the expected value of the largest of twenty-seven independent standard normal draws, 1.998, which is the integral of x n phi(x) Phi(x) to the power n minus one over the real line at n equal to 27, computed by numerical integration and reproducible by anyone. The expectation is the largest the shortfall can be, reached when every cell sits at one level, and the sentence says that too. 0.19 is quoted from `src/taxiout/models.py`; 1.998 is a constant of the arithmetic |
+| §4 | 332.1 | `(300 ** 2 + (86820 - 3120) ** 2 / 344841) ** (1 / 2)` | 86,820, 3,120, 344,841 | the frozen model's prediction, if the row recorded the lag: the one plan-shifted ranking departure of §4, priced in score terms: a base score of 300 s over the 344,841 rows, the row's squared residual added to the mean squared error and the root taken. 300 is an assumption about the base and the sentence says so; the row's two readings are the lag it would record as a day-shift, 86,820 s, and the airport's rest mean for an ordinary taxi-out, 1,144.2 s, both quoted from `reports/planshift.md`, as are the two predictions, 3,120 s before the rule and 52,550 s under it; 344,841 is the ranking set's row count |
+| §4 | 305.6 | `(300 ** 2 + (86820 - 52550) ** 2 / 344841) ** (1 / 2)` | 86,820, 52,550, 344,841 | the rule's prediction, if the row recorded the lag: the one plan-shifted ranking departure of §4, priced in score terms: a base score of 300 s over the 344,841 rows, the row's squared residual added to the mean squared error and the root taken. 300 is an assumption about the base and the sentence says so; the row's two readings are the lag it would record as a day-shift, 86,820 s, and the airport's rest mean for an ordinary taxi-out, 1,144.2 s, both quoted from `reports/planshift.md`, as are the two predictions, 3,120 s before the rule and 52,550 s under it; 344,841 is the ranking set's row count |
+| §4 | 300.0 | `(300 ** 2 + (1144.2 - 3120) ** 2 / 344841) ** (1 / 2)` | 1,144.2, 3,120, 344,841 | the frozen model's prediction, if the row recorded an ordinary taxi-out: the one plan-shifted ranking departure of §4, priced in score terms: a base score of 300 s over the 344,841 rows, the row's squared residual added to the mean squared error and the root taken. 300 is an assumption about the base and the sentence says so; the row's two readings are the lag it would record as a day-shift, 86,820 s, and the airport's rest mean for an ordinary taxi-out, 1,144.2 s, both quoted from `reports/planshift.md`, as are the two predictions, 3,120 s before the rule and 52,550 s under it; 344,841 is the ranking set's row count |
+| §4 | 312.5 | `(300 ** 2 + (1144.2 - 52550) ** 2 / 344841) ** (1 / 2)` | 1,144.2, 52,550, 344,841 | the rule's prediction, if the row recorded an ordinary taxi-out: the one plan-shifted ranking departure of §4, priced in score terms: a base score of 300 s over the 344,841 rows, the row's squared residual added to the mean squared error and the root taken. 300 is an assumption about the base and the sentence says so; the row's two readings are the lag it would record as a day-shift, 86,820 s, and the airport's rest mean for an ordinary taxi-out, 1,144.2 s, both quoted from `reports/planshift.md`, as are the two predictions, 3,120 s before the rule and 52,550 s under it; 344,841 is the ranking set's row count |
+| §8.4 | 4.2 | `265.7 - 261.5` | 265.7, 261.5 | the five congestion and weather blocks together, net of the plan lags, over the held-out year: `+ plan lags` minus `+ weather`, both pooled ex-flagged figures of `reports/monthly_ladder.md`, *Summary: the year, pooled from the twelve months* |
 
 ## Authored artifacts
 
 **`src/taxiout/synthetic.py`** -- a fictional airfield where every distance, turn and repair is hand-derived, with worked traffic in the challenge's own schema so the pipeline runs end to end without the challenge data. Its numeric constants ARE the field's definition, which is why the module is registered once here rather than constant by constant: there is no provenance question to answer about the coordinates of an invented stand.
 
 The condition that makes it safe: **no generator of a model figure imports it**. Check 4 proves
-it against 11 named generators rather
+it against 20 named generators rather
 than this record claiming it.
 
 ## Frozen documents
 
-**15** dated records, each with a sha256. These need
+**14** dated records, each with a sha256. These need
 the opposite gate from every other file here: the risk is not that they go
 stale, it is that somebody edits them. A currency check over one would
 demand destroying the record.
@@ -239,7 +254,6 @@ demand destroying the record.
 | `reports/row-wise-2026-09-11.md` | a dated measurement of one booster setting |
 | `reports/threads-2026-09-12.md` | a dated measurement of what the thread count changes |
 | `reports/container-2026-09-12.md` | a dated record of the reference container's pins |
-| `reports/submission-2026-09-19.md` | a dated record of one scored file, written at the tree it was built from |
 | `reports/preregistered-2026-09-20.md` | the pre-registered experiments and their verdicts, and the source of `sweep_params.BLOCK_07_OCTOBER_*`. Its criteria were fixed before its numbers existed and the document is the proof of that order |
 | `reports/determinism.md` | a measurement campaign of 59 fits on one rung and one split, made under the parameters of its day and reported as such. Its 90 records under `data/processed/determinism/` hold arrays derived from the challenge data, are not redistributed, and no target reruns the campaign, so a clean checkout cannot regenerate it and must not be asked to. Moved here on 27 September 2026, from the live set, after the clean-checkout reproduction found it the one report it could not regenerate; the file itself is unchanged since the freeze commit |
 | `reports/reproduction-2026-09-27.md` | the dated record of the frozen commit reproduced from a clean clone at the tag: the pinned fetch, the matrices, the residuals, fourteen reports and the submission, each compared with what the commit carries. Its value is that it was measured once, on its date, against that commit |

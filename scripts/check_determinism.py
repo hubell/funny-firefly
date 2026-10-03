@@ -121,10 +121,12 @@ CONFIGS: dict[str, dict[str, object]] = {
 }
 
 # At or below this, two predictions come from the same trees and differ in the
-# last few bits; above it, a split went the other way somewhere. The two
-# comparisons already on file (reports/linux-residuals-delta.txt and
-# reports/linux-run2-vs-run1.txt) put the largest near-identical file at 9e-9 s
-# and the smallest whole-tree one at 0.6 s, so the line is not delicate.
+# last few bits; above it, a split went the other way somewhere. Two
+# comparisons put the largest near-identical file at 9e-9 s and the smallest
+# whole-tree one at 0.6 s, so the line is not delicate: the one on file,
+# reports/linux-run2-vs-run1.txt, and the residual comparison of the Linux
+# migration, which the repository's history keeps as
+# reports/linux-residuals-delta.txt (removed from the tree in October 2026).
 SAME_TREES_S = 1e-6
 
 # The report must carry this phrase, and ``make licence-check`` looks for it.

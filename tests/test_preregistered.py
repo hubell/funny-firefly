@@ -441,21 +441,21 @@ def test_the_report_refuses_a_stand_identifier():
 
 
 def test_the_report_refuses_a_movement_identifier():
-    text = "The largest residual is on movement 202501153, at EDDF."
+    text = "The largest residual is on movement 900000001, at EDDF."
     with pytest.raises(SystemExit, match="movement identifier"):
-        pr.check_no_identifiers(text, set(), {"202501153"})
+        pr.check_no_identifiers(text, set(), {"900000001"})
 
 
 def test_the_report_allows_an_airport_code_and_a_figure():
     """ICAO codes are public, and a number that is not an identifier is a figure."""
     text = "EDDF, EGLL and EHAM pooled at 237.8 s over 20,790 rows in 1,234 s."
-    pr.check_no_identifiers(text, {"EDDF", "A12"}, {"202501153"})
+    pr.check_no_identifiers(text, {"EDDF", "A12"}, {"900000001"})
 
 
 def test_a_movement_identifier_inside_a_digest_is_not_a_hit():
     """The word boundaries are the test, so a hex digest cannot trip it."""
-    text = "digest `f3202501153ab...`, over 12 rows"
-    pr.check_no_identifiers(text, set(), {"202501153"})
+    text = "digest `f3900000001ab...`, over 12 rows"
+    pr.check_no_identifiers(text, set(), {"900000001"})
 
 
 def test_the_pre_registration_carried_here_names_no_session_and_no_note():
@@ -468,16 +468,15 @@ def test_the_pre_registration_carried_here_names_no_session_and_no_note():
     test carries none of the words it is looking for and cannot drift from
     the gate.
     """
-    import re
 
     import check_licence_hygiene as hygiene
 
     body = pr.PREREGISTRATION
     assert "Block 0" not in body and "Block 1" not in body
     assert "2026-09-19.md" not in body and "2026-09-20.md" not in body
-    assert not re.findall(hygiene.ATTRIBUTION_PATTERN, body, re.IGNORECASE)
+    assert not hygiene.attribution_in(body)
     # And the same over the whole report, which is what gets published.
-    assert not re.findall(hygiene.ATTRIBUTION_PATTERN, pr.__doc__, re.IGNORECASE)
+    assert not hygiene.attribution_in(pr.__doc__)
 
 
 def test_the_criteria_are_constants_and_not_computed():
@@ -662,7 +661,7 @@ def test_the_report_builds_from_the_records_and_says_nothing_shipped(
     for n in (1, 2, 3):
         assert text.count(f"## What Experiment {n} measured") == 1
         assert text.count(f"## Experiment {n}:") == 1
-    pr.check_no_identifiers(text, {"A12"}, {"202501153"})
+    pr.check_no_identifiers(text, {"A12"}, {"900000001"})
 
 
 def test_a_stopped_run_writes_a_report_that_reads_no_figure(tmp_path, monkeypatch):
@@ -747,6 +746,25 @@ def test_the_list_holds_only_the_published_side():
 def test_every_kind_in_the_list_is_one_of_the_two():
     assert {p.kind for p in pr.SUBSTITUTIONS} == {pr.WORK_BLOCK, pr.NOTE_REFERENCE}
     assert all(p.tokens >= 1 for p in pr.SUBSTITUTIONS)
+
+
+def test_the_note_comes_from_the_environment_and_has_no_default(monkeypatch, tmp_path):
+    """No path on any machine is written into the script: without the variable
+    there is no note, and with it the note is the record's file in that
+    directory. ``--note`` sets the same name from the command line."""
+    import importlib.util
+
+    script = Path(pr.__file__)
+    for value, want in ((None, None), (str(tmp_path), tmp_path / pr.NOTE_NAME)):
+        if value is None:
+            monkeypatch.delenv(pr.NOTES_ENV, raising=False)
+        else:
+            monkeypatch.setenv(pr.NOTES_ENV, value)
+        spec = importlib.util.spec_from_file_location("_preregistered_env", script)
+        module = importlib.util.module_from_spec(spec)
+        monkeypatch.setitem(sys.modules, "_preregistered_env", module)
+        spec.loader.exec_module(module)
+        assert module.NOTE == want
 
 
 def test_a_clean_checkout_still_audits_against_the_published_text(monkeypatch, tmp_path):

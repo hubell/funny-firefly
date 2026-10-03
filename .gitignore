@@ -1,11 +1,11 @@
-# cached upstream data — regenerate with scripts/fetch_osm.py
+# cached upstream data: regenerate with scripts/fetch_osm.py
 data/raw/
 data/interim/
 data/processed/*
 
 # The generated distance matrices are deliberately NOT committed. They are a
 # Derivative Database of OpenStreetMap and carry ODbL, which is not ours to
-# waive — committing them would put a second licence in a repository that ships
+# waive; committing them would put a second licence in a repository that ships
 # GPLv3 in totality. See data/processed/taxi_distance/ODbL-NOTICE.md, which is
 # committed because it is our own documentation rather than OSM-derived data.
 !data/processed/taxi_distance/
@@ -27,15 +27,7 @@ data/challenge/*
 # it, so nothing in this directory is ever committed by a stray `git add`.
 data/submissions/
 
-# Assistant configuration and instructions. The repository carries no trace of
-# what wrote it, and these are the two paths that would carry one: neither was
-# ignored, so `git add -A` would have committed the local settings file against
-# that rule. scripts/check_licence_hygiene.py lists both as forbidden as well,
-# so removing these two lines fails the gate rather than passing quietly.
-.claude/
-CLAUDE.md
-
-# credentials — Minio/OpenSky bucket keys
+# credentials: Minio/OpenSky bucket keys
 .env
 *.env
 secrets.toml

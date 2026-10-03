@@ -1644,7 +1644,7 @@ def guard(text: str, stands: set[str], movements: set[str]) -> None:
         raise SystemExit(
             "refusing to write the report: it names a work block or where work was discussed"
         )
-    if re.search(hygiene.ATTRIBUTION_PATTERN, text, re.I):
+    if hygiene.attribution_in(text):
         raise SystemExit("refusing to write the report: it names an assistant or a tool")
     if "\u2014" in text or "\u2013" in text:
         raise SystemExit(

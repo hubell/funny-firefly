@@ -29,12 +29,18 @@ dependencies = [
 # requirement on additional datasets without the question arising. The floor is
 # where the country calendars this reads settled; the version the reports were
 # generated with is recorded in the README beside the other data sources.
+# `scikit-learn` is the one entry nothing here imports. It stays because every
+# report was generated with it installed (requirements-freeze.txt records the
+# version) and the container's smoke test imports it. `threadpoolctl` is
+# imported by scripts/check_determinism.py, which records the BLAS thread pools;
+# until it was declared here it was installed only because scikit-learn needs it.
 modelling = [
     "numpy>=1.26",
     "pandas>=2.1",
     "pyarrow>=19.0.1",
     "scipy>=1.11",
     "scikit-learn>=1.4",
+    "threadpoolctl>=3",
     "catboost>=1.2",
     "lightgbm>=4.3",
     "holidays>=0.60",

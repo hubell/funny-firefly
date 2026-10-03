@@ -143,15 +143,21 @@ _REPO_ROOT_MODULES: tuple[str, ...] = (
     "scripts/check_runways_ourairports.py",
     "scripts/fast_lane.py",
     "scripts/fetch_metar.py",
+    "scripts/fetch_metar_history.py",
     "scripts/fetch_osm.py",
     "scripts/fetch_ourairports.py",
+    "scripts/fit_monthly_pairs.py",
+    "scripts/fit_monthly_seeds.py",
     "scripts/make_submission.py",
+    "scripts/monthly.py",
     "scripts/pooled_tails.py",
     "scripts/preregistered.py",
     "scripts/report_congestion.py",
     "scripts/report_coverage.py",
     "scripts/report_geometry_gaps.py",
     "scripts/report_headroom.py",
+    "scripts/report_monthly.py",
+    "scripts/report_monthly_ladder.py",
     "scripts/report_occupancy.py",
     "scripts/report_residual.py",
     "scripts/report_submission.py",
@@ -193,17 +199,17 @@ _SCRIPTS: tuple[Constant, ...] = (
     *_mod(
         "scripts/check_licence_hygiene.py",
         (
-            "HISTORY_DEPTH",
-            (40,),
-            CHOSEN,
-            "line 204: deep enough to cover a batch of commits made by one"
-            " script, shallow enough to stay fast on every run",
+            "ATTRIBUTION_WORDS",
+            (6, 6, 9, 7, 7, 6, 14),
+            MECHANISM,
+            "the length of each held word beside its digest, which the window"
+            " scan cuts to: read off the word, not chosen",
         ),
         (
             "LEAK_THRESHOLD",
             (3,),
             CHOSEN,
-            "line 208, and the module docstring: one match is a coincidence and"
+            "line 263, and the module docstring: one match is a coincidence and"
             " a list is a leak, so a file is flagged only at three or more",
         ),
     ),
@@ -272,6 +278,33 @@ _SCRIPTS: tuple[Constant, ...] = (
         ),
     ),
     *_mod(
+        "scripts/fetch_metar_history.py",
+        (
+            "FIRST_YEAR",
+            (2015,),
+            CHOSEN,
+            VALUE_NOT_JUSTIFIED + ": the first of the ten calendar years before the"
+            " training year whose METARs set each airport-month of 2025 against a"
+            " norm, in one context table of `reports/monthly_ladder.md` (Annex E)."
+            " Nothing in a model figure reads the history. No reason for ten years"
+            " rather than a neighboring span is recorded",
+        ),
+        (
+            "LAST_YEAR",
+            (2024,),
+            MECHANISM,
+            "the year before the training year, so the history ends where the"
+            " model's own cache, `data/raw/metar/`, begins",
+        ),
+        (
+            "PERIODS",
+            (1, 1),
+            MECHANISM,
+            "a calendar year runs to the next one's first day, and `range` stops"
+            " one before its end",
+        ),
+    ),
+    *_mod(
         "scripts/fetch_ourairports.py",
         (
             "PAUSE_S",
@@ -291,6 +324,38 @@ _SCRIPTS: tuple[Constant, ...] = (
             (120,),
             CHOSEN,
             "robustness: the socket timeout on that request." + FETCH_BASIS,
+        ),
+    ),
+    *_mod(
+        "scripts/fit_monthly_seeds.py",
+        (
+            "OFFSETS",
+            (1, 2, 3, 4),
+            MECHANISM,
+            "the submission's seed offsets after the ladder's own, 0: the module"
+            " refuses to load unless `(0,) + OFFSETS` is"
+            " `range(taxiout.models.BAGGING_SEEDS)`, so the value is that"
+            " registered constant's and not a choice made here",
+        ),
+    ),
+    *_mod(
+        "scripts/monthly.py",
+        (
+            "DAY_SHIFT_S",
+            (3600.0,),
+            MECHANISM,
+            "seconds in an hour, converting `TAIL_EXCLUSION_ADOPTED_H`",
+        ),
+        (
+            "MIN_CELL_ROWS",
+            (30,),
+            CHOSEN,
+            VALUE_NOT_JUSTIFIED + ": below this many rows a cell prints its row"
+            " count instead of its figure, so a cell of a handful of rows is not"
+            " read as a rate. The same value and rule as"
+            " `scripts/report_monthly_ladder.py`'s, whose cells these reports set"
+            " beside their own; no reason for thirty rather than a neighboring"
+            " count is recorded",
         ),
     ),
     *_mod(
@@ -454,6 +519,27 @@ _SCRIPTS: tuple[Constant, ...] = (
         ("OCTOBER_TRAIN", (1, 10), MECHANISM, "a month range, not a quantity"),
     ),
     *_mod(
+        "scripts/report_fiumicino.py",
+        (
+            "LAG_EDGES_MIN",
+            (0, 15, 30, 45, 60, 120),
+            CHOSEN,
+            "the plan-lag bands of `scripts/report_residual.py`, whose"
+            " `LAG_EDGES_MIN` holds the same six edges and carries the reason;"
+            " written out again so the shares are read in the bands"
+            " `reports/residual.md` prints",
+        ),
+        (
+            "NAMED",
+            (10,),
+            CHOSEN,
+            VALUE_NOT_JUSTIFIED + ": how many airline designators are named before"
+            " the rest are pooled, the count `scripts/report_residual.py`'s"
+            " `NAMED_PREFIXES` uses for the same designators, where it is on the"
+            " same terms",
+        ),
+    ),
+    *_mod(
         "scripts/report_geometry_gaps.py",
         (
             "MIN_PAIR_ROWS",
@@ -572,6 +658,90 @@ _SCRIPTS: tuple[Constant, ...] = (
         ),
     ),
     *_mod(
+        "scripts/report_istanbul.py",
+        (
+            "LOW_VIS_BAND",
+            (2.0,),
+            MECHANISM,
+            "the value `taxiout.metar` gives the visibility band below"
+            " `VIS_LOW_M`, where low-visibility procedures apply; a label of"
+            " that module's banding, not a threshold chosen here",
+        ),
+    ),
+    *_mod(
+        "scripts/report_monthly.py",
+        ("MONTHS", (1, 13), MECHANISM, "the twelve calendar months of the training year"),
+        (
+            "SEED",
+            (0,),
+            MECHANISM,
+            'the offset on `BOOSTER_PARAMS["random_state"]` that is the ladder\'s'
+            " own model: every rung of the ladder is fitted at offset 0",
+        ),
+        (
+            "REF_FORWARD",
+            (214.7, 234.0, 364.8, 322.4, 368.2, 620.5),
+            QUOTED,
+            "`reports/baseline.md`'s ladder tables, `+ plan differences` on the"
+            " December and July splits: excluding flagged rows, every row with"
+            " the record-quality term, every row without it. The forward legs are"
+            " checked against them before any held-out leg is fitted, and a"
+            " difference at the printed precision stops the fit. Regenerable by"
+            " the ladder",
+        ),
+    ),
+    *_mod(
+        "scripts/report_monthly_ladder.py",
+        (
+            "DAY_SHIFT_S",
+            (3600.0,),
+            MECHANISM,
+            "seconds in an hour, converting `TAIL_EXCLUSION_ADOPTED_H`",
+        ),
+        (
+            "MIN_CELL_ROWS",
+            (30,),
+            CHOSEN,
+            VALUE_NOT_JUSTIFIED + ": below this many rows an annex cell prints its"
+            " row count instead of its figure, so an airport-month, an hour or a"
+            " runway of a handful of rows is not read as a rate. The rule is"
+            " stated in `reports/monthly_ladder.md`; no reason for thirty rather"
+            " than a neighboring count is recorded",
+        ),
+        (
+            "YEAR",
+            (2025,),
+            MECHANISM,
+            "the training year, the calendar year the model's own METAR cache holds",
+        ),
+        (
+            "HISTORY_YEARS",
+            (2015, 2025),
+            MECHANISM,
+            "the ten calendar years `scripts/fetch_metar_history.py` fetches,"
+            " `FIRST_YEAR` to `LAST_YEAR` there, written as a `range` that stops"
+            " before the training year",
+        ),
+        (
+            "LOW_VIS_BAND",
+            (2.0,),
+            MECHANISM,
+            "the value `taxiout.metar` gives the visibility band below"
+            " `VIS_LOW_M`, where low-visibility procedures apply; a label of"
+            " that module's banding, not a threshold chosen here",
+        ),
+    ),
+    *_mod(
+        "scripts/report_monthly_seeds.py",
+        (
+            "OFFSETS",
+            (0,),
+            MECHANISM,
+            "offset 0, the held-out-month fit's own seed, put before"
+            " `fit_monthly_seeds.OFFSETS` so the five are the submission's",
+        ),
+    ),
+    *_mod(
         "scripts/report_occupancy.py",
         (
             "GAIN_BAND_EDGES_MIN",
@@ -608,6 +778,44 @@ _SCRIPTS: tuple[Constant, ...] = (
             CHOSEN,
             "line 163: the caps the hard floor is tried at, on the reasoning"
             " that the bound is sound at short gaps and collapses at long ones",
+        ),
+    ),
+    *_mod(
+        "scripts/report_planshift.py",
+        (
+            "THRESHOLD_S",
+            (3600.0,),
+            MECHANISM,
+            "seconds in an hour, converting `TAIL_EXCLUSION_ADOPTED_H`",
+        ),
+        (
+            "EXPECTED_TRAINING",
+            (3, 2),
+            QUOTED,
+            "`reports/preregistered-2026-10-02.md`: three training departures in"
+            " the class, two of them long, the counts the rule was written"
+            " knowing. A different count is the pre-registration's second stop,"
+            " and the report is not written",
+        ),
+        (
+            "EXPECTED_RANKING",
+            (1,),
+            QUOTED,
+            "`reports/preregistered-2026-10-02.md`: one ranking departure in the"
+            " class, at LIRF in July 2026. A different count is the"
+            " pre-registration's first stop",
+        ),
+        (
+            "PlanShift.n",
+            (0,),
+            MECHANISM,
+            "a dataclass field's count before `fit` sets it",
+        ),
+        (
+            "PlanShift.long",
+            (0,),
+            MECHANISM,
+            "a dataclass field's count before `fit` sets it",
         ),
     ),
     *_mod(
@@ -728,14 +936,14 @@ _SCRIPTS: tuple[Constant, ...] = (
             "DISRUPTION_MIN_ROWS",
             (20,),
             CHOSEN,
-            "line 577 states the rule both sides of the data are read at, so the"
+            "line 580 states the rule both sides of the data are read at, so the"
             " two tables can be set against each other",
         ),
         (
             "DISRUPTION_RATE_MULTIPLE",
             (10,),
             CHOSEN,
-            "line 577, covering this too: a share this many times the airport's"
+            "line 580, covering this too: a share this many times the airport's"
             " own training-year rate before the day is called out",
         ),
     ),
@@ -1410,13 +1618,13 @@ CONSTANTS: tuple[Constant, ...] = (
             "VIS_LOW_M",
             (1500.0,),
             CHOSEN,
-            "line 78: where low-visibility procedures are typically in force",
+            "line 82: where low-visibility procedures are typically in force",
         ),
         (
             "VIS_HIGH_M",
             (8000.0,),
             CHOSEN,
-            "line 78, covering this too: 8 km is ordinary daylight visibility",
+            "line 82, covering this too: 8 km is ordinary daylight visibility",
         ),
         (
             "STATUTE_MILE_M",
@@ -1428,7 +1636,7 @@ CONSTANTS: tuple[Constant, ...] = (
             "MAX_CARRY_H",
             (3,),
             CHOSEN,
-            "line 88 states the rule it fixes: how many hours a report may be"
+            "line 92 states the rule it fixes: how many hours a report may be"
             " carried forward into hours without one",
         ),
     ),
@@ -1844,6 +2052,15 @@ MODEL_FIGURE_GENERATORS: tuple[str, ...] = (
     "scripts/report_congestion.py",
     "scripts/report_occupancy.py",
     "scripts/candidates.py",
+    "scripts/report_monthly.py",
+    "scripts/report_monthly_ladder.py",
+    "scripts/fit_monthly_seeds.py",
+    "scripts/report_monthly_seeds.py",
+    "scripts/fit_monthly_pairs.py",
+    "scripts/report_monthly_pairs.py",
+    "scripts/report_planshift.py",
+    "scripts/report_istanbul.py",
+    "scripts/report_fiumicino.py",
 )
 
 
@@ -1909,11 +2126,6 @@ FROZEN_DOCUMENTS: tuple[Frozen, ...] = (
         "reports/container-2026-09-12.md",
         "c5191c26c9578dd89ca4c9862b50b051a78964f882b55394766189044b2fd583",
         "a dated record of the reference container's pins",
-    ),
-    Frozen(
-        "reports/submission-2026-09-19.md",
-        "62fadca6eb1508aebb66145128d33cfe14e9e0323816b203bb4d0a44bba34437",
-        "a dated record of one scored file, written at the tree it was built from",
     ),
     Frozen(
         "reports/preregistered-2026-09-20.md",
@@ -2321,9 +2533,16 @@ REPORT_INPUTS_DECLARED: tuple[tuple[str, str], ...] = (
     ("scripts/check_runways_ourairports.py", "reports/runway_crosscheck.md"),
     ("scripts/report_congestion.py", "reports/congestion.md"),
     ("scripts/report_coverage.py", "reports/stand_coverage.md"),
+    ("scripts/report_fiumicino.py", "reports/fiumicino.md"),
     ("scripts/report_geometry_gaps.py", "reports/geometry_gaps.md"),
     ("scripts/report_headroom.py", "reports/headroom.md"),
+    ("scripts/report_istanbul.py", "reports/istanbul.md"),
+    ("scripts/report_monthly.py", "reports/monthly.md"),
+    ("scripts/report_monthly_ladder.py", "reports/monthly_ladder.md"),
+    ("scripts/report_monthly_pairs.py", "reports/monthly_pairs.md"),
+    ("scripts/report_monthly_seeds.py", "reports/monthly_seeds.md"),
     ("scripts/report_occupancy.py", "reports/occupancy.md"),
+    ("scripts/report_planshift.py", "reports/planshift.md"),
     ("scripts/report_residual.py", "reports/residual.md"),
     ("scripts/report_synthetic_airport.py", "reports/synthetic_airport.md"),
     ("scripts/report_tails.py", "reports/tails.md"),
@@ -2752,7 +2971,49 @@ _EXCESS_JULY = "the same, on the July split"
 # an interval bound in *Held-out pairs*, which §6.3 cites, by chance; the
 # entry stands first so the check reads the figure as what it is, and the
 # report prints the chance match beside it.
+# The four score figures of §4, added on 3 October 2026: the reason they
+# share, the operands they share, and the one constant, 300, which is an
+# assumption the sentence names and not a measurement.
+_PLAN_SHIFT_BET = (
+    " the one plan-shifted ranking departure of §4, priced in score terms: a"
+    " base score of 300 s over the 344,841 rows, the row's squared residual"
+    " added to the mean squared error and the root taken. 300 is an assumption"
+    " about the base and the sentence says so; the row's two readings are the"
+    " lag it would record as a day-shift, 86,820 s, and the airport's rest mean"
+    " for an ordinary taxi-out, 1,144.2 s, both quoted from"
+    " `reports/planshift.md`, as are the two predictions, 3,120 s before the"
+    " rule and 52,550 s under it; 344,841 is the ranking set's row count"
+)
+
 PAPER_FIGURE_EXEMPTIONS: tuple[PaperFigure, ...] = (
+    # The table of §7.2, added on 1 October 2026: a block's change is its row's
+    # ex-flagged RMSE minus the row above, computed from two figures of
+    # `reports/baseline.md`, *The ablation ladder*. The other changes in that
+    # table are printed by the report itself and are matched, not exempt.
+    # In the same table the plan-lag row's held-out interval has a bound of
+    # -5.8, quoted from *Held-out pairs*; it shares its key with the July
+    # change of the congestion row, so the check reads it as this entry's
+    # arithmetic, which is verified, and prints the interval's line beside it.
+    PaperFigure(
+        "§7.2",
+        "-1.5",
+        "the aircraft block's change on the December split: `identifiers + time"
+        " + geometry + aircraft` against `identifiers + time + geometry`,"
+        " ex-flagged",
+        "320.2 - 321.7",
+        ("320.2", "321.7"),
+    ),
+    PaperFigure(
+        "§7.2",
+        "-3.8",
+        "the same change on the July split",
+        "407.3 - 411.1",
+        ("407.3", "411.1"),
+    ),
+    PaperFigure("§7.2", "-79.3", _PLAN_LAG_DECEMBER, "240.9 - 320.2", ("240.9", "320.2")),
+    PaperFigure("§7.2", "-57.4", _PLAN_LAG_JULY, "349.9 - 407.3", ("349.9", "407.3")),
+    PaperFigure("§7.2", "-7.7", _EXCESS_DECEMBER, "233.2 - 240.9", ("233.2", "240.9")),
+    PaperFigure("§7.2", "-5.8", _EXCESS_JULY, "344.1 - 349.9", ("344.1", "349.9")),
     PaperFigure("§1.2", "79.3", _PLAN_LAG_DECEMBER, "320.2 - 240.9", ("320.2", "240.9")),
     PaperFigure("§1.2", "57.4", _PLAN_LAG_JULY, "407.3 - 349.9", ("407.3", "349.9")),
     PaperFigure("§1.2", "7.7", _EXCESS_DECEMBER, "240.9 - 233.2", ("240.9", "233.2")),
@@ -2792,6 +3053,46 @@ PAPER_FIGURE_EXEMPTIONS: tuple[PaperFigure, ...] = (
         " `src/taxiout/models.py`; 1.998 is a constant of the arithmetic",
         "0.19 / 2 ** (1 / 2) * 1.998",
         ("0.19",),
+    ),
+    PaperFigure(
+        "§4",
+        "332.1",
+        "the frozen model's prediction, if the row recorded the lag:" + _PLAN_SHIFT_BET,
+        "(300 ** 2 + (86820 - 3120) ** 2 / 344841) ** (1 / 2)",
+        ("86,820", "3,120", "344,841"),
+    ),
+    PaperFigure(
+        "§4",
+        "305.6",
+        "the rule's prediction, if the row recorded the lag:" + _PLAN_SHIFT_BET,
+        "(300 ** 2 + (86820 - 52550) ** 2 / 344841) ** (1 / 2)",
+        ("86,820", "52,550", "344,841"),
+    ),
+    PaperFigure(
+        "§4",
+        "300.0",
+        "the frozen model's prediction, if the row recorded an ordinary"
+        " taxi-out:" + _PLAN_SHIFT_BET,
+        "(300 ** 2 + (1144.2 - 3120) ** 2 / 344841) ** (1 / 2)",
+        ("1,144.2", "3,120", "344,841"),
+    ),
+    PaperFigure(
+        "§4",
+        "312.5",
+        "the rule's prediction, if the row recorded an ordinary taxi-out:"
+        + _PLAN_SHIFT_BET,
+        "(300 ** 2 + (1144.2 - 52550) ** 2 / 344841) ** (1 / 2)",
+        ("1,144.2", "52,550", "344,841"),
+    ),
+    PaperFigure(
+        "§8.4",
+        "4.2",
+        "the five congestion and weather blocks together, net of the plan lags,"
+        " over the held-out year: `+ plan lags` minus `+ weather`, both pooled"
+        " ex-flagged figures of `reports/monthly_ladder.md`, *Summary: the"
+        " year, pooled from the twelve months*",
+        "265.7 - 261.5",
+        ("265.7", "261.5"),
     ),
 )
 

@@ -25,7 +25,7 @@ pq = pytest.importorskip("pyarrow.parquet")
 
 def _template(n: int = 5) -> pd.DataFrame:
     """Identifiers as doubles and a null int target, as the organizers' file has them."""
-    ids = np.array([202180234 + 3 * i for i in range(n)], dtype=np.float64)
+    ids = np.array([900000000 + 3 * i for i in range(n)], dtype=np.float64)
     return pd.DataFrame({ID: ids, TARGET: np.full(n, np.nan)})
 
 

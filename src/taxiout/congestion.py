@@ -141,6 +141,11 @@ SOURCES: dict[str, tuple[str, ...]] = {
     },
     **{
         c: _SELF
+        # The subject's own runway: a subject the movement frame does not hold is
+        # appended to it as a movement of its own, from its bare columns, in
+        # ``_configuration``. Every subject is in the frame at inference, so the
+        # branch is latent there, but it reads the column.
+        + ("RUNWAY_mvt",)
         + (
             "DEP.MVT_TIME_UTC_mvt",
             "DEP.RUNWAY_mvt",
@@ -154,7 +159,9 @@ SOURCES: dict[str, tuple[str, ...]] = {
         for c in CONFIGURATION_FEATURES
     },
     "win_truncated": ("MVT_TIME_UTC_mvt",),
-    "sched_truncated": ("SCHED_TIME_UTC_mvt",),
+    # The take-off as well as the schedule: the covered block the schedule is
+    # judged against starts and ends with the take-off's calendar month.
+    "sched_truncated": ("MVT_TIME_UTC_mvt", "SCHED_TIME_UTC_mvt"),
 }
 
 # What the movement frame has to carry: every prefixed source, stripped, plus

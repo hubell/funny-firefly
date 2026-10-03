@@ -89,7 +89,10 @@ PARAMS: dict[str, str] = {
     "direct": "no",
     "report_type": "3",
 }
-DATA_FIELDS = tuple(f for f in FIELDS if f != "valid")
+# The archive writes the station and the time first on every row whatever is
+# asked, so neither is requested as data: the request is the one every cached
+# file records in the manifest.
+DATA_FIELDS = tuple(f for f in FIELDS if f not in ("station", "valid"))
 
 PAUSE_S = 2.0
 RETRIES = 4
@@ -136,7 +139,9 @@ def load_manifest() -> dict:
         "source": "Iowa Environmental Mesonet, Iowa State University: ASOS/METAR archive",
         "endpoint": ENDPOINT,
         "parameters": PARAMS,
-        "fields": list(FIELDS),
+        # The time and the data asked for, as every manifest so far records them;
+        # the station is the request itself.
+        "fields": ["valid", *DATA_FIELDS],
         "terms_url": TERMS_URL,
         "terms": TERMS,
         "warranty": WARRANTY,

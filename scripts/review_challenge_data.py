@@ -192,7 +192,8 @@ def section_inventory(root: Path) -> tuple[list[str], dict]:
         "## Inventory",
         "",
         f"Twelve monthly training files, {total:,} movements in total, which is the",
-        "figure the organisers publish for the eleven listed airports.",
+        "figure the challenge's data page gives for the ten airports its Table 1",
+        "lists (read on 29 September 2026).",
         "",
         *table(["file", "rows"], rows, "-r"),
         "",
@@ -265,7 +266,9 @@ def section_airports(dep: pd.DataFrame, rk_dep: pd.DataFrame) -> tuple[list[str]
     lines = [
         "## Airports and months",
         "",
-        f"The organisers list {len(listed)} airports. The data contains departures from",
+        "The entry's own airport list, `taxiout.airports.AIRPORTS` of 2 September",
+        f"2026, holds {len(listed)} airports; the challenge's data page lists ten, in its",
+        "Table 1 (read on 29 September 2026). The data contains departures from",
         f"{len(present)}: " + ", ".join(present) + ".",
     ]
     if absent:
@@ -1439,7 +1442,9 @@ def main() -> int:
         "",
         "## In one paragraph",
         "",
-        f"The data covers {len(ap['present'])} airports, not the {len(AIRPORTS)} listed (absent:",
+        f"The data covers {len(ap['present'])} airports, the ten the challenge's data page",
+        f"lists (read on 29 September 2026), not the {len(AIRPORTS)} of the entry's own",
+        "airport list (absent:",
         f"{absent}). January 2026 is a census of all of them; July 2026 covers",
         f"{len(ap['jul_airports'])} ({', '.join(ap['jul_airports'])}). The identifiers join: runways",
         f"everywhere, stands at {pct(jn['train_by_airport'][worst_ap])} ({worst_ap}) to",

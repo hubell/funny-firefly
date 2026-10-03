@@ -76,8 +76,8 @@ def normalise(value: str, stage: int) -> str:
 def split_compound(value: str) -> list[str]:
     """Identifiers held in one tag value.
 
-    ``"1 1A"`` and ``"Y01;Y02"`` are two identifiers each; ``"V 117"`` is one,
-    because ``V`` alone is not an identifier. Anything not recognisably a list
+    ``"9 9Z"`` and ``"Q98;Q99"`` are two identifiers each; ``"W 998"`` is one,
+    because ``W`` alone is not an identifier. Anything not recognisably a list
     is returned whole.
     """
     tokens = [t for t in re.split(r"[\s;]+", str(value).strip().upper()) if t]

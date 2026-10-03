@@ -224,6 +224,28 @@ PROSE_EXEMPT: tuple[tuple[str, str, str], ...] = (
         "the ODbL version in the data credit, not a measurement",
     ),
     (
+        "scripts/report_monthly_ladder.py",
+        "1.5",
+        "the same visibility band label, in that report's annexes",
+    ),
+    (
+        "scripts/report_monthly_ladder.py",
+        "0.1",
+        "the precision the helping rule reads a change at, a definition the"
+        " report states with the rule",
+    ),
+    (
+        "scripts/report_monthly_ladder.py",
+        "0.0",
+        "the printed change that rule calls a tie, the same definition",
+    ),
+    (
+        "scripts/check_licence_hygiene.py",
+        "3.0",
+        "the licence identifier, GPL-3.0-only, which the gate requires in every"
+        " source file; not a measurement",
+    ),
+    (
         "src/taxiout/osm.py",
         "0.1",
         "this client's version in its user-agent string, not a measurement",
@@ -248,6 +270,14 @@ PROSE_EXEMPT_ASSIGNMENTS: tuple[tuple[str, str, str], ...] = (
         " `preregistered.substitution_audit` already aligns it against the note"
         " line by line and rebuilds it byte for byte, which is a stronger check"
         " than this one",
+    ),
+    (
+        "scripts/report_fiumicino.py",
+        "PRINTED_LADDER",
+        "the year-level changes `reports/monthly_ladder.md` prints in its"
+        " *Summary: every airport*, held so the report can set its own"
+        " recomputation from the residuals beside them. The report prints both"
+        " and whether they agree, and the run fails when one differs",
     ),
 )
 

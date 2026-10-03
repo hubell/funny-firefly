@@ -43,6 +43,7 @@ import pandas as pd
 # external columns a feature may read, and the registry names them under the
 # ``METAR.`` phase so the audit can hold them to this list.
 FIELDS: tuple[str, ...] = (
+    "station",
     "valid",
     "tmpf",
     "dwpf",
@@ -65,6 +66,9 @@ SOURCES: dict[str, tuple[str, ...]] = {
     c: (
         "MVT_TIME_UTC_mvt",
         "ADEP_mvt",
+        # The archive's station code, the key the weather is joined on to
+        # ``ADEP_mvt``.
+        "METAR.station",
         "METAR.valid",
         "METAR.vsby",
         "METAR.tmpf",
@@ -96,7 +100,7 @@ def load_metar(root: Path) -> pd.DataFrame:
         df = pd.read_csv(f, na_values=["M"], keep_default_na=True)
         frames.append(df)
     if not frames:
-        return pd.DataFrame(columns=["station", *FIELDS])
+        return pd.DataFrame(columns=list(FIELDS))
     out = pd.concat(frames, ignore_index=True)
     out["valid"] = pd.to_datetime(out["valid"], utc=True)
     return out.drop_duplicates(["station", "valid"]).sort_values(["station", "valid"])

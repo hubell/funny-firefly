@@ -223,7 +223,8 @@ def test_the_loader_reads_the_archive_format(tmp_path):
         encoding="utf-8",
     )
     m = load_metar(tmp_path)
-    assert list(m.columns) == ["station", *FIELDS]
+    # The archive's header is the field list, the station first.
+    assert list(m.columns) == list(FIELDS)
     assert m["valid"].dt.tz is not None
     assert np.isnan(m["vsby"].iloc[1]) and m["vsby"].iloc[0] == 6.21
 

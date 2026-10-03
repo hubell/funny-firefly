@@ -50,6 +50,7 @@ import argparse
 import difflib
 import hashlib
 import json
+import os
 import re
 import resource
 import sys
@@ -626,10 +627,15 @@ SUBSTITUTIONS: tuple[Place, ...] = (
     ),
 )
 
-# Where the note lives when it is on hand. A clean checkout does not have it,
-# and the report says the byte-for-byte check was not run rather than saying it
-# passed.
-NOTE = Path("/mnt/data2tb/linux_handover/notes/preregistration_2026-09-20.md")
+# Where the note lives when it is on hand: ``--note PATH``, or the directory the
+# environment variable ``PREREGISTRATION_NOTES`` names, and no default. A clean
+# checkout has neither, and the report says the byte-for-byte check was not run
+# rather than saying it passed.
+NOTES_ENV = "PREREGISTRATION_NOTES"
+NOTE_NAME = "preregistration_2026-09-20.md"
+NOTE: Path | None = (
+    Path(os.environ[NOTES_ENV]) / NOTE_NAME if os.environ.get(NOTES_ENV) else None
+)
 NOTE_HEADING = "## Definitions, fixed here"
 
 # Patterns, not names. Each matches any numbered work block or any dated
@@ -677,7 +683,7 @@ def substitution_audit() -> dict:
         or NOTE_REFERENCE_TOKEN.search(PREREGISTRATION)
     )
 
-    if not NOTE.exists():
+    if NOTE is None or not NOTE.exists():
         out["note_checked"] = False
         out["note_verdict"] = (
             "not run: the note is not on this machine, so only the checks that"
@@ -3064,12 +3070,23 @@ def main() -> int:
         help="fit nothing; regenerate the report from the records already on disk",
     )
     ap.add_argument(
+        "--note",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="the working note of 20 September, to check the published text against"
+        " byte for byte (default: ${PREREGISTRATION_NOTES}/" + NOTE_NAME + ", if set)",
+    )
+    ap.add_argument(
         "--date",
         default=None,
         metavar="YYYY-MM-DD",
         help="the date in the report's file name (default: today, UTC)",
     )
     args = ap.parse_args()
+    if args.note is not None:
+        global NOTE
+        NOTE = args.note
     generated = args.date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
     if args.report:

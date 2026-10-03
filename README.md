@@ -141,7 +141,7 @@ from it and carries every figure. Four findings shape everything after:
   which every ranking departure exposes. The ranking page states that the
   score is RMSE over the January and July 2026 movements, with no row
   excluded; five such rows predicted as ordinary taxi-outs would raise a
-  300 s model to 512 s. [`reports/tails.md`](reports/tails.md) has the
+  300 s model to 445 s. [`reports/tails.md`](reports/tails.md) has the
   mechanism, the cells it covers, and what the term is worth.
 - **The identifiers join.** Runways at ~100%; stands at 87% (Munich) to 99.9%
   (Istanbul) of departures after a staged normalisation chosen by join rate
@@ -224,9 +224,18 @@ make residual     # needs the challenge data and the residuals; writes reports/r
 make headroom     # needs the challenge data and the residuals; writes reports/headroom.md
 make baseline     # needs the challenge data; writes reports/baseline.md
 make transfer     # needs the challenge data; writes reports/transfer.md
+make metar-history  # ten years of METARs, context only (network, resumable)
+make monthly      # needs the residuals monthly-fit stores; writes reports/monthly.md
+make monthly-ladder  # needs monthly-ladder-fit's residuals; writes reports/monthly_ladder.md
+make monthly-seeds   # needs monthly-seeds-fit's residuals; writes reports/monthly_seeds.md
+make monthly-pairs   # needs monthly-pairs-fit's residuals; writes reports/monthly_pairs.md
+make planshift   # needs the challenge data, monthly's residuals and v6; writes reports/planshift.md
+make istanbul    # needs monthly-seeds' residuals and the METAR history; writes reports/istanbul.md
+make fiumicino   # needs monthly-ladder's residuals; writes reports/fiumicino.md
 make submission TEAM=<name>   # needs the challenge data; writes a submission
 make licence-check  # verify no OSM-derived or challenge content is tracked
 make provenance     # verify every number is categorised; writes docs/provenance.md
+make paper-docx     # the paper as a Word document; writes docs/paper.docx
 ```
 
 `make test` works on a clean checkout with nothing installed but `pytest`
@@ -238,6 +247,7 @@ data review and everything after it need `pip install -e ".[modelling]"`.
 | ----- | ----- | ------ |
 | `scripts/fetch_osm.py` | Overpass API | `data/raw/<ICAO>.json.gz` |
 | `scripts/fetch_metar.py` | Iowa State Mesonet ASOS archive | `data/raw/metar/<ICAO>_<period>.csv`, `MANIFEST.json` |
+| `scripts/fetch_metar_history.py` | `data/challenge/` (which airports have departures), Iowa State Mesonet ASOS archive, 2015 to 2024 | `data/raw/metar_history/<ICAO>_<period>.csv`, `MANIFEST.json` |
 | `scripts/fetch_ourairports.py` | OurAirports `airports.csv` | `data/raw/ourairports_airports.csv`, `ourairports_MANIFEST.json` |
 | `scripts/report_coverage.py` | `data/raw/` | `reports/stand_coverage.md` |
 | `scripts/build_taxi_graph.py` | `data/raw/` | `data/processed/taxi_distance/`, `reports/taxi_routing.md` |
@@ -254,12 +264,20 @@ data review and everything after it need `pip install -e ".[modelling]"`.
 | `scripts/check_provenance.py` | the tracked tree, and `taxiout.provenance` | `docs/provenance.md` (with `--write-doc`); otherwise a verdict and a non-zero exit |
 | `scripts/run_baselines.py` | `data/challenge/`, `data/processed/taxi_distance/`, `data/raw/metar/`, `data/raw/ourairports_airports.csv` | `reports/baseline.md`, `data/processed/residuals/` (gitignored) |
 | `scripts/report_transfer.py` | `data/challenge/`, `data/processed/taxi_distance/`, `data/raw/metar/` | `reports/transfer.md` |
+| `scripts/report_monthly.py` | `data/challenge/`, `data/processed/taxi_distance/`, `data/raw/metar/`, `data/raw/ourairports_airports.csv`, `data/processed/residuals/` | `data/processed/monthly/` (`--fit`, gitignored); `reports/monthly.md` (`--report`) |
+| `scripts/report_monthly_ladder.py` | the same, `data/processed/monthly/`, `data/raw/metar_history/`, `reports/baseline.md` | `data/processed/monthly_ladder/` (`--fit`, gitignored); `reports/monthly_ladder.md` (`--report`) |
+| `scripts/fit_monthly_seeds.py`, `scripts/report_monthly_seeds.py` | the same as `report_monthly.py`, and the two directories above | `data/processed/monthly_seeds/` (gitignored); `reports/monthly_seeds.md` |
+| `scripts/fit_monthly_pairs.py`, `scripts/report_monthly_pairs.py` | the same as `run_baselines.py`, and `reports/baseline.md` | `data/processed/monthly_pairs/` (gitignored); `reports/monthly_pairs.md` |
+| `scripts/report_planshift.py` | `data/challenge/`, `data/processed/monthly/`, `data/submissions/funny-firefly_v6.parquet`, `reports/preregistered-2026-10-02.md` | `reports/planshift.md` |
+| `scripts/report_istanbul.py` | `data/challenge/`, `data/processed/monthly_seeds/`, `data/raw/metar/`, `data/raw/metar_history/` | `reports/istanbul.md` |
+| `scripts/report_fiumicino.py` | `data/challenge/`, `data/processed/monthly_ladder/` | `reports/fiumicino.md` |
 | `scripts/sweep_params.py` | `data/challenge/`, `data/processed/taxi_distance/`, `data/raw/metar/` | `data/processed/sweep_october.csv` (gitignored) |
 | `scripts/make_submission.py` | `data/challenge/`, `data/processed/taxi_distance/`, `data/raw/metar/` | `data/submissions/<team>_v<n>.parquet` (gitignored) |
 
-Only `fetch_osm.py`, `fetch_metar.py`, `fetch_ourairports.py` and
-`check_runways_ourairports.py` touch the network. `build_taxi_graph.py` runs all 11
-airports in about two minutes from the cache and takes `--airports`,
+Only `fetch_osm.py`, `fetch_metar.py`, `fetch_metar_history.py`,
+`fetch_ourairports.py` and `check_runways_ourairports.py` touch the network.
+`build_taxi_graph.py` runs all 11 airports in about two minutes from the
+cache and takes `--airports`,
 `--runway-penalty` and `--max-snap-m` for sensitivity checks. Output is
 deterministic: repeated runs produce byte-identical files.
 
@@ -339,8 +357,8 @@ from the other.
 
 **The deposit.** The Zenodo deposit **[DOI]** holds, under ODbL, the 35
 matrix files and the eleven Overpass answers with their `PINS.json`, and,
-public domain, the METAR cache and the two OurAirports tables, each with the
-manifest the fetcher wrote. Its `README.md` says how each part is verified
+public domain, the METAR cache, the ten years of METARs before it and the
+two OurAirports tables, each with the manifest the fetcher wrote. Its `README.md` says how each part is verified
 against this repository at the tag, and `SHA256SUMS` covers every file in it.
 
 ## Data sources
@@ -372,7 +390,12 @@ against this repository at the tag, and `SHA256SUMS` covers every file in it.
   and "Attributing the Iowa Environmental Mesonet of Iowa State University
   would be appreciated", which this line does. The observations themselves are
   METARs the airports publish; the archive is where a reader can re-fetch
-  them from the recorded request.
+  them from the recorded request. Beside that cache, the ten calendar years
+  before the training year, 2015 to 2024, at the ten airports with
+  departures, fetched by `scripts/fetch_metar_history.py` through the same
+  endpoint and terms and cached, gitignored, under `data/raw/metar_history/`
+  with its own `MANIFEST.json`; it sets 2025's weather against a ten-year
+  norm in one table of `reports/monthly_ladder.md` and enters no model.
 
 Those two are the additional *datasets*. Both, as the entry read them, are in
 the Zenodo deposit **[DOI]** beside the OSM-derived matrices and answers, so a
@@ -432,9 +455,10 @@ the predictions submitted, is encumbered either way.
 Reasoning in full:
 [`data/processed/taxi_distance/ODbL-NOTICE.md`](data/processed/taxi_distance/ODbL-NOTICE.md).
 `make licence-check` enforces it: no OSM-derived artefact or challenge data
-tracked, no literal stand identifier from either source in any tracked file,
-attribution present on every report. It runs in CI and should run before every
-commit.
+tracked, no list of literal stand identifiers from either source in any
+tracked Markdown file, the contributors' credit and the licence named on
+every report and on the paper, and the GPLv3 licence line in every source
+file. It runs in CI and should run before every commit.
 
 ## Prior art
 
@@ -508,14 +532,19 @@ scripts/
   report_transfer.py           reports/transfer.md (needs challenge data)
   sweep_params.py              the second parameter sweep, on October 2025; keeps the first's terms
   make_submission.py           a submission file (needs challenge data)
+  fetch_metar_history.py       cache ten years of METARs before 2025 (resumable, network)
+  report_monthly.py            every month held out, the shipped rung: reports/monthly.md
+  report_monthly_ladder.py     every rung, every month held out: reports/monthly_ladder.md
+  fit_monthly_seeds.py         four more seeds per held-out month
+  report_monthly_seeds.py      reports/monthly_seeds.md
+  fit_monthly_pairs.py         the held-out pair folds, every prediction stored
+  report_monthly_pairs.py      reports/monthly_pairs.md
+  report_planshift.py          reports/planshift.md
+  report_istanbul.py           reports/istanbul.md
+  report_fiumicino.py          reports/fiumicino.md
+  monthly.py                   what the last five share
   check_licence_hygiene.py     verifies no OSM or challenge content is tracked
   check_provenance.py          verifies every number is categorised (+ docs/provenance.md)
-  commit_geometry.sh           one-shot commit batch (geometry stage)
-  commit_gate0.sh              one-shot commit batch (data review stage)
-  commit_tails.sh              one-shot commit batch (record-quality term)
-  commit_synthetic.sh          one-shot commit batch (worked airport)
-  commit_gate1.sh              one-shot commit batch (modelling stage)
-  commit_geometry_gaps.sh      one-shot commit batch (unimpeded-term diagnostics)
 docs/
   provenance.md       generated; where every number comes from, and what is open
   modelling_notes.md  decisions, caveats, open questions, leakage rules

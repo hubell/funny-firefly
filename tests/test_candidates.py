@@ -495,7 +495,7 @@ def test_the_module_names_no_assistant_and_no_work_block():
     import check_licence_hygiene as hygiene
 
     source = (REPO / "scripts" / "candidates.py").read_text(encoding="utf-8")
-    assert not re.findall(hygiene.ATTRIBUTION_PATTERN, source, re.IGNORECASE)
+    assert not hygiene.attribution_in(source)
     assert not re.search(cand.WORK_BLOCK_PATTERN, source)
 
 

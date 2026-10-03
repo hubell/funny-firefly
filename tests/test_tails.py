@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import os
+
 import pytest
 
 pd = pytest.importorskip("pandas")
@@ -729,7 +731,11 @@ def test_the_class_on_the_training_year_and_the_ranking_set():
 # names no work block either, and the copy's words for the other side.
 PUBLISHED_COPY = "reports/preregistered-2026-10-02.md"
 PUBLISHED_TAIL = "\n## What differs from the note\n"
-WORKING_NOTE = "/mnt/data2tb/linux_handover/notes/preregistration_2026-10-02_dayshift.md"
+# The working notes are on hand where the environment variable names their
+# directory; there is no default, and without it the copy is checked alone.
+WORKING_NOTE = os.path.join(
+    os.environ.get("PREREGISTRATION_NOTES", ""), "preregistration_2026-10-02_dayshift.md"
+)
 WORKING_NOTE_SHA256 = "d62b48f32d3ba9da07aa346cb04a2560feaff9664a9734228d7523e669dda9a1"
 # A numbered work block, with or without a letter after its number; the
 # pattern of 20 September stops at the number and misses the lettered ones.
@@ -769,8 +775,11 @@ def test_the_note_with_the_listed_substitutions_is_the_published_copy():
     import re
 
     note = pathlib.Path(WORKING_NOTE)
-    if not note.exists():
-        pytest.skip("the working note is not on this machine; the copy is checked alone")
+    if not os.environ.get("PREREGISTRATION_NOTES") or not note.exists():
+        pytest.skip(
+            "the working note is not on hand; the copy is checked alone"
+            " (PREREGISTRATION_NOTES names the notes' directory)"
+        )
     raw = note.read_bytes()
     assert hashlib.sha256(raw).hexdigest() == WORKING_NOTE_SHA256
     text = raw.decode("utf-8")
@@ -795,7 +804,7 @@ def test_the_published_copy_names_no_work_block_and_credits_openstreetmap():
     assert not re.search(WORK_BLOCK_TOKEN, copy)
     assert not re.search(r"\bcha[t]\b|\bsessio[n]\b", copy, re.IGNORECASE)
     assert not pr.NOTE_REFERENCE_TOKEN.search(copy)
-    assert not re.search(hygiene.ATTRIBUTION_PATTERN, copy, re.IGNORECASE)
+    assert not hygiene.attribution_in(copy)
     assert copy.count(hygiene.ATTRIBUTION) == 1
     # and the note's digest, which fixed the order, is the one it names
     assert set(re.findall(r"`([0-9a-f]{64})`", copy)) == {WORKING_NOTE_SHA256}
