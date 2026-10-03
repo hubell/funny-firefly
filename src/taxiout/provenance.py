@@ -1843,6 +1843,7 @@ MODEL_FIGURE_GENERATORS: tuple[str, ...] = (
     "scripts/report_residual.py",
     "scripts/report_congestion.py",
     "scripts/report_occupancy.py",
+    "scripts/candidates.py",
 )
 
 
@@ -1965,6 +1966,39 @@ FROZEN_DOCUMENTS: tuple[Frozen, ...] = (
         " existed. The copy differs from the note in the places its closing"
         " section lists and nowhere else, which `tests/test_tails.py` checks"
         " against the note where the note is on hand",
+    ),
+    Frozen(
+        "reports/preregistered-2026-09-28.md",
+        "c439050e138851c96a72940f48e2d65ac474f027866acfd0544b5e3bb844cf49",
+        "the three candidates of 28 September, their legs, their reference and"
+        " the four conditions they were first to be read under, fixed before any"
+        " of them was fitted on top of the rung and the parameters that ship."
+        " The rule they were read under is `reports/preregistered-2026-10-03.md`,"
+        " which keeps these, replaces the paragraph on what adoption costs, and"
+        " adds the rows every figure is over and a fifth condition. What is"
+        " frozen is this published copy, at the digest beside it. What fixed the"
+        " order is the working note it was copied from, sha256"
+        " eee5b947e4c449eb7df5765ca62d25a3ca954f201ecefa23311eec8918813e60,"
+        " recorded on 28 September 2026 when it was written. The copy differs"
+        " from the note in the place its closing section lists and nowhere else,"
+        " which `tests/test_preregistered_copies.py` checks against the note where"
+        " the note is on hand",
+    ),
+    Frozen(
+        "reports/preregistered-2026-10-03.md",
+        "158803d1cbeb3092f1afba37a914be2df64b40b40782739c2bfa3193c3aeaa9c",
+        "the rule the three candidates are read under: the four conditions of"
+        " 28 September over the rows neither the record-quality term nor the"
+        " plan-shift rule covers, a fifth on the twelve held-out months, and"
+        " adoption as one recorded increment on the rung that ships. What is"
+        " frozen is this published copy, at the digest beside it. What fixed the"
+        " order is the working note it was copied from, sha256"
+        " 91e3306ef2b5e0efd6ab8d0a5c0ed9e2fc29ed0b0015bb4af8e96c6a2a601662,"
+        " written on 3 October 2026 after v7 was committed and before any"
+        " candidate was fitted under it. The copy differs from the note in the"
+        " place its closing section lists and nowhere else, which"
+        " `tests/test_preregistered_copies.py` checks against the note where the"
+        " note is on hand",
     ),
 )
 
@@ -2282,6 +2316,7 @@ REPORT_INPUTS_HEADING = "## What this report was generated from"
 # rather than to inputs it cannot have.
 REPORT_INPUTS_DECLARED: tuple[tuple[str, str], ...] = (
     ("scripts/build_taxi_graph.py", "reports/taxi_routing.md"),
+    ("scripts/candidates.py", "reports/candidates-2026-10-03.md"),
     ("scripts/check_penalty_sensitivity.py", "reports/penalty_sensitivity.md"),
     ("scripts/check_runways_ourairports.py", "reports/runway_crosscheck.md"),
     ("scripts/report_congestion.py", "reports/congestion.md"),

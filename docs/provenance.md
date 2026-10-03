@@ -87,7 +87,7 @@ either direction without somebody seeing it.
 
 ## What a report declares it was generated from
 
-**14** generators write a footer naming every
+**15** generators write a footer naming every
 path the run read, with a sha256 each; check 8 recomputes them and calls
 the report verified, stale or unverifiable. The rule for who carries one
 is the Makefile's own measured time: under five minutes and the generator
@@ -220,12 +220,12 @@ the operands it reads from the cited sections, and the reason.
 **`src/taxiout/synthetic.py`** -- a fictional airfield where every distance, turn and repair is hand-derived, with worked traffic in the challenge's own schema so the pipeline runs end to end without the challenge data. Its numeric constants ARE the field's definition, which is why the module is registered once here rather than constant by constant: there is no provenance question to answer about the coordinates of an invented stand.
 
 The condition that makes it safe: **no generator of a model figure imports it**. Check 4 proves
-it against 10 named generators rather
+it against 11 named generators rather
 than this record claiming it.
 
 ## Frozen documents
 
-**13** dated records, each with a sha256. These need
+**15** dated records, each with a sha256. These need
 the opposite gate from every other file here: the risk is not that they go
 stale, it is that somebody edits them. A currency check over one would
 demand destroying the record.
@@ -245,6 +245,8 @@ demand destroying the record.
 | `reports/reproduction-2026-09-27.md` | the dated record of the frozen commit reproduced from a clean clone at the tag: the pinned fetch, the matrices, the residuals, fourteen reports and the submission, each compared with what the commit carries. Its value is that it was measured once, on its date, against that commit |
 | `reports/ranking-refresh-2026-09-28.md` | the dated record of the ranking files the organizers re-issued on 4 September 2026, set beside the copies of 2 September the entry was built on: the rows July gained at seven airports, the timestamps moved in the rows both hold, and the training files unchanged. Its value is that it was measured once, on its date, against both |
 | `reports/preregistered-2026-10-02.md` | the rule of the plan-shifted departures, fixed before it was evaluated or built, and the source of the class's definition in `taxiout.tails.PlanShiftModel`. What is frozen is this published copy, at the digest beside it. What fixed the order is the working note it was copied from, sha256 d62b48f32d3ba9da07aa346cb04a2560feaff9664a9734228d7523e669dda9a1, written on 2 October 2026 after the class was seen in the ranking set's exposed fields and before any fold, any v7 or any score existed. The copy differs from the note in the places its closing section lists and nowhere else, which `tests/test_tails.py` checks against the note where the note is on hand |
+| `reports/preregistered-2026-09-28.md` | the three candidates of 28 September, their legs, their reference and the four conditions they were first to be read under, fixed before any of them was fitted on top of the rung and the parameters that ship. The rule they were read under is `reports/preregistered-2026-10-03.md`, which keeps these, replaces the paragraph on what adoption costs, and adds the rows every figure is over and a fifth condition. What is frozen is this published copy, at the digest beside it. What fixed the order is the working note it was copied from, sha256 eee5b947e4c449eb7df5765ca62d25a3ca954f201ecefa23311eec8918813e60, recorded on 28 September 2026 when it was written. The copy differs from the note in the place its closing section lists and nowhere else, which `tests/test_preregistered_copies.py` checks against the note where the note is on hand |
+| `reports/preregistered-2026-10-03.md` | the rule the three candidates are read under: the four conditions of 28 September over the rows neither the record-quality term nor the plan-shift rule covers, a fifth on the twelve held-out months, and adoption as one recorded increment on the rung that ships. What is frozen is this published copy, at the digest beside it. What fixed the order is the working note it was copied from, sha256 91e3306ef2b5e0efd6ab8d0a5c0ed9e2fc29ed0b0015bb4af8e96c6a2a601662, written on 3 October 2026 after v7 was committed and before any candidate was fitted under it. The copy differs from the note in the place its closing section lists and nowhere else, which `tests/test_preregistered_copies.py` checks against the note where the note is on hand |
 
 ## What a rebuild of an external input is pinned to
 
