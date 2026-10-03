@@ -9,19 +9,28 @@ pd = pytest.importorskip("pandas")
 np = pytest.importorskip("numpy")
 
 from taxiout.challenge import (  # noqa: E402
+    EXCLUDED_BY_DECISION,
     FORBIDDEN_FEATURE_INPUTS,
     HIDDEN_FOR_TEST_DEPARTURES,
+    MOVEMENTS_GLOB,
+    RANKING,
 )
 from taxiout.tails import (  # noqa: E402
     BUCKETS,
     FIT_ONLY_INPUTS,
     FLAG_INPUTS,
+    PLAN_SHIFT_ADD_ONE,
+    PLAN_SHIFT_FIT_ONLY_INPUTS,
+    PLAN_SHIFT_PREDICT_INPUTS,
     PREDICT_INPUTS,
+    PlanShiftModel,
     TailModel,
     combine,
     defaulted_block,
     flag,
     lag_band,
+    plan_shift_threshold_s,
+    plan_shifted,
 )
 
 HOUR = 3600
@@ -384,3 +393,409 @@ def test_the_submission_averages_the_five_seeds_the_rule_adopted():
     assert [ast.unparse(v) for v in seeds] == [
         "BAGGING_SEEDS if SEED_AVERAGE_ADOPTED else 1"
     ]
+
+
+# --------------------------------------------------------------------------
+# the plan-shifted departures, as reports/preregistered-2026-10-02.md fixes them
+
+
+def _plan_frame(rows):
+    """Synthetic departures for the plan-shifted class.
+
+    Each row is ``(icao, lag_s, eobt_s, lobt_s, taxi_s)``: the take-off is
+    ``lag_s`` after the schedule, ``eobt_s`` after ``EOBT_1_flt`` and
+    ``lobt_s`` after ``LOBT_flt``, ``None`` for an estimate that is absent, and
+    the block time is the take-off minus ``taxi_s``, as in the data.
+    ``AOBT_3_flt`` sits a minute after the block time, where the Network
+    Manager's record would put it.
+    """
+    recs = []
+    for i, (icao, lag_s, eobt_s, lobt_s, taxi) in enumerate(rows):
+        sched = T0 + pd.Timedelta(minutes=7 * i)
+        mvt = sched + pd.Timedelta(seconds=lag_s)
+        block = mvt - pd.Timedelta(seconds=taxi)
+        recs.append(
+            {
+                "ADEP_mvt": icao,
+                "MVT_TIME_UTC_mvt": mvt,
+                "SCHED_TIME_UTC_mvt": sched,
+                "BLOCK_TIME_UTC_mvt": block,
+                "EOBT_1_flt": pd.NaT
+                if eobt_s is None
+                else mvt - pd.Timedelta(seconds=eobt_s),
+                "LOBT_flt": pd.NaT
+                if lobt_s is None
+                else mvt - pd.Timedelta(seconds=lobt_s),
+                "AOBT_3_flt": block + pd.Timedelta(minutes=1),
+                "TAXITIME_SEC_mvt": np.int32(taxi),
+            }
+        )
+    return pd.DataFrame(recs)
+
+
+def _plan_training():
+    """A year with two class departures, one long, and a covered cell.
+
+    AAAA carries ordinary departures with a record, one without, and the two
+    class departures: plan lags of five and twenty-four hours, the first
+    recording an ordinary taxi-out and the second a long one. CCCC carries a
+    cell the term covers whose rows are plan-shifted too, five defaulted block
+    times and one ordinary taxi-out in the same cell with a record, and two
+    ordinary departures with a record outside it.
+    """
+    h = plan_shift_threshold_s()
+    rows = [("AAAA", 600, 900, 800, 600)] * 4
+    rows += [("AAAA", 700, None, None, 2000)]  # no record: not in the rest mean
+    rows += [("AAAA", 600, h + 3600, h + 3600, 1000)]  # class, ordinary
+    rows += [("AAAA", 24 * HOUR, 24 * HOUR, 24 * HOUR, 24 * HOUR - 600)]  # class, long
+    rows += [("CCCC", 5 * HOUR, 5 * HOUR, 5 * HOUR, 5 * HOUR)] * 5  # covered, shifted
+    rows += [("CCCC", 5 * HOUR, 5 * HOUR, 5 * HOUR, 900)]  # same cell, ordinary
+    rows += [("CCCC", 600, 900, 800, 700)] * 2
+    return _plan_frame(rows)
+
+
+def _plan_model(train=None):
+    train = _plan_training() if train is None else train
+    term = TailModel().fit(train)
+    return term, PlanShiftModel(term).fit(train)
+
+
+def test_plan_shift_inputs_are_the_pre_registration_s():
+    assert PlanShiftModel.PREDICT_INPUTS == PLAN_SHIFT_PREDICT_INPUTS
+    assert PlanShiftModel.FIT_ONLY_INPUTS == PLAN_SHIFT_FIT_ONLY_INPUTS
+    assert set(PLAN_SHIFT_PREDICT_INPUTS) == {
+        "MVT_TIME_UTC_mvt",
+        "EOBT_1_flt",
+        "LOBT_flt",
+        "ADEP_mvt",
+    }
+    assert PLAN_SHIFT_FIT_ONLY_INPUTS == ("TAXITIME_SEC_mvt",)
+    assert not set(PLAN_SHIFT_PREDICT_INPUTS) & set(FORBIDDEN_FEATURE_INPUTS)
+    assert set(PLAN_SHIFT_FIT_ONLY_INPUTS) <= set(HIDDEN_FOR_TEST_DEPARTURES)
+    assert not set(PLAN_SHIFT_FIT_ONLY_INPUTS) & set(EXCLUDED_BY_DECISION)
+
+
+def test_the_threshold_is_read_from_models_and_not_copied(monkeypatch):
+    import taxiout.models as models
+    import taxiout.tails as tails
+
+    assert tails.TAIL_EXCLUSION_ADOPTED_H is models.TAIL_EXCLUSION_ADOPTED_H
+    assert plan_shift_threshold_s() == models.TAIL_EXCLUSION_ADOPTED_H * 3600
+    # read at the call and not fixed in the function: another value moves it
+    monkeypatch.setattr(tails, "TAIL_EXCLUSION_ADOPTED_H", 5.0)
+    assert plan_shift_threshold_s() == 5 * 3600
+    # and with no adopted exclusion there is no class, rather than a guessed one
+    monkeypatch.setattr(tails, "TAIL_EXCLUSION_ADOPTED_H", None)
+    with pytest.raises(RuntimeError):
+        plan_shift_threshold_s()
+
+
+@pytest.mark.parametrize(
+    ("eobt_past", "lobt_past", "picked"),
+    [
+        (1, 1, True),
+        (0, 1, False),  # exactly the threshold is not past it
+        (1, 0, False),
+        (-600, 3600, False),
+        (3600, -600, False),
+        (None, 3600, False),  # an estimate absent
+        (3600, None, False),
+        (None, None, False),  # no record at all
+    ],
+)
+def test_the_class_needs_both_lags_past_the_threshold_and_both_estimates(
+    eobt_past, lobt_past, picked
+):
+    h = plan_shift_threshold_s()
+    eobt = None if eobt_past is None else h + eobt_past
+    lobt = None if lobt_past is None else h + lobt_past
+    _, model = _plan_model()
+    row = _plan_frame([("AAAA", 600, eobt, lobt, 900)])
+    assert plan_shifted(row).tolist() == [picked]
+    assert model.in_class(row).tolist() == [picked]
+    assert model.predict(row).notna().tolist() == [picked]
+
+
+def test_a_row_the_term_covers_is_never_in_the_class():
+    train = _plan_training()
+    term, model = _plan_model(train)
+    both = plan_shifted(train) & term.flagged(train)
+    # the six rows of CCCC's covered cell, every one of them plan-shifted too
+    assert train.loc[both, "ADEP_mvt"].tolist() == ["CCCC"] * 6
+    assert not model.in_class(train)[both].any()
+    # the fit counts the two class departures and none of the term's six
+    assert model.n == 2 and model.long == 1
+    # and where the rule has a value on a covered row, the term's is submitted
+    phys = pd.Series(1.0, index=train.index)
+    tail, plan = term.predict(train), model.predict(train)
+    assert plan[both].notna().all()
+    out = combine(phys, tail, plan)
+    assert out[both].tolist() == tail[both].tolist()
+    assert out[model.in_class(train)].tolist() == plan[model.in_class(train)].tolist()
+
+
+@pytest.mark.parametrize(("n", "long"), [(0, 0), (1, 0), (1, 1), (2, 1), (3, 2)])
+def test_the_share_is_the_add_one_estimate(n, long):
+    h = plan_shift_threshold_s()
+    rows = [("AAAA", 600, 900, 800, 600)] * 3
+    rows += [("AAAA", 600, h + 1, h + 1, h + 1)] * long  # long: over the threshold
+    rows += [("AAAA", 600, h + 1, h + 1, h)] * (n - long)  # exactly it: not long
+    _, model = _plan_model(_plan_frame(rows))
+    assert PLAN_SHIFT_ADD_ONE == (1, 2)
+    assert (model.n, model.long) == (n, long)
+    assert model.share == pytest.approx((long + 1) / (n + 2))
+
+
+def test_the_prediction_is_the_stated_mixture():
+    h = plan_shift_threshold_s()
+    # A third class departure, long, so the share is the training year's 3 / 5
+    # and not 1 / 2, where the mixture and its mirror image coincide; and an
+    # ordinary departure with a record whose taxi-out is exactly the threshold,
+    # which the rest mean holds, "four hours or less".
+    train = pd.concat(
+        [
+            _plan_training(),
+            _plan_frame(
+                [
+                    ("AAAA", 600, 30 * HOUR, 30 * HOUR, 30 * HOUR - 600),
+                    ("AAAA", 600, 900, 800, h),
+                ]
+            ),
+        ],
+        ignore_index=True,
+    )
+    _, model = _plan_model(train)
+    assert (model.n, model.long, model.share) == (3, 2, pytest.approx(0.6))
+    # The rest mean: every departure with a record and a taxi-out of four hours
+    # or less, the class's ordinary one and the term's ordinary one included.
+    assert model.rest_mean["AAAA"] == pytest.approx((4 * 600 + 1000 + h) / 6)
+    assert model.rest_mean["CCCC"] == pytest.approx((900 + 2 * 700) / 3)
+    share = 0.6
+    lag = 24 * HOUR + 3
+    test = _plan_frame(
+        [
+            ("AAAA", 26 * HOUR, 23 * HOUR, lag, 0),
+            ("CCCC", 600, h + 60, h + 60, 0),
+            ("AAAA", 600, 900, 800, 0),
+        ]
+    )
+    p = model.predict(test)
+    assert p.iloc[0] == pytest.approx(0.6 * lag + 0.4 * (4 * 600 + 1000 + h) / 6)
+    assert p.iloc[0] == pytest.approx(share * lag + (1 - share) * model.rest_mean["AAAA"])
+    assert p.iloc[1] == pytest.approx(
+        share * (h + 60) + (1 - share) * model.rest_mean["CCCC"]
+    )
+    assert np.isnan(p.iloc[2])
+    assert p.index.equals(test.index)
+
+
+def test_hidden_fields_set_to_nonsense_move_no_prediction():
+    train = _plan_training()
+    term, model = _plan_model(train)
+    test = _plan_frame(
+        [
+            ("AAAA", 26 * HOUR, 23 * HOUR, 24 * HOUR, 900),
+            ("CCCC", 5 * HOUR, 5 * HOUR, 5 * HOUR, 900),
+            ("AAAA", 600, 900, 800, 900),
+        ]
+    )
+    nonsense = test.copy()
+    for c in HIDDEN_FOR_TEST_DEPARTURES + EXCLUDED_BY_DECISION:
+        if c == "TAXITIME_SEC_mvt":
+            nonsense[c] = np.int32(-987654)
+        else:
+            nonsense[c] = pd.Timestamp("1970-01-01T00:00:00Z")
+    assert set(HIDDEN_FOR_TEST_DEPARTURES + EXCLUDED_BY_DECISION) <= set(test.columns)
+    want = model.predict(test)
+    pd.testing.assert_series_equal(model.predict(nonsense), want)
+    pd.testing.assert_series_equal(
+        model.predict(nonsense[list(PLAN_SHIFT_PREDICT_INPUTS)]), want
+    )
+    phys = pd.Series(1.0, index=test.index)
+    pd.testing.assert_series_equal(
+        combine(phys, term.predict(nonsense), model.predict(nonsense)),
+        combine(phys, term.predict(test), want),
+    )
+    # and the fit never reads AOBT_3_flt either
+    blanked = train.copy()
+    blanked["AOBT_3_flt"] = pd.Timestamp("1970-01-01T00:00:00Z")
+    again = PlanShiftModel(term).fit(blanked)
+    assert (again.n, again.long, again.share) == (model.n, model.long, model.share)
+    pd.testing.assert_series_equal(again.rest_mean, model.rest_mean)
+
+
+def test_an_empty_class_predicts_nothing():
+    """Departures none of which is in the class: no prediction, and the
+    submission is the term's and the model's as it was without the rule."""
+    _, model = _plan_model()
+    test = _plan_frame([("AAAA", 600, 900, 800, 0), ("BBBB", 5 * HOUR, None, None, 0)])
+    term = model.term
+    plan = model.predict(test)
+    assert not model.in_class(test).any() and plan.isna().all()
+    phys = pd.Series([900.0, 1000.0], index=test.index)
+    tail = term.predict(test)
+    pd.testing.assert_series_equal(combine(phys, tail, plan), combine(phys, tail))
+
+
+def test_a_fit_with_no_class_still_has_the_add_one_share():
+    """The other reading of an empty class, stated rather than assumed: a fit
+    given no class departure has n = 0 and the add-one share (0 + 1) / (0 + 2),
+    and the rule as written still predicts for a class row it is shown."""
+    h = plan_shift_threshold_s()
+    rows = [("AAAA", 600, 900, 800, 600)] * 3 + [("BBBB", 700, None, None, 800)]
+    _, model = _plan_model(_plan_frame(rows))
+    assert (model.n, model.long, model.share) == (0, 0, 0.5)
+    test = _plan_frame([("AAAA", 600, h + 60, h + 60, 0)])
+    assert model.predict(test).iloc[0] == pytest.approx(0.5 * (h + 60) + 0.5 * 600)
+
+
+def test_a_class_row_with_no_rest_mean_is_refused():
+    """The pre-registration does not say what the rule predicts at an airport
+    its fit holds no rest mean for, so the rule refuses rather than choose.
+    An ordinary row at such an airport is simply not the rule's."""
+    h = plan_shift_threshold_s()
+    _, model = _plan_model()
+    assert "ZZZZ" not in model.rest_mean.index
+    assert model.predict(_plan_frame([("ZZZZ", 600, 900, 800, 0)])).isna().all()
+    with pytest.raises(ValueError):
+        model.predict(_plan_frame([("ZZZZ", 600, h + 60, h + 60, 0)]))
+
+
+def test_plan_shift_predict_reads_only_its_inputs_and_needs_a_fit():
+    term, model = _plan_model()
+    test = _plan_frame([("AAAA", 26 * HOUR, 23 * HOUR, 24 * HOUR, 0)])
+    assert model.predict(test[list(PLAN_SHIFT_PREDICT_INPUTS)]).notna().all()
+    with pytest.raises(KeyError):
+        model.predict(test.drop(columns=["EOBT_1_flt"]))
+    with pytest.raises(KeyError):
+        PlanShiftModel(term).fit(test.drop(columns=["TAXITIME_SEC_mvt"]))
+    with pytest.raises(RuntimeError):
+        PlanShiftModel(term).predict(test)
+
+
+def test_combine_puts_the_term_first_then_the_class_then_the_model():
+    idx = pd.Index([10, 11, 12, 13])
+    phys = pd.Series([900.0, 950.0, 1000.0, 1100.0], index=idx)
+    tail = pd.Series([np.nan, 20000.0, np.nan, 30000.0], index=idx)
+    plan = pd.Series([np.nan, 5000.0, 52000.0, np.nan], index=idx)
+    out = combine(phys, tail, plan)
+    assert out.tolist() == [900.0, 20000.0, 52000.0, 30000.0]
+    assert out.index.equals(idx)
+    assert combine(phys.to_numpy(), tail, plan).tolist() == out.tolist()
+    with pytest.raises(ValueError):
+        combine(phys, tail, pd.Series([np.nan] * 4, index=[0, 1, 2, 3]))
+
+
+def test_the_class_on_the_training_year_and_the_ranking_set():
+    """The counts the pre-registration was written knowing: three training
+    departures, two of them long, and one in the ranking set, at LIRF in July
+    2026. Its first two stops, held here so a change to the data or to the rule
+    that moves them fails rather than ships."""
+    import pathlib
+
+    from taxiout.challenge import load_movements, load_ranking, to_pandas
+
+    data = pathlib.Path(__file__).resolve().parents[1] / "data" / "challenge"
+    if not (data / RANKING).exists() or not any(data.glob(MOVEMENTS_GLOB)):
+        pytest.skip(
+            "no challenge data in this checkout: data/ is gitignored, so a clean"
+            " checkout has none"
+        )
+    plan = sorted(set(PREDICT_INPUTS) | set(PLAN_SHIFT_PREDICT_INPUTS))
+    train = to_pandas(
+        load_movements(data, sorted(set(plan) | set(FIT_ONLY_INPUTS)), phase="DEP")
+    ).reset_index(drop=True)
+    rank = to_pandas(load_ranking(data, plan, phase="DEP")).reset_index(drop=True)
+    term = TailModel().fit(train)
+    model = PlanShiftModel(term).fit(train)
+    assert (model.n, model.long) == (3, 2)
+    assert model.share == pytest.approx(3 / 5)
+    members = model.in_class(rank)
+    assert int(members.sum()) == 1
+    assert rank.loc[members, "ADEP_mvt"].astype(str).tolist() == ["LIRF"]
+    month = pd.to_datetime(rank.loc[members, "MVT_TIME_UTC_mvt"], utc=True)
+    assert month.dt.strftime("%Y-%m").tolist() == ["2026-07"]
+    # what the submission takes the rule on is exactly the class
+    taken = model.predict(rank).notna() & term.predict(rank).isna()
+    assert (taken.to_numpy() == members.to_numpy()).all()
+
+
+# --------------------------------------------------------------------------
+# the published copy of the note the rule was fixed in
+
+# The working note is not published; reports/preregistered-2026-10-02.md is
+# the note with the places its closing section lists changed and nothing else.
+# Each substitution is held by a pattern for the note's side, so this file
+# names no work block either, and the copy's words for the other side.
+PUBLISHED_COPY = "reports/preregistered-2026-10-02.md"
+PUBLISHED_TAIL = "\n## What differs from the note\n"
+WORKING_NOTE = "/mnt/data2tb/linux_handover/notes/preregistration_2026-10-02_dayshift.md"
+WORKING_NOTE_SHA256 = "d62b48f32d3ba9da07aa346cb04a2560feaff9664a9734228d7523e669dda9a1"
+# A numbered work block, with or without a letter after its number; the
+# pattern of 20 September stops at the number and misses the lettered ones.
+WORK_BLOCK_TOKEN = r"\bBlock\s+\d+[A-Za-z]*\b"
+COPY_SUBSTITUTIONS = (
+    (
+        WORK_BLOCK_TOKEN + r" copies this file unchanged into\n"
+        r"`reports/preregistered-2026-10-02\.md` and freezes it under its digest; the\n"
+        r"digest recorded in the cha[t] when this file was written is the proof of the\n"
+        r"order\.",
+        "The working note this is copied from was digested when it\nwas written, sha256\n"
+        f"`{WORKING_NOTE_SHA256}`, before the\n"
+        "rule was evaluated on any fold; that digest is the proof of the order. This\n"
+        "copy differs from the note only in the places listed at its end.",
+    ),
+    (r"after reading " + WORK_BLOCK_TOKEN, "after reading the held-out-month ladder"),
+    (
+        r"the twelve held-out months of " + WORK_BLOCK_TOKEN,
+        "the twelve held-out months of the held-out-month ladder",
+    ),
+)
+
+
+def _published_copy() -> str:
+    import pathlib
+
+    root = pathlib.Path(__file__).resolve().parents[1]
+    return (root / PUBLISHED_COPY).read_text(encoding="utf-8")
+
+
+def test_the_note_with_the_listed_substitutions_is_the_published_copy():
+    """Where the note is on hand: its digest first, then each listed
+    substitution applied once, and the result is the published copy up to its
+    closing section byte for byte, which is all the copy adds after it."""
+    import hashlib
+    import pathlib
+    import re
+
+    note = pathlib.Path(WORKING_NOTE)
+    if not note.exists():
+        pytest.skip("the working note is not on this machine; the copy is checked alone")
+    raw = note.read_bytes()
+    assert hashlib.sha256(raw).hexdigest() == WORKING_NOTE_SHA256
+    text = raw.decode("utf-8")
+    for pattern, words in COPY_SUBSTITUTIONS:
+        text, n = re.subn(pattern, lambda _m, w=words: w, text)
+        assert n == 1, pattern
+    copy = _published_copy()
+    assert copy.count(PUBLISHED_TAIL) == 1
+    assert copy[: copy.index(PUBLISHED_TAIL)] == text
+
+
+def test_the_published_copy_names_no_work_block_and_credits_openstreetmap():
+    import re
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    import check_licence_hygiene as hygiene
+    import preregistered as pr
+
+    copy = _published_copy()
+    assert not re.search(WORK_BLOCK_TOKEN, copy)
+    assert not re.search(r"\bcha[t]\b|\bsessio[n]\b", copy, re.IGNORECASE)
+    assert not pr.NOTE_REFERENCE_TOKEN.search(copy)
+    assert not re.search(hygiene.ATTRIBUTION_PATTERN, copy, re.IGNORECASE)
+    assert copy.count(hygiene.ATTRIBUTION) == 1
+    # and the note's digest, which fixed the order, is the one it names
+    assert set(re.findall(r"`([0-9a-f]{64})`", copy)) == {WORKING_NOTE_SHA256}

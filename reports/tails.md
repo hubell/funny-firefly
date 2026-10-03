@@ -7,7 +7,7 @@ term predicts for them, and what it is worth.
 
 **This report has two generators, and each section says which wrote it.**
 Everything above *The pooled record-quality rule, measured* is written by
-`scripts/report_tails.py` from the data under `data/challenge/` on 2026-09-28,
+`scripts/report_tails.py` from the data under `data/challenge/` on 2026-10-03,
 and every figure in it is computed there. That section is written into this
 file afterwards by `scripts/pooled_tails.py --report`, carries its own date,
 and its figures are computed there; `make tails` runs the two in that order.
@@ -145,7 +145,8 @@ mean over the rows that were not defaulted:
 
 Every other row -- every row at the other airports, and every row with
 a flight-side record -- gets no prediction from the term and is left to
-the physical model.
+the physical model, except the plan-shifted departures, which have a
+section of their own below.
 
 ## Why this form, and not the others
 
@@ -269,6 +270,78 @@ Rows per covered cell, against the 2025 monthly rate:
 | --- | --- | ---: | ---: | --- |
 | LIRF | 2026-01 | 11,061 | 107 | `noflt:normal` 92 (113/month in 2025); `noflt:4-12h` 12 (8/month in 2025); `noflt:>12h` 3 (2/month in 2025) |
 | LIRF | 2026-07 | 15,838 | 276 | `noflt:normal` 248 (113/month in 2025); `noflt:4-12h` 20 (8/month in 2025); `noflt:>12h` 8 (2/month in 2025) |
+
+Beside the term, the rule of *The plan-shifted departures* below takes
+1 row of the ranking set that the term leaves: 1 at LIRF in July 2026.
+The two together replace the physical model's prediction on
+384 of the 344,841 ranking departures.
+
+## The plan-shifted departures
+
+One class of departure the cells cannot reach: a departure the term does
+not cover whose take-off falls more than 4 h after both of its flight
+plan's off-block estimates, `EOBT_1_flt` and `LOBT_flt`, both present. The
+cells key on the schedule lag and on the absence of a record, and these
+departures have one. `taxiout.tails.PlanShiftModel` predicts for them by the
+rule `reports/preregistered-2026-10-02.md` fixed before it was evaluated or
+built (sha256 `c1aba2f8e7d41626cd2b6fb0bce2025e4f027d056c6cc46c090d269f904f5368`), and that document is the
+source of every definition in this section.
+
+**It rests on 3 rows of the training year, and was added after the
+class was seen in the ranking set's exposed fields.** The pre-registration
+records both, and says of its own evaluation that it shows what the rule
+does to those rows and is not independent evidence that the rule is right.
+
+### The class in the training year
+
+Fitted on the full training year, against the term fitted there: the class
+holds 3 departures (1 at LFPG, 2 at LIRF),
+and 2 of them recorded a taxi-out over 4 h, which the rule
+calls *long*. The term covers 0 of the 3 training departures past 4 h after both estimates.
+
+The share is the add-one estimate over the class's departures,
+`(long + 1) / (n + 2)`, so a class of a few rows cannot assert a
+share of none or all: (2 + 1) / (3 + 2) = **0.6000**.
+The rest mean is the mean recorded taxi-out of the airport's training
+departures with a flight-plan record (`LOBT_flt` present) and a taxi-out of 4 h
+or less. Nothing is left out for being the term's or the class's, since
+the pre-registration names no such exclusion. The means hold
+0 of the term's 1,485 rows, because
+0 of those have a record, and 1 of the class's 3:
+
+| ICAO | departures with a record, 4 h or less | rest mean (s) |
+| --- | ---: | ---: |
+| EDDF | 228,185 | 862.5 |
+| EDDM | 166,324 | 810.6 |
+| EGLL | 238,132 | 1,363.0 |
+| EHAM | 243,867 | 787.6 |
+| LEBL | 177,843 | 955.6 |
+| LEMD | 211,295 | 1,014.3 |
+| LFPG | 235,777 | 1,016.7 |
+| LIRF | 159,215 | 1,144.2 |
+| LSZH | 132,616 | 741.6 |
+| LTFM | 269,320 | 1,049.6 |
+
+### The class in the ranking set
+
+1 of the 344,841 ranking departures is in the class. The term covers 0 of the 1 ranking departure past 4 h after both estimates.
+
+| ICAO | month | departures in the class |
+| --- | --- | ---: |
+| LIRF | 2026-07 | 1 |
+
+### The prediction
+
+`share x lag + (1 - share) x rest_mean`, the form the term uses, with the lag
+taken as take-off minus `LOBT_flt`, the plan's last known off-block time,
+and the rest mean of the departure's airport. It is substituted
+(`taxiout.tails.combine`) for the physical model's prediction on the
+class's rows, after the term, and before the rounding and the clip at zero
+that `scripts/make_submission.py` applies to every prediction. It reads
+`MVT_TIME_UTC_mvt`, `EOBT_1_flt`, `LOBT_flt`, `ADEP_mvt` and, at fit time, the recorded taxi-out; never
+`AOBT_3_flt`, which stays excluded by decision. The physical model, its rows
+and its parameters, and the term's cells and the rows it covers, are what
+they were without it.
 
 ## The callsign-prefix reading, at LIRF
 
@@ -433,6 +506,16 @@ squared error; 335 of 190,713 in July, carrying 57.8%;
 and 383 of 344,841 ranking rows, 107 in January and 276 in July. Its
 whole effect on the leaderboard runs through those rows.
 
+Beside those rows sits the rule of the plan-shifted departures: the term's
+form, with an add-one share, for departures whose take-off left their
+flight plan hours behind. Its share is estimated from
+3 rows of the training year, 2 of them long, and
+its rest mean from the airport's ordinary departures; it is a conditional
+mean and not a taxi time. It was added after the class was seen in the ranking
+set's exposed fields, was fixed in advance of any evaluation, and takes
+1 row of the ranking set, 1 at LIRF in July 2026.
+Its whole effect on the leaderboard runs through that row.
+
 ## What this report was generated from
 
 Every path this run read, with the sha256 of each as it was read.
@@ -457,6 +540,7 @@ not redistribute is not present.
 | `data/challenge/movements/training_2025-12-01_2026-01-01.parquet` | `2d357f2f403a86778a69e93f72d8754effe77f1ac0942399b3d1b7728241f724` |
 | `data/challenge/ranking.parquet` | `9db75e3a56fa09b87aab72e191a53da3fe763d9887ad2b23aea9cde6a6325f86` |
 | `data/challenge/submitting.parquet` | `0d383408ed5ac27bfcfd12d6b961cee77c8a6364b10dad9fe3ec81115c79652b` |
+| `reports/preregistered-2026-10-02.md` | `c1aba2f8e7d41626cd2b6fb0bce2025e4f027d056c6cc46c090d269f904f5368` |
 
 ## The pooled record-quality rule, measured
 

@@ -14,6 +14,11 @@ excluded -- so that "with and without the term" has a concrete baseline. The
 baseline report, ``reports/baseline.md``, carries the same comparison for
 the real model.
 
+One section describes the class of departure the cells cannot reach: the
+plan-shifted departures, whose rule ``taxiout.tails.PlanShiftModel`` implements
+as ``reports/preregistered-2026-10-02.md`` fixed it, with the class's count, its
+fitted share and rest means, and the ranking rows it takes.
+
 One section answers a question rather than describing the term. A review note
 of 10 September read several callsign prefixes at the covered airport as having
 taxi times equal to their lag in most of their rows with a Network Manager
@@ -45,7 +50,12 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
 
 from taxiout.callsign import callsign_features  # noqa: E402
-from taxiout.provenance import challenge_inputs, report_inputs_footer  # noqa: E402
+from taxiout.provenance import (  # noqa: E402
+    FROZEN_DOCUMENTS,
+    challenge_inputs,
+    digest,
+    report_inputs_footer,
+)
 from taxiout.challenge import load_movements, load_ranking, to_pandas  # noqa: E402
 from taxiout.tails import (  # noqa: E402
     BUCKETS,
@@ -54,17 +64,27 @@ from taxiout.tails import (  # noqa: E402
     MIN_COUNT,
     MIN_SHARE,
     NEAR_S,
+    PLAN_SHIFT_ADD_ONE,
+    PLAN_SHIFT_PREDICT_INPUTS,
     PREDICT_INPUTS,
     UNFLAGGED_BUCKET,
+    PlanShiftModel,
     TailModel,
     combine,
     defaulted_block,
     flag,
     lag_seconds,
+    plan_shift_threshold_s,
+    plan_shifted,
 )
 
 DATA = REPO / "data" / "challenge"
 OUT = REPO / "reports" / "tails.md"
+
+# The dated record the plan-shifted departures' rule was fixed in, repository
+# relative as ``taxiout.provenance.FROZEN_DOCUMENTS`` keys it. Read for its
+# digest, never written: this generator writes ``OUT`` alone.
+PREREGISTRATION = "reports/preregistered-2026-10-02.md"
 
 
 def _pooled_section_title() -> str:
@@ -150,11 +170,10 @@ def rmse(y: pd.Series, p: pd.Series) -> float:
 
 
 def load() -> tuple[pd.DataFrame, pd.DataFrame]:
-    cols = list(PREDICT_INPUTS + FIT_ONLY_INPUTS) + [
-        "STAND_mvt",
-        "RUNWAY_mvt",
-        "FLIGHT_mvt",
-    ]
+    # The plan-shifted departures' rule reads one estimate the term does not.
+    rule = [c for c in PLAN_SHIFT_PREDICT_INPUTS if c not in PREDICT_INPUTS]
+    extra = ["STAND_mvt", "RUNWAY_mvt", "FLIGHT_mvt"]
+    cols = list(PREDICT_INPUTS + FIT_ONLY_INPUTS) + rule + extra
     dep = to_pandas(load_movements(DATA, cols, phase="DEP"))
     dep["ADEP_mvt"] = dep["ADEP_mvt"].astype(str)
     dep["y"] = pd.to_numeric(dep["TAXITIME_SEC_mvt"], errors="coerce").astype(float)
@@ -175,7 +194,9 @@ def load() -> tuple[pd.DataFrame, pd.DataFrame]:
         .le(NEAR_S)
         .fillna(False)
     )
-    rk = to_pandas(load_ranking(DATA, list(PREDICT_INPUTS) + ["FLIGHT_mvt"], phase="DEP"))
+    rk = to_pandas(
+        load_ranking(DATA, list(PREDICT_INPUTS) + rule + ["FLIGHT_mvt"], phase="DEP")
+    )
     rk["ADEP_mvt"] = rk["ADEP_mvt"].astype(str)
     rk["month"] = rk["MVT_TIME_UTC_mvt"].dt.month
     rk["bucket"] = flag(rk)["tail_bucket"].astype(str)
@@ -503,7 +524,8 @@ def section_cells(dep: pd.DataFrame, model: TailModel) -> tuple[list[str], dict]
         "",
         "Every other row -- every row at the other airports, and every row with",
         "a flight-side record -- gets no prediction from the term and is left to",
-        "the physical model.",
+        "the physical model, except the plan-shifted departures, which have a",
+        "section of their own below.",
     ]
     return lines, facts
 
@@ -839,8 +861,20 @@ def _month_split(f: dict) -> str:
     return f"{f['rk_flagged_jan']:,} in January and {f['rk_flagged_jul']:,} in July"
 
 
+def _rows(n: int) -> str:
+    return f"{n:,} {'row' if n == 1 else 'rows'}"
+
+
+def _where(frame: pd.DataFrame, mask: pd.Series) -> list[str]:
+    """``1 at LIRF in July 2026``, per (airport, month) of the masked rows."""
+    at = frame.loc[mask.to_numpy(dtype=bool)]
+    when = pd.to_datetime(at["MVT_TIME_UTC_mvt"], utc=True).dt.strftime("%B %Y")
+    counts = at.groupby([at["ADEP_mvt"].astype(str), when.rename("when")]).size()
+    return [f"{int(n):,} at {icao} in {w}" for (icao, w), n in counts.items()]
+
+
 def section_ranking(
-    dep: pd.DataFrame, rk: pd.DataFrame, model: TailModel
+    dep: pd.DataFrame, rk: pd.DataFrame, model: TailModel, rule: PlanShiftModel
 ) -> tuple[list[str], dict]:
     facts: dict = {}
     flagged = model.flagged(rk)
@@ -876,6 +910,11 @@ def section_ranking(
     facts["rk_jul_airports"] = len(jul_airports)
     facts["rk_jul_covered"] = sorted(jul_airports & set(cov_index.get_level_values(0)))
     facts["rk_flagged_jul_airports"] = sorted(set(rk.loc[flagged & jul, "ADEP_mvt"]))
+    # The plan-shifted departures' rule, on the rows the term leaves: the rows
+    # ``taxiout.tails.combine`` takes it on, counted beside the term's.
+    shifted = rule.predict(rk).notna() & ~flagged
+    facts["rk_plan_shift"] = int(shifted.sum())
+    facts["rk_plan_shift_where"] = _where(rk, shifted)
     lines = [
         "## What it touches in the ranking set",
         "",
@@ -887,8 +926,149 @@ def section_ranking(
         *table(
             ["ICAO", "month", "departures", "flagged", "covered cells"], rows, "--rr-"
         ),
+        "",
+        "Beside the term, the rule of *The plan-shifted departures* below takes",
+        f"{_rows(facts['rk_plan_shift'])} of the ranking set that the term leaves"
+        + (
+            f": {_names(facts['rk_plan_shift_where'])}."
+            if facts["rk_plan_shift"]
+            else "."
+        ),
+        "The two together replace the physical model's prediction on",
+        f"{facts['rk_flagged'] + facts['rk_plan_shift']:,} of the {facts['rk_rows']:,} ranking departures.",
     ]
     return lines, facts
+
+
+def section_plan_shift(
+    dep: pd.DataFrame, rk: pd.DataFrame, model: TailModel, rule: PlanShiftModel
+) -> list[str]:
+    """The plan-shifted departures: the class, its fit, the ranking rows it takes.
+
+    Aggregates only, as the rest of the report: counts, the fitted share and
+    the rest means, and where the class sits in the ranking set. Neither a
+    training departure's own values nor any prediction is printed.
+    """
+    held = {f.path: f.sha256 for f in FROZEN_DOCUMENTS}.get(PREREGISTRATION)
+    sha = digest(REPO / PREREGISTRATION)
+    if held is None or sha != held:
+        raise RuntimeError(
+            f"{PREREGISTRATION} is not at the digest"
+            " taxiout.provenance.FROZEN_DOCUMENTS holds for it; the rule's source"
+            " has moved"
+        )
+    hours = f"{plan_shift_threshold_s() / HOUR:g}"
+    plus_long, plus_n = PLAN_SHIFT_ADD_ONE
+    y = dep["y"]
+    members = rule.in_class(dep)
+    long = members & (y > plan_shift_threshold_s())
+    by_airport = dep.loc[members, "ADEP_mvt"].astype(str).value_counts().sort_index()
+    train_shifted = plan_shifted(dep)
+    train_shifted_covered = int((train_shifted & model.flagged(dep)).sum())
+    rest_pop = dep["LOBT_flt"].notna() & (y <= plan_shift_threshold_s())
+    rest_rows = rest_pop.groupby(dep["ADEP_mvt"].astype(str)).sum()
+    term_rows = model.flagged(dep)
+    term_in_rest = int((rest_pop & term_rows).sum())
+    term_with_record = int((term_rows & dep["LOBT_flt"].notna()).sum())
+    class_in_rest = int((rest_pop & members).sum())
+    rest = [
+        [icao, f"{int(rest_rows.get(icao, 0)):,}", num(float(v), 1)]
+        for icao, v in rule.rest_mean.items()
+    ]
+    rk_flagged = model.flagged(rk)
+    rk_shifted = plan_shifted(rk)
+    rk_members = rule.in_class(rk)
+    when = pd.to_datetime(rk["MVT_TIME_UTC_mvt"], utc=True).dt.strftime("%Y-%m")
+    at = rk.loc[rk_members.to_numpy(dtype=bool)]
+    counts = at.groupby([at["ADEP_mvt"].astype(str), when[at.index].rename("m")]).size()
+    rk_rows = [[icao, m, f"{int(n):,}"] for (icao, m), n in counts.items()]
+    reads = ", ".join(f"`{c}`" for c in PLAN_SHIFT_PREDICT_INPUTS)
+    lines = [
+        "## The plan-shifted departures",
+        "",
+        "One class of departure the cells cannot reach: a departure the term does",
+        f"not cover whose take-off falls more than {hours} h after both of its flight",
+        "plan's off-block estimates, `EOBT_1_flt` and `LOBT_flt`, both present. The",
+        "cells key on the schedule lag and on the absence of a record, and these",
+        "departures have one. `taxiout.tails.PlanShiftModel` predicts for them by the",
+        "rule `reports/preregistered-2026-10-02.md` fixed before it was evaluated or",
+        f"built (sha256 `{sha}`), and that document is the",
+        "source of every definition in this section.",
+        "",
+        f"**It rests on {_rows(rule.n)} of the training year, and was added after the",
+        "class was seen in the ranking set's exposed fields.** The pre-registration",
+        "records both, and says of its own evaluation that it shows what the rule",
+        "does to those rows and is not independent evidence that the rule is right.",
+        "",
+        "### The class in the training year",
+        "",
+        "Fitted on the full training year, against the term fitted there: the class",
+        f"holds {rule.n:,} {'departure' if rule.n == 1 else 'departures'}"
+        + (
+            f" ({', '.join(f'{int(n):,} at {icao}' for icao, n in by_airport.items())})"
+            if rule.n
+            else ""
+        )
+        + ",",
+        f"and {int(long.sum()):,} of them recorded a taxi-out over {hours} h, which the rule",
+        f"calls *long*. The term covers {train_shifted_covered:,} of the"
+        f" {int(train_shifted.sum()):,} training"
+        f" {'departure' if int(train_shifted.sum()) == 1 else 'departures'} past {hours} h"
+        " after both"
+        " estimates"
+        + (
+            "; those are the term's and not the class's."
+            if train_shifted_covered
+            else "."
+        ),
+        "",
+        "The share is the add-one estimate over the class's departures,",
+        f"`(long + {plus_long}) / (n + {plus_n})`, so a class of a few rows cannot assert a",
+        f"share of none or all: ({rule.long:,} + {plus_long}) / ({rule.n:,} + {plus_n}) = **{rule.share:.4f}**.",
+        "The rest mean is the mean recorded taxi-out of the airport's training",
+        f"departures with a flight-plan record (`LOBT_flt` present) and a taxi-out of {hours} h",
+        "or less. Nothing is left out for being the term's or the class's, since",
+        "the pre-registration names no such exclusion. The means hold",
+        f"{term_in_rest:,} of the term's {int(term_rows.sum()):,} rows, because",
+        f"{term_with_record:,} of those have a record, and {class_in_rest:,} of the class's {rule.n:,}:",
+        "",
+        *table(
+            ["ICAO", f"departures with a record, {hours} h or less", "rest mean (s)"],
+            rest,
+            "-rr",
+        ),
+        "",
+        "### The class in the ranking set",
+        "",
+        f"{int(rk_members.sum()):,} of the {len(rk):,} ranking departures"
+        f" {'is' if int(rk_members.sum()) == 1 else 'are'} in the class. The term"
+        f" covers {int((rk_shifted & rk_flagged).sum()):,} of the"
+        f" {int(rk_shifted.sum()):,} ranking"
+        f" {'departure' if int(rk_shifted.sum()) == 1 else 'departures'} past {hours} h"
+        " after both"
+        " estimates"
+        + (
+            "; those are the term's and not the class's."
+            if int((rk_shifted & rk_flagged).sum())
+            else "."
+        ),
+        "",
+        *table(["ICAO", "month", "departures in the class"], rk_rows, "--r"),
+        "",
+        "### The prediction",
+        "",
+        "`share x lag + (1 - share) x rest_mean`, the form the term uses, with the lag",
+        "taken as take-off minus `LOBT_flt`, the plan's last known off-block time,",
+        "and the rest mean of the departure's airport. It is substituted",
+        "(`taxiout.tails.combine`) for the physical model's prediction on the",
+        "class's rows, after the term, and before the rounding and the clip at zero",
+        "that `scripts/make_submission.py` applies to every prediction. It reads",
+        f"{reads} and, at fit time, the recorded taxi-out; never",
+        "`AOBT_3_flt`, which stays excluded by decision. The physical model, its rows",
+        "and its parameters, and the term's cells and the rows it covers, are what",
+        "they were without it.",
+    ]
+    return lines
 
 
 # --------------------------------------------------------------------------
@@ -1120,6 +1300,21 @@ def section_statement(f_mech: dict, f_worth: dict, f_rank: dict) -> list[str]:
             if not f_rank["rk_flagged_jul"]
             else ["whole effect on the leaderboard runs through those rows."]
         ),
+        "",
+        "Beside those rows sits the rule of the plan-shifted departures: the term's",
+        "form, with an add-one share, for departures whose take-off left their",
+        "flight plan hours behind. Its share is estimated from",
+        f"{_rows(f_rank['ps_n'])} of the training year, {f_rank['ps_long']:,} of them long, and",
+        "its rest mean from the airport's ordinary departures; it is a conditional",
+        "mean and not a taxi time. It was added after the class was seen in the ranking",
+        "set's exposed fields, was fixed in advance of any evaluation, and takes",
+        f"{_rows(f_rank['rk_plan_shift'])} of the ranking set"
+        + (
+            f", {_names(f_rank['rk_plan_shift_where'])}."
+            if f_rank["rk_plan_shift"]
+            else "."
+        ),
+        f"Its whole effect on the leaderboard runs through {'that row' if f_rank['rk_plan_shift'] == 1 else 'those rows'}.",
     ]
 
 
@@ -1148,14 +1343,17 @@ def main() -> int:
         return 1
     dep, rk = load()
     model = TailModel().fit(dep)
+    rule = PlanShiftModel(model).fit(dep)
     sp = splits(dep)
 
     mech_lines, f_mech = section_mechanism(dep)
     cell_lines, f_cells = section_cells(dep, model)
     design_lines, _ = section_design(dep, sp)
     worth_lines, f_worth = section_worth(dep, sp)
-    rank_lines, f_rank = section_ranking(dep, rk, model)
+    rank_lines, f_rank = section_ranking(dep, rk, model, rule)
     f_rank["covered_airports"] = f_cells["covered_airports"]
+    f_rank["ps_n"], f_rank["ps_long"] = rule.n, rule.long
+    plan_lines = section_plan_shift(dep, rk, model, rule)
     prefix_lines = section_prefixes(dep, rk, model)
 
     generated = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -1220,7 +1418,7 @@ def main() -> int:
     ]
     footer = [
         "",
-        *report_inputs_footer(REPO, challenge_inputs(DATA)),
+        *report_inputs_footer(REPO, challenge_inputs(DATA) + [REPO / PREREGISTRATION]),
         "",
         "Movement and flight data supplied by EUROCONTROL PRC and the OpenSky",
         "Network under the terms of the PRC Data Challenge 2026. This report uses",
@@ -1238,6 +1436,8 @@ def main() -> int:
         + worth_lines
         + [""]
         + rank_lines
+        + [""]
+        + plan_lines
         + [""]
         + prefix_lines
         + [""]

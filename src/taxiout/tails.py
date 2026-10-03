@@ -44,24 +44,50 @@ none, and the report measures what that costs.
 plan first proposed; it is kept so the ablation can show what knowing the
 mechanism is worth.
 
-Interface, fixed between the two Gate 1 streams::
+One class of departure the cells cannot reach is predicted beside them: the
+*plan-shifted* departures, ``PlanShiftModel``. A departure the term does not
+cover whose take-off falls more than ``TAIL_EXCLUSION_ADOPTED_H`` after both of
+its flight plan's off-block estimates, ``EOBT_1_flt`` and ``LOBT_flt``, both
+present. The cells key on the schedule lag and on the absence of a record, and
+these departures have a record. A fit counts the class's departures and how
+many of them recorded a taxi-out over the same four hours, and the prediction
+is the term's own form: ``share * lag + (1 - share) * rest_mean``, with the
+add-one share ``(long + 1) / (n + 2)``, the lag taken from ``LOBT_flt``, and the
+rest mean of the airport's departures with a record and a taxi-out of four
+hours or less. The class was added on 2 October 2026, after it was seen in the
+ranking set's exposed fields, on the evidence of three training departures,
+two of them long. ``reports/preregistered-2026-10-02.md`` fixed the rule before
+it was evaluated or built, and is the source of its definition.
+
+Interface, fixed between the two Gate 1 streams, and widened by one class::
 
     flag(frame)                -> DataFrame[flt_missing, lag_s, tail_bucket]
     TailModel().fit(frame)     -> self          (training rows, target present)
     TailModel().predict(frame) -> Series        (NaN where not covered)
     combine(physical, tail)    -> Series        (tail where present, else physical)
 
+    PlanShiftModel(term).fit(frame)     -> self    (the rows the term was fitted on)
+    PlanShiftModel(term).predict(frame) -> Series  (NaN off the plan-shifted rows)
+    combine(physical, tail, plan_shift) -> Series  (tail, else plan_shift, else physical)
+
 ``flag`` and ``predict`` read only ``LOBT_flt``, ``MVT_TIME_UTC_mvt``,
 ``SCHED_TIME_UTC_mvt`` and ``ADEP_mvt``; ``fit`` additionally reads the two
 fields the ranking set hides, which is what a fit on training rows is for.
+``PlanShiftModel.predict`` reads ``MVT_TIME_UTC_mvt``, ``EOBT_1_flt``,
+``LOBT_flt`` and ``ADEP_mvt``, and leaves the term's rows to ``combine``, which
+puts the term first; its ``fit`` additionally reads the recorded taxi-out, and
+asks the fitted term which of the rows it is given the term covers.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import ClassVar
 
 import numpy as np
 import pandas as pd
+
+from taxiout.models import TAIL_EXCLUSION_ADOPTED_H
 
 HOUR = 3600.0
 
@@ -275,8 +301,162 @@ class TailModel:
             raise RuntimeError("TailModel is not fitted")
 
 
-def combine(physical, tail: pd.Series) -> pd.Series:
-    """The submitted prediction: the term where it exists, else the physical model."""
+# --------------------------------------------------------------------------
+# the plan-shifted departures
+
+# What the rule reads, in the words of ``reports/preregistered-2026-10-02.md``:
+# the take-off time, the two off-block estimates, the departure airport and, at
+# fit time, the recorded taxi-out. Never ``AOBT_3_flt``, which stays excluded
+# by decision. ``tests/test_tails.py`` asserts both against ``taxiout.challenge``.
+PLAN_SHIFT_PREDICT_INPUTS: tuple[str, ...] = (
+    "MVT_TIME_UTC_mvt",
+    "EOBT_1_flt",
+    "LOBT_flt",
+    "ADEP_mvt",
+)
+PLAN_SHIFT_FIT_ONLY_INPUTS: tuple[str, ...] = ("TAXITIME_SEC_mvt",)
+
+# The add-one estimate of the class's long share, ``(long + 1) / (n + 2)``: one
+# long and one ordinary departure added to the class a fit is given, so that a
+# class of one or three rows cannot assert a share of none or all. The form is
+# the estimator's, fixed with the rest of the rule by
+# reports/preregistered-2026-10-02.md, and nothing about it was measured.
+PLAN_SHIFT_ADD_ONE: tuple[int, int] = (1, 2)
+
+
+def plan_shift_threshold_s() -> float:
+    """``TAIL_EXCLUSION_ADOPTED_H`` in seconds, read where it is fixed.
+
+    The pre-registration defines the class, *long* and the rest mean by the
+    four hours ``taxiout.models`` already fixed on the mechanism that no
+    aircraft taxis for four hours, so there is no class without it.
+    """
+    if TAIL_EXCLUSION_ADOPTED_H is None:
+        raise RuntimeError(
+            "the plan-shifted class is defined by TAIL_EXCLUSION_ADOPTED_H,"
+            " which is not adopted"
+        )
+    return float(TAIL_EXCLUSION_ADOPTED_H) * HOUR
+
+
+def plan_shifted(frame: pd.DataFrame) -> pd.Series:
+    """Rows whose take-off falls past the threshold after both estimates.
+
+    Both ``EOBT_1_flt`` and ``LOBT_flt`` present, and take-off minus each one
+    strictly above ``plan_shift_threshold_s``. The class is these rows less the
+    term's; ``PlanShiftModel.in_class`` takes the term's out.
+    """
+    need = ("MVT_TIME_UTC_mvt", "EOBT_1_flt", "LOBT_flt")
+    missing = [c for c in need if c not in frame.columns]
+    if missing:
+        raise KeyError(f"plan_shifted() needs {missing}")
+    threshold = plan_shift_threshold_s()
+    takeoff = _utc(frame["MVT_TIME_UTC_mvt"])
+    after_eobt = (takeoff - _utc(frame["EOBT_1_flt"])).dt.total_seconds()
+    after_lobt = (takeoff - _utc(frame["LOBT_flt"])).dt.total_seconds()
+    present = frame["EOBT_1_flt"].notna() & frame["LOBT_flt"].notna()
+    out = present & (after_eobt > threshold) & (after_lobt > threshold)
+    return out.fillna(False).astype(bool).rename("plan_shifted")
+
+
+@dataclass
+class PlanShiftModel:
+    """The rule of ``reports/preregistered-2026-10-02.md``, fitted.
+
+    ``term`` is the fitted record-quality term, and the class is defined
+    against it: a departure the term does not cover, with both lags past the
+    threshold. ``fit`` reads the rows the term was fitted on. ``n`` and
+    ``long`` count the class and its departures recorded over the threshold,
+    ``share`` is the add-one estimate, and ``rest_mean`` is the mean recorded
+    taxi-out per airport over the departures with a flight-plan record
+    (``LOBT_flt`` present, as ``flag`` reads it) and a taxi-out of at most the
+    threshold, with nothing left out for being the term's or the class's, since
+    the pre-registration names no such exclusion. Aggregates only; safe to print.
+    """
+
+    PREDICT_INPUTS: ClassVar[tuple[str, ...]] = PLAN_SHIFT_PREDICT_INPUTS
+    FIT_ONLY_INPUTS: ClassVar[tuple[str, ...]] = PLAN_SHIFT_FIT_ONLY_INPUTS
+
+    term: TailModel
+    n: int | None = None
+    long: int | None = None
+    share: float | None = None
+    rest_mean: pd.Series = field(default_factory=lambda: pd.Series(dtype=float))
+
+    def in_class(self, frame: pd.DataFrame) -> pd.Series:
+        """The class: the rows the term leaves, of those ``plan_shifted`` picks."""
+        covered = self.term.flagged(frame).to_numpy(dtype=bool)
+        return (plan_shifted(frame) & ~covered).rename("plan_shift")
+
+    def fit(self, frame: pd.DataFrame) -> "PlanShiftModel":
+        """Count the class, its long departures and the rest means on ``frame``."""
+        need = PLAN_SHIFT_PREDICT_INPUTS + PLAN_SHIFT_FIT_ONLY_INPUTS
+        missing = [c for c in need if c not in frame.columns]
+        if missing:
+            raise KeyError(f"fit() needs {missing}")
+        threshold = plan_shift_threshold_s()
+        y = pd.to_numeric(frame["TAXITIME_SEC_mvt"], errors="coerce").astype(float)
+        members = self.in_class(frame)
+        self.n = int(members.sum())
+        self.long = int((members & (y > threshold)).sum())
+        plus_long, plus_n = PLAN_SHIFT_ADD_ONE
+        self.share = (self.long + plus_long) / (self.n + plus_n)
+        rest = (frame["LOBT_flt"].notna() & y.notna() & (y <= threshold)).to_numpy()
+        icao = frame["ADEP_mvt"].astype(str).to_numpy()[rest]
+        self.rest_mean = (
+            pd.Series(y.to_numpy()[rest], index=pd.Index(icao, name="icao"))
+            .groupby(level="icao", sort=True)
+            .mean()
+            .astype(float)
+            .rename("rest_mean")
+        )
+        return self
+
+    def predict(self, frame: pd.DataFrame) -> pd.Series:
+        """The rule on the rows ``plan_shifted`` picks; NaN elsewhere.
+
+        Reads ``PREDICT_INPUTS`` only, so it runs unchanged on the ranking set,
+        and does not ask the term: a row the term covers is the term's, and
+        ``combine`` puts the term first. A plan-shifted row at an airport the
+        fit holds no rest mean for is refused with a ``ValueError``: the
+        pre-registration does not define its prediction, so this neither
+        drops the rest mean nor leaves the row to the model, either of which
+        would be a choice made here. No departure of the training year or of
+        the ranking set is such a row.
+        """
+        self._check_fitted()
+        missing = [c for c in PLAN_SHIFT_PREDICT_INPUTS if c not in frame.columns]
+        if missing:
+            raise KeyError(f"predict() needs {missing}")
+        picked = plan_shifted(frame).to_numpy(dtype=bool)
+        lag = (
+            (_utc(frame["MVT_TIME_UTC_mvt"]) - _utc(frame["LOBT_flt"]))
+            .dt.total_seconds()
+            .to_numpy(dtype=float)
+        )
+        icao = frame["ADEP_mvt"].astype(str)
+        rest = icao.map(self.rest_mean).to_numpy(dtype=float)
+        undefined = picked & np.isnan(rest)
+        if undefined.any():
+            raise ValueError(
+                "the plan-shifted departures' rule has no rest mean for "
+                f"{sorted(set(icao[undefined]))}, and the pre-registration does not"
+                " say what it predicts there"
+            )
+        value = self.share * lag + (1.0 - self.share) * rest
+        out = np.where(picked, value, np.nan)
+        return pd.Series(out, index=frame.index, name="plan_shift", dtype=float)
+
+    def _check_fitted(self) -> None:
+        if self.share is None:
+            raise RuntimeError("PlanShiftModel is not fitted")
+
+
+def combine(physical, tail: pd.Series, plan_shift: pd.Series | None = None) -> pd.Series:
+    """The submitted prediction, in order: the term where it exists, then the
+    plan-shifted departures' rule on the rows the term leaves, else the
+    physical model. Without ``plan_shift`` it is the term and the model alone.
+    """
     tail = pd.Series(tail, dtype=float)
     if isinstance(physical, pd.Series):
         # A Series is aligned by index, and a mismatch is an error rather
@@ -288,6 +468,11 @@ def combine(physical, tail: pd.Series) -> pd.Series:
         phys = np.asarray(physical, dtype=float)
         if phys.shape != (len(tail),):
             raise ValueError("physical and tail differ in length")
+    if plan_shift is not None:
+        plan_shift = pd.Series(plan_shift, dtype=float)
+        if not plan_shift.index.equals(tail.index):
+            raise ValueError("tail and plan_shift must share an index")
+        phys = np.where(plan_shift.notna().to_numpy(), plan_shift.to_numpy(), phys)
     out = np.where(tail.notna().to_numpy(), tail.to_numpy(), phys)
     return pd.Series(out, index=tail.index, name="prediction", dtype=float)
 
@@ -302,12 +487,18 @@ __all__ = [
     "MIN_COUNT",
     "MIN_SHARE",
     "NEAR_S",
+    "PLAN_SHIFT_ADD_ONE",
+    "PLAN_SHIFT_FIT_ONLY_INPUTS",
+    "PLAN_SHIFT_PREDICT_INPUTS",
     "PREDICT_INPUTS",
     "UNFLAGGED_BUCKET",
+    "PlanShiftModel",
     "TailModel",
     "combine",
     "defaulted_block",
     "flag",
     "lag_band",
     "lag_seconds",
+    "plan_shift_threshold_s",
+    "plan_shifted",
 ]

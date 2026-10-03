@@ -702,7 +702,7 @@ _SCRIPTS: tuple[Constant, ...] = (
             "PREFIX_ROWS",
             (15,),
             CHOSEN,
-            "line 105: enough to show the shape of the claim, with the sentence"
+            "line 125: enough to show the shape of the claim, with the sentence"
             " under each table computed over every row",
         ),
     ),
@@ -1276,7 +1276,7 @@ CONSTANTS: tuple[Constant, ...] = (
             CHOSEN,
             f"{VALUE_NOT_JUSTIFIED}: the plausibility ceiling on a plan lag,"
             " two hours. The same two hours as `taxiout.tails.LONG_S`, whose"
-            " reason is recorded at `src/taxiout/tails.py` line 88 -- two hours is above"
+            " reason is recorded at `src/taxiout/tails.py` line 114 -- two hours is above"
             " every plausible taxi-out and below every artifact. **Cited and"
             " not imported**: that sentence is about the length of a taxi, and"
             " this bounds the gap between a plan and a pushback, so an import"
@@ -1305,7 +1305,7 @@ CONSTANTS: tuple[Constant, ...] = (
             CHOSEN,
             f"{VALUE_NOT_JUSTIFIED}: the plausibility bound on an arrival's"
             " lateness, the same two hours as `LAG_HI_S` above and as"
-            " `taxiout.tails.LONG_S`, whose reason is at `src/taxiout/tails.py` line 88."
+            " `taxiout.tails.LONG_S`, whose reason is at `src/taxiout/tails.py` line 114."
             " Cited on the same terms and for the same reason: that sentence"
             " bounds a taxi duration and this bounds a lateness, so the"
             " citation places the magnitude and does not justify this use",
@@ -1630,21 +1630,21 @@ CONSTANTS: tuple[Constant, ...] = (
             "NEAR_S",
             (60.0,),
             CHOSEN,
-            "line 85: the 60 s absorbs the schedule's minute resolution, and 83%"
+            "line 111: the 60 s absorbs the schedule's minute resolution, and 83%"
             " of the rows it catches are within 5 s",
         ),
         (
             "LONG_S",
             (2,),
             CHOSEN,
-            "line 85, covering this too: two hours is above every plausible"
+            "line 111, covering this too: two hours is above every plausible"
             " taxi-out and below every artifact",
         ),
         (
             "MIN_COUNT",
             (5,),
             CHOSEN,
-            "line 92: below five rows a cell's defaulted share is a coin toss,"
+            "line 118: below five rows a cell's defaulted share is a coin toss,"
             " and above ten the rule discards the cells the term exists for --"
             " the Fiumicino `>12 h` cell has 29 rows in a year",
         ),
@@ -1652,9 +1652,18 @@ CONSTANTS: tuple[Constant, ...] = (
             "MIN_SHARE",
             (0.05,),
             CHOSEN,
-            "line 92, covering this too: five percent separates cells whose"
+            "line 118, covering this too: five percent separates cells whose"
             " artifact share is a property of the feed from cells with a stray"
             " row",
+        ),
+        (
+            "PLAN_SHIFT_ADD_ONE",
+            (1, 2),
+            MECHANISM,
+            "the add-one estimate's form, `(long + 1) / (n + 2)`: the estimator"
+            " of the plan-shifted class's long share, fixed with the rest of"
+            " the rule by `reports/preregistered-2026-10-02.md` before it was"
+            " evaluated, and not a value picked against anything",
         ),
     ),
     *_mod(
@@ -1941,6 +1950,21 @@ FROZEN_DOCUMENTS: tuple[Frozen, ...] = (
         " built on: the rows July gained at seven airports, the timestamps"
         " moved in the rows both hold, and the training files unchanged. Its"
         " value is that it was measured once, on its date, against both",
+    ),
+    Frozen(
+        "reports/preregistered-2026-10-02.md",
+        "c1aba2f8e7d41626cd2b6fb0bce2025e4f027d056c6cc46c090d269f904f5368",
+        "the rule of the plan-shifted departures, fixed before it was evaluated"
+        " or built, and the source of the class's definition in"
+        " `taxiout.tails.PlanShiftModel`. What is frozen is this published"
+        " copy, at the digest beside it. What fixed the order is the working"
+        " note it was copied from, sha256"
+        " d62b48f32d3ba9da07aa346cb04a2560feaff9664a9734228d7523e669dda9a1,"
+        " written on 2 October 2026 after the class was seen in the ranking"
+        " set's exposed fields and before any fold, any v7 or any score"
+        " existed. The copy differs from the note in the places its closing"
+        " section lists and nowhere else, which `tests/test_tails.py` checks"
+        " against the note where the note is on hand",
     ),
 )
 

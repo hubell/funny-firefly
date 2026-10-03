@@ -16,9 +16,11 @@ more than the seed floor on both forward splits, and it has never been measured
 on top of the rung this script fits, so what it would add here is not known and
 it is not in the model. Fitted on the full 2025
 movement files with the rows ``taxiout.tails`` covers excluded, then combined
-with that term on the rows it covers. Nothing here is chosen by a leaderboard
-score; the rung and the hyperparameters are the ones ``reports/baseline.md`` was
-generated with.
+with that term on the rows it covers, and with the rule of the plan-shifted
+departures (``taxiout.tails.PlanShiftModel``, fixed by
+``reports/preregistered-2026-10-02.md``) on the rows of that class the term
+leaves. Nothing here is chosen by a leaderboard score; the rung and the
+hyperparameters are the ones ``reports/baseline.md`` was generated with.
 
 The file goes to ``data/submissions/<team>_v<n>.parquet``, with a manifest
 beside it at ``<team>_v<n>.manifest.json``, and the script checks with git
@@ -30,7 +32,8 @@ whole of ``data/submissions/``, and this verifies rather than assumes it.
 The manifest says what the file was built from and by: the git revision and
 whether the tree was clean, the booster, its version and the parameters it was
 fitted with, how many rows it was fitted on, how many ranking rows took the
-record-quality term and how many sit on a pair the training year never saw,
+record-quality term, how many took the plan-shifted departures' rule and what
+that rule was fitted to, and how many sit on a pair the training year never saw,
 the sha256 of the template read and of the file written, and the time. Two
 fields are left empty for the only values the scorer is ever read for,
 ``usedPairs`` and the score. Two builds of one version should differ in the
@@ -139,7 +142,7 @@ TAILS_PREDICT_COLUMNS = ("SCHED_TIME_UTC_mvt", "ADEP_mvt", "LOBT_flt", "MVT_TIME
 # What the two Stream B modules must export for this script to run.
 NEEDED = {
     "taxiout.submission": ("write", "check_filename"),
-    "taxiout.tails": ("TailModel", "combine"),
+    "taxiout.tails": ("TailModel", "PlanShiftModel", "combine"),
 }
 
 
@@ -329,8 +332,17 @@ def main() -> int:
     fallback = airport_fallback(matrix)
     weather = regime_by_hour(load_metar(METAR))
     airports = load_airports(OURAIRPORTS)
-    train_columns = sorted(set(REQUIRED_COLUMNS) | set(TAILS_TRAIN_COLUMNS) | {TARGET})
-    rank_columns = sorted(set(REQUIRED_COLUMNS) | set(TAILS_PREDICT_COLUMNS) | {ID})
+    # The plan-shifted departures' rule reads the take-off, the two off-block
+    # estimates and the airport, all four in REQUIRED_COLUMNS already, and the
+    # target at fit time; named here so that its inputs are loaded whatever the
+    # feature set becomes.
+    plan_shift_columns = set(tails.PlanShiftModel.PREDICT_INPUTS)
+    train_columns = sorted(
+        set(REQUIRED_COLUMNS) | set(TAILS_TRAIN_COLUMNS) | plan_shift_columns | {TARGET}
+    )
+    rank_columns = sorted(
+        set(REQUIRED_COLUMNS) | set(TAILS_PREDICT_COLUMNS) | plan_shift_columns | {ID}
+    )
     train = to_pandas(load_movements(DATA, train_columns, phase="DEP")).reset_index(
         drop=True
     )
@@ -355,6 +367,15 @@ def main() -> int:
     print(
         f"  {int(tail_model.cells['covered'].sum()):,} covered cells, "
         f"{int(covered.sum()):,} training rows excluded from the physical fit"
+    )
+    # The plan-shifted departures: fitted on the same rows as the term and
+    # against it, and read nowhere in the physical fit, whose rows stay
+    # ``fitting_rows``'s.
+    plan_shift_model = tails.PlanShiftModel(tail_model).fit(train)
+    print(
+        f"  {plan_shift_model.n:,} plan-shifted training departures, "
+        f"{plan_shift_model.long:,} of them long; add-one share "
+        f"{plan_shift_model.share:.4f}"
     )
 
     print(f"fitting {RUNG.label} ...")
@@ -468,14 +489,18 @@ def main() -> int:
         )
     physical = model.predict(Xr)
     tail = tail_model.predict(rank)
-    pred = tails.combine(physical, tail)
+    plan_shift = plan_shift_model.predict(rank)
+    # The term first, then the plan-shifted rule on the rows the term leaves.
+    shifted = plan_shift.notna() & tail.isna()
+    pred = tails.combine(physical, tail, plan_shift)
     # The submission's target is a non-negative int32; a boosted model can
     # extrapolate below zero on a row unlike anything it was fitted on, and a
     # negative taxi-out is not a prediction anyone should submit.
     negative = int((pred < 0).sum())
     pred = pred.clip(lower=0)
     print(
-        f"  {int(tail.notna().sum()):,} rows take the record-quality term; "
+        f"  {int(tail.notna().sum()):,} rows take the record-quality term, "
+        f"{int(shifted.sum()):,} the plan-shifted departures' rule; "
         f"{negative:,} negative predictions clipped to zero"
     )
     print(
@@ -508,6 +533,16 @@ def main() -> int:
         "record_quality_rows": int(tail.notna().sum()),
         "record_quality_rows_by_month": {
             m: int(n) for m, n in tail.notna().groupby(month.to_numpy()).sum().items()
+        },
+        "plan_shift_rows": {
+            m: int(n) for m, n in shifted.groupby(month.to_numpy()).sum().items()
+        },
+        "plan_shift_n": plan_shift_model.n,
+        "plan_shift_long": plan_shift_model.long,
+        "plan_shift_share": plan_shift_model.share,
+        "plan_shift_rest_mean": {
+            icao: float(plan_shift_model.rest_mean[icao])
+            for icao in sorted(set(rank.loc[shifted, "ADEP_mvt"].astype(str)))
         },
         "ranking_bare_prior": bare_prior,
         "encoding_length_dependence": {
