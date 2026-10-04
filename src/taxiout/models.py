@@ -381,6 +381,22 @@ BAGGING_SEEDS = 5
 # it once and import it.
 SEED_AVERAGE_ADOPTED: bool = True
 
+# Whether the submission substitutes the record-quality term's and the
+# plan-shifted departures' rule's predictions on the rows they cover. Both are
+# still fitted, still exclude their training rows from the physical fit, and
+# are still counted in the manifest; this decides only what the file predicts
+# on those rows. The decision is ``reports/preregistered-2026-10-04.md``'s §1,
+# fixed before any figure it governs existed: "Every file uploaded from now
+# predicts every ranking row with the booster. The record-quality term
+# (`taxiout.tails.TailModel`) and the rule of the plan-shifted departures
+# (`taxiout.tails.PlanShiftModel`) are still fitted, still exclude their
+# training rows from the physical fit exactly as now, and are still reported,
+# but their predictions are not substituted." It supersedes the substitution
+# steps of ``reports/preregistered-2026-10-02.md``. True is the behavior v7
+# was built with; ``scripts/make_submission.py`` reads this and decides
+# nothing itself.
+TAIL_RULES_SUBSTITUTED: bool = False
+
 
 # The top rung's feature block, named once so the rungs that build on it say
 # so rather than repeating fifteen tuples and drifting from one another.
@@ -1231,6 +1247,7 @@ __all__ = [
     "ENCODING_STAND_BLOCK",
     "GATE_2C_RUNGS",
     "SEED_AVERAGE_ADOPTED",
+    "TAIL_RULES_SUBSTITUTED",
     "TAIL_EXCLUSION_ADOPTED_H",
     "fit_rows",
     "LADDER_PROPER",

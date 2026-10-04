@@ -1,9 +1,11 @@
 # SPDX-License-Identifier: GPL-3.0-only
-"""The published copies of the candidates' two pre-registrations.
+"""The published copies of the pre-registrations after the freeze.
 
 ``reports/preregistered-2026-09-28.md`` and ``reports/preregistered-2026-10-03.md``
 are the working notes the rule was fixed in, with the places their closing
-sections list changed and nothing else. The notes are not published; where one
+sections list changed and nothing else. ``reports/preregistered-2026-10-04.md``
+is its note byte for byte: written to need no change, it has no closing section
+of differences, and its digest is the note's. The notes are not published; where one
 is on hand, its digest is checked first and the copy is rebuilt from it, in the
 form ``tests/test_tails.py`` checks the copy of 2 October in. Each substitution
 is held by a pattern for the note's side, so this file names no work block
@@ -33,6 +35,15 @@ NOTE_REFERENCE_TOKEN = r"\b[A-Za-z0-9_]+_\d{4}-\d{2}-\d{2}\.md\b"
 
 NOTE_0928 = "eee5b947e4c449eb7df5765ca62d25a3ca954f201ecefa23311eec8918813e60"
 NOTE_1003 = "91e3306ef2b5e0efd6ab8d0a5c0ed9e2fc29ed0b0015bb4af8e96c6a2a601662"
+NOTE_1004 = "568299d1f2fd63cd049c83d40bfab3a0af6ebe548ad0318d23c7a26a992d3990"
+
+# Copies equal to their note, byte for byte: path to (note, the note's digest).
+IDENTICAL = {
+    "reports/preregistered-2026-10-04.md": (
+        "preregistration_2026-10-04_board.md",
+        NOTE_1004,
+    ),
+}
 
 COPIES = {
     "reports/preregistered-2026-09-28.md": (
@@ -119,3 +130,45 @@ def test_the_copy_is_frozen_at_its_digest_and_its_record_names_the_note(path):
     assert path in held
     assert digest(REPO / path) == held[path].sha256
     assert COPIES[path][1] in held[path].why
+
+
+@pytest.mark.parametrize("path", sorted(IDENTICAL))
+def test_the_identical_copy_is_its_note_byte_for_byte(path):
+    """Where the note is on hand, the copy is the note; and either way the
+    copy's own digest is the note's, which is what fixed the order."""
+    name, note_sha = IDENTICAL[path]
+    raw = (REPO / path).read_bytes()
+    assert hashlib.sha256(raw).hexdigest() == note_sha
+    note = Path(NOTES or ".") / name
+    if not NOTES or not note.exists():
+        pytest.skip(
+            "the working note is not on hand; the copy is checked alone"
+            " (PREREGISTRATION_NOTES names the notes' directory)"
+        )
+    assert note.read_bytes() == raw
+
+
+@pytest.mark.parametrize("path", sorted(IDENTICAL))
+def test_the_identical_copy_names_no_work_block_and_credits_openstreetmap(path):
+    sys.path.insert(0, str(REPO / "scripts"))
+    import check_licence_hygiene as hygiene
+
+    copy = _published(path)
+    assert not re.search(WORK_BLOCK_TOKEN, copy)
+    assert not re.search(r"\bblock\d+[a-z]*\b", copy)
+    assert not re.search(r"\bcha[t]\b|\bsessio[n]\b", copy, re.IGNORECASE)
+    assert not re.search(NOTE_REFERENCE_TOKEN, copy)
+    assert not hygiene.attribution_in(copy)
+    assert copy.count(hygiene.ATTRIBUTION) == 1
+    assert "ODbL" in copy
+    assert PUBLISHED_TAIL not in copy
+
+
+@pytest.mark.parametrize("path", sorted(IDENTICAL))
+def test_the_identical_copy_is_frozen_at_the_notes_digest(path):
+    sys.path.insert(0, str(REPO / "src"))
+    from taxiout.provenance import FROZEN_DOCUMENTS, digest
+
+    held = {f.path: f for f in FROZEN_DOCUMENTS}
+    assert path in held
+    assert digest(REPO / path) == held[path].sha256 == IDENTICAL[path][1]

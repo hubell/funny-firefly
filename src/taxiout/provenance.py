@@ -504,10 +504,11 @@ _SCRIPTS: tuple[Constant, ...] = (
         ),
         (
             "RULE_LEGS",
-            (217.6, 217.11, 217.59, 0.48, 325.8, 325.29, 325.81, 0.52),
+            (217.6, 217.11, 217.59, 0.48, False, 325.8, 325.29, 325.81, 0.52, True),
             QUOTED,
             "the figures the seed-averaging rule is read on, quoted from"
-            " `reports/baseline.md` of 19 September 2026",
+            " `reports/baseline.md` of 19 September 2026, each with whether"
+            " this run reproduces it",
         ),
         (
             "SUBSTITUTIONS",
@@ -601,7 +602,7 @@ _SCRIPTS: tuple[Constant, ...] = (
         "scripts/report_headroom.py",
         (
             "HEADROOM_BOOSTER_PARAMS",
-            (1.0, 1.0, 0, 32, 10.0, 20260902, 8, 1),
+            (1.0, 1.0, 0, 32, 10.0, 20260902, True, True, 8, 1),
             CHOSEN,
             "lines 104 to 126: the smallest value on each of the four axes of"
             " `sweep_params.FIRST_SWEEP`, the grid live when"
@@ -1183,6 +1184,7 @@ _SCRIPTS: tuple[Constant, ...] = (
                 235.0,
                 235.0,
                 244.8,
+                False,
             ),
             QUOTED,
             "the first sweep's terms and its October figures, 3 September 2026,"
@@ -1234,6 +1236,31 @@ _SCRIPTS: tuple[Constant, ...] = (
             QUOTED,
             "the same report's October fitting-sample size",
         ),
+    ),
+    *_mod(
+        "scripts/candidates.py",
+        (
+            "Arm.saturation",
+            (False,),
+            MECHANISM,
+            "a dataclass field's off default: an arm reads the saturation block"
+            " only when it says so",
+        ),
+    ),
+    *_mod(
+        "scripts/check_determinism.py",
+        (
+            "CONFIGS",
+            (True, True, True, True, True, True, True),
+            MECHANISM,
+            "the booster switches each compared configuration turns on, which"
+            " are what the comparison is of and not quantities",
+        ),
+    ),
+    *_mod(
+        "scripts/report_monthly.py",
+        ("Leg.train", (False,), MECHANISM, "a dataclass field's `repr=False`"),
+        ("Leg.valid", (False,), MECHANISM, "a dataclass field's `repr=False`"),
     ),
 )
 
@@ -1467,6 +1494,18 @@ CONSTANTS: tuple[Constant, ...] = (
             MECHANISM,
             "a dataclass field's zero default, not a quantity",
         ),
+        (
+            "WithinVariance.decisive",
+            (False,),
+            MECHANISM,
+            "a dataclass field's off default, set by the fit, not a decision",
+        ),
+        (
+            "WithinVariance.material",
+            (False,),
+            MECHANISM,
+            "a dataclass field's off default, set by the fit, not a decision",
+        ),
     ),
     *_mod(
         "src/taxiout/exposure.py",
@@ -1644,7 +1683,7 @@ CONSTANTS: tuple[Constant, ...] = (
         "src/taxiout/models.py",
         (
             "BOOSTER_PARAMS",
-            (6000, 0.03, 127, 20, 0.9, 0.8, 1, 64, 20.0, 20260902, 8, 1),
+            (6000, 0.03, 127, 20, 0.9, 0.8, 1, 64, 20.0, 20260902, True, True, 8, 1),
             CHOSEN,
             "the cell left standing by the extension of the second sweep, 23"
             " September 2026, scored 214.4391 s on October against 214.9045 s"
@@ -1675,12 +1714,48 @@ CONSTANTS: tuple[Constant, ...] = (
             "TAIL_EXCLUSION_ADOPTED_H",
             (4.0,),
             CHOSEN,
-            "lines 811 to 832: fixed at four hours on the mechanism and not by a sweep,"
+            "lines 827 to 848: fixed at four hours on the mechanism and not by a sweep,"
             " because no aircraft taxis for four hours, and reported against an"
             " un-excluded fit and a two-hour arm both fixed before the run",
         ),
         ("_NET_CHAIN", (0,), MECHANISM, "an index into a rung list, not a quantity"),
         ("ABOVE_SUBMISSION", (1,), MECHANISM, "a slice offset, not a quantity"),
+        (
+            "SEED_AVERAGE_ADOPTED",
+            (True,),
+            CHOSEN,
+            "lines 377 to 381: the recorded decision to ship the five-seed"
+            " average, taken on 25 September 2026 under the rule of 19 September"
+            " as `reports/baseline.md` reads it under the parameters that ship;"
+            " `BAGGING_SEEDS`'s comment carries the readings",
+        ),
+        (
+            "TAIL_RULES_SUBSTITUTED",
+            (False,),
+            CHOSEN,
+            "lines 384 to 397: §1 of `reports/preregistered-2026-10-04.md`,"
+            " fixed before any figure it governs existed: every file uploaded"
+            " from 4 October 2026 predicts every ranking row with the booster,"
+            " and the record-quality term and the plan-shift rule are still"
+            " fitted, still exclude their training rows from the physical fit,"
+            " and are still reported, but their predictions are not substituted."
+            " The reason is that section's table of four readings of the 384"
+            " rows' truth and the scorer's arithmetic, over which dropping both"
+            " rules costs at most 7.2 s and keeping them up to 290.8 s",
+        ),
+        (
+            "Rung.diagnostic",
+            (False,),
+            MECHANISM,
+            "a dataclass field's off default: a rung is a step of the ladder"
+            " unless it says otherwise",
+        ),
+        (
+            "LADDER",
+            (True,),
+            MECHANISM,
+            "the one rung marked `diagnostic=True`, a flag and not a quantity",
+        ),
     ),
     *_mod(
         "src/taxiout/occupancy.py",
@@ -2233,6 +2308,21 @@ FROZEN_DOCUMENTS: tuple[Frozen, ...] = (
         " scorer returned them on 4 October 2026. Regenerating it would read the"
         " manifest of whatever file is on disk, and the readback happens once",
     ),
+    Frozen(
+        "reports/preregistered-2026-10-04.md",
+        "568299d1f2fd63cd049c83d40bfab3a0af6ebe548ad0318d23c7a26a992d3990",
+        "the decision that every file uploaded from 4 October 2026 predicts"
+        " every ranking row with the booster, the rules the next candidates and"
+        " the off-block measurement are read under, and the source of"
+        " `taxiout.models.TAIL_RULES_SUBSTITUTED`. What is frozen is this"
+        " published copy, at the digest beside it. What fixed the order is the"
+        " working note it was copied from, sha256"
+        " 568299d1f2fd63cd049c83d40bfab3a0af6ebe548ad0318d23c7a26a992d3990,"
+        " written on 4 October 2026 before any figure it governs existed. It"
+        " was written to need no change and the copy is the note byte for byte,"
+        " which `tests/test_preregistered_copies.py` checks against the note"
+        " where the note is on hand",
+    ),
 )
 
 
@@ -2395,7 +2485,7 @@ PROVENANCE_PENDING: tuple[Pending, ...] = ()
 
 SCOPE: tuple[tuple[str, str], ...] = (
     (
-        "module-level numeric assignments in `src/` and `scripts/`",
+        "module-level numeric and boolean assignments in `src/` and `scripts/`",
         "covered by `CONSTANTS`, one entry each, and check 1 fails on any the"
         " scanner finds and the register does not carry",
     ),

@@ -25,20 +25,20 @@ the gate's job is to prove there is no fifth.
 
 ## The constants
 
-`taxiout.provenance.CONSTANTS` carries **259** entries, one
+`taxiout.provenance.CONSTANTS` carries **269** entries, one
 per module-level numeric assignment the scanner finds outside the
-authored artifact. The scanner finds **313** in all, of which
+authored artifact. The scanner finds **324** in all, of which
 **50** are in `src/taxiout/synthetic.py` and are covered by
 `AUTHORED_ARTIFACTS` as a module rather than one by one.
 
 | class | entries | what it means |
 | --- | ---: | --- |
-| `mechanism` | 114 | definitional or a unit conversion; nobody chose it |
-| `chosen` | 110 | somebody picked it, and the basis says what against |
+| `mechanism` | 122 | definitional or a unit conversion; nobody chose it |
+| `chosen` | 112 | somebody picked it, and the basis says what against |
 | `derived` | 1 | computed from the data and frozen into the source |
 | `quoted` | 34 | a measurement from a named run or document |
 
-**Of the 110 chosen constants, 14 record
+**Of the 112 chosen constants, 14 record
 no reason at all, and a further
 15 record the method, the convention or a neighbouring
 use and not the value.** That is the finding this register was built to
@@ -241,7 +241,7 @@ than this record claiming it.
 
 ## Frozen documents
 
-**15** dated records, each with a sha256. These need
+**16** dated records, each with a sha256. These need
 the opposite gate from every other file here: the risk is not that they go
 stale, it is that somebody edits them. A currency check over one would
 demand destroying the record.
@@ -263,6 +263,7 @@ demand destroying the record.
 | `reports/preregistered-2026-09-28.md` | the three candidates of 28 September, their legs, their reference and the four conditions they were first to be read under, fixed before any of them was fitted on top of the rung and the parameters that ship. The rule they were read under is `reports/preregistered-2026-10-03.md`, which keeps these, replaces the paragraph on what adoption costs, and adds the rows every figure is over and a fifth condition. What is frozen is this published copy, at the digest beside it. What fixed the order is the working note it was copied from, sha256 eee5b947e4c449eb7df5765ca62d25a3ca954f201ecefa23311eec8918813e60, recorded on 28 September 2026 when it was written. The copy differs from the note in the place its closing section lists and nowhere else, which `tests/test_preregistered_copies.py` checks against the note where the note is on hand |
 | `reports/preregistered-2026-10-03.md` | the rule the three candidates are read under: the four conditions of 28 September over the rows neither the record-quality term nor the plan-shift rule covers, a fifth on the twelve held-out months, and adoption as one recorded increment on the rung that ships. What is frozen is this published copy, at the digest beside it. What fixed the order is the working note it was copied from, sha256 91e3306ef2b5e0efd6ab8d0a5c0ed9e2fc29ed0b0015bb4af8e96c6a2a601662, written on 3 October 2026 after v7 was committed and before any candidate was fitted under it. The copy differs from the note in the place its closing section lists and nowhere else, which `tests/test_preregistered_copies.py` checks against the note where the note is on hand |
 | `reports/submission-2026-10-04.md` | the record of the one upload: the scored file, `funny-firefly_v7.parquet`, built twice byte for byte, its target's type, and the two values the upload rule allows to be read back, `usedPairs` and the score, as the scorer returned them on 4 October 2026. Regenerating it would read the manifest of whatever file is on disk, and the readback happens once |
+| `reports/preregistered-2026-10-04.md` | the decision that every file uploaded from 4 October 2026 predicts every ranking row with the booster, the rules the next candidates and the off-block measurement are read under, and the source of `taxiout.models.TAIL_RULES_SUBSTITUTED`. What is frozen is this published copy, at the digest beside it. What fixed the order is the working note it was copied from, sha256 568299d1f2fd63cd049c83d40bfab3a0af6ebe548ad0318d23c7a26a992d3990, written on 4 October 2026 before any figure it governs existed. It was written to need no change and the copy is the note byte for byte, which `tests/test_preregistered_copies.py` checks against the note where the note is on hand |
 
 ## What a rebuild of an external input is pinned to
 
@@ -319,7 +320,7 @@ Stated so its silence is not read as a pass.
 
 | surface | treatment |
 | --- | --- |
-| module-level numeric assignments in `src/` and `scripts/` | covered by `CONSTANTS`, one entry each, and check 1 fails on any the scanner finds and the register does not carry |
+| module-level numeric and boolean assignments in `src/` and `scripts/` | covered by `CONSTANTS`, one entry each, and check 1 fails on any the scanner finds and the register does not carry |
 | numeric defaults in function signatures | NOT covered. The scanner counts them and the census prints the count, but they are parameters of a call and not constants of a module, and every one that matters is bound to a module constant at the call site. Stated here so the silence is not read as a pass |
 | `src/taxiout/provenance.py` | NOT covered, and it cannot be: its aggregate assignments hold every registered literal in the repository, so an entry for them would be a copy of the register inside itself and would drift whenever any other entry changed. Its own prose figures are the bases, each of which names its source, and check 7 excludes it for that reason |
 | `scripts/check_provenance.py` | its `REPO` is registered like every other script's; its prose figures are the exemption table's own data, which is a list of figures by construction, so check 7 excludes it. It writes no report |

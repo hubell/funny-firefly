@@ -15,11 +15,15 @@ ship, ``reports/baseline.md`` reads it better than the rung it was added to by
 more than the seed floor on both forward splits, and it has never been measured
 on top of the rung this script fits, so what it would add here is not known and
 it is not in the model. Fitted on the full 2025
-movement files with the rows ``taxiout.tails`` covers excluded, then combined
-with that term on the rows it covers, and with the rule of the plan-shifted
-departures (``taxiout.tails.PlanShiftModel``, fixed by
-``reports/preregistered-2026-10-02.md``) on the rows of that class the term
-leaves. Nothing here is chosen by a leaderboard score; the rung and the
+movement files with the rows ``taxiout.tails`` covers excluded. The
+record-quality term and the rule of the plan-shifted departures
+(``taxiout.tails.PlanShiftModel``, fixed by
+``reports/preregistered-2026-10-02.md``) are fitted and counted beside it, and
+``taxiout.models.TAIL_RULES_SUBSTITUTED`` decides whether their predictions
+replace the model's on the rows they cover: the term on its rows, then the rule
+on the rows of its class the term leaves. It is False since
+``reports/preregistered-2026-10-04.md``, so the file is the physical model's
+prediction on every row. Nothing here is chosen by a leaderboard score; the rung and the
 hyperparameters are the ones ``reports/baseline.md`` was generated with.
 
 The file goes to ``data/submissions/<team>_v<n>.parquet``, with a manifest
@@ -31,9 +35,10 @@ whole of ``data/submissions/``, and this verifies rather than assumes it.
 
 The manifest says what the file was built from and by: the git revision and
 whether the tree was clean, the booster, its version and the parameters it was
-fitted with, how many rows it was fitted on, how many ranking rows took the
-record-quality term, how many took the plan-shifted departures' rule and what
-that rule was fitted to, and how many sit on a pair the training year never saw,
+fitted with, how many rows it was fitted on, whether the two rules'
+predictions were substituted, how many ranking rows the record-quality term
+covers and how many the plan-shifted departures' rule covers, which are the
+rows each would have taken when they are not, what that rule was fitted to, and how many sit on a pair the training year never saw,
 the sha256 of the template read and of the file written, and the time. Two
 fields are left empty for the only values the scorer is ever read for,
 ``usedPairs`` and the score. Two builds of one version should differ in the
@@ -112,6 +117,7 @@ from taxiout.models import (  # noqa: E402
     TOP_RUNG,
     Booster,
     SEED_AVERAGE_ADOPTED,
+    TAIL_RULES_SUBSTITUTED,
     SeedAverage,
     booster_backend,
     fit_rows as fitting_rows,
@@ -251,6 +257,24 @@ def next_version(team: str) -> int:
         if len(tail) == 2 and tail[0] == team and tail[1].isdigit():
             used.append(int(tail[1]))
     return max(used, default=0) + 1
+
+
+def submitted(physical, tail: pd.Series, plan_shift: pd.Series, substitute: bool):
+    """What the file predicts, before rounding and clipping.
+
+    With ``substitute`` the term on the rows it covers, then the plan-shifted
+    rule on the rows of its class the term leaves, then the model, which is
+    ``taxiout.tails.combine``. Without it the model on every row, passed
+    through ``combine`` with nothing to substitute so that the alignment checks
+    are the same either way. ``substitute`` is
+    ``taxiout.models.TAIL_RULES_SUBSTITUTED`` and is decided there, not here.
+    """
+    from taxiout.tails import combine
+
+    if substitute:
+        return combine(physical, tail, plan_shift)
+    combine(physical, tail, plan_shift)
+    return combine(physical, pd.Series(np.nan, index=tail.index, dtype=float))
 
 
 def main() -> int:
@@ -492,18 +516,22 @@ def main() -> int:
     physical = model.predict(Xr)
     tail = tail_model.predict(rank)
     plan_shift = plan_shift_model.predict(rank)
-    # The term first, then the plan-shifted rule on the rows the term leaves.
+    # The term first, then the plan-shifted rule on the rows the term leaves:
+    # the rows each rule takes when substituted, and would take when not.
     shifted = plan_shift.notna() & tail.isna()
-    pred = tails.combine(physical, tail, plan_shift)
+    pred = submitted(physical, tail, plan_shift, TAIL_RULES_SUBSTITUTED)
     # The submission's target is a non-negative int32; a boosted model can
     # extrapolate below zero on a row unlike anything it was fitted on, and a
     # negative taxi-out is not a prediction anyone should submit.
     negative = int((pred < 0).sum())
     pred = pred.clip(lower=0)
     print(
-        f"  {int(tail.notna().sum()):,} rows take the record-quality term, "
-        f"{int(shifted.sum()):,} the plan-shifted departures' rule; "
-        f"{negative:,} negative predictions clipped to zero"
+        f"  {int(tail.notna().sum()):,} rows "
+        + ("take" if TAIL_RULES_SUBSTITUTED else "would take")
+        + f" the record-quality term, {int(shifted.sum()):,} the plan-shifted "
+        "departures' rule"
+        + ("" if TAIL_RULES_SUBSTITUTED else ", neither substituted")
+        + f"; {negative:,} negative predictions clipped to zero"
     )
     print(
         f"  mean {pred.mean():,.0f} s, median {pred.median():,.0f} s, "
@@ -531,6 +559,7 @@ def main() -> int:
         "booster_params": dict(model.params),
         "seeds": BAGGING_SEEDS if SEED_AVERAGE_ADOPTED else 1,
         "fit_rows": int(fit_rows.sum()),
+        "tail_rules_substituted": TAIL_RULES_SUBSTITUTED,
         "record_quality_covered_cells": int(tail_model.cells["covered"].sum()),
         "record_quality_rows": int(tail.notna().sum()),
         "record_quality_rows_by_month": {
@@ -538,6 +567,10 @@ def main() -> int:
         },
         "plan_shift_rows": {
             m: int(n) for m, n in shifted.groupby(month.to_numpy()).sum().items()
+        },
+        "rows_each_rule_would_take": {
+            "record_quality": int(tail.notna().sum()),
+            "plan_shift": int(shifted.sum()),
         },
         "plan_shift_n": plan_shift_model.n,
         "plan_shift_long": plan_shift_model.long,

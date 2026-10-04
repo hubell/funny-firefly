@@ -262,7 +262,27 @@ def test_nan_target_rows_are_ignored_in_fit():
 # combine
 
 
-def test_combine_prefers_the_term_where_present():
+def _submission_script():
+    """``scripts/make_submission.py`` as a module; its ``main`` is not run."""
+    import importlib.util
+    import pathlib
+
+    path = pathlib.Path(__file__).resolve().parents[1] / "scripts" / "make_submission.py"
+    spec = importlib.util.spec_from_file_location("make_submission_under_test", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+# With ``substitute`` the file is what built v7, ``combine``; without it, which
+# is ``taxiout.models.TAIL_RULES_SUBSTITUTED`` since
+# reports/preregistered-2026-10-04.md, the physical prediction on every row.
+SUBSTITUTE = pytest.mark.parametrize("substitute", [True, False], ids=["v7", "rules-off"])
+
+
+@SUBSTITUTE
+def test_combine_prefers_the_term_where_present(substitute):
+    submitted = _submission_script().submitted
     idx = pd.Index([10, 11, 12])
     phys = pd.Series([900.0, 950.0, 1000.0], index=idx)
     tail = pd.Series([np.nan, 20000.0, np.nan], index=idx)
@@ -270,14 +290,34 @@ def test_combine_prefers_the_term_where_present():
     assert out.tolist() == [900.0, 20000.0, 1000.0]
     assert out.index.equals(idx)
     assert combine(np.array([1.0, 2.0, 3.0]), tail).tolist() == [1.0, 20000.0, 3.0]
+    # what the file is written from, under the flag
+    written = submitted(phys, tail, None, substitute)
+    assert written.index.equals(idx)
+    if substitute:
+        pd.testing.assert_series_equal(written, out)
+    else:
+        assert written.tolist() == phys.tolist()
+    arr = submitted(np.array([1.0, 2.0, 3.0]), tail, None, substitute)
+    assert arr.tolist() == ([1.0, 20000.0, 3.0] if substitute else [1.0, 2.0, 3.0])
 
 
-def test_combine_rejects_misaligned_inputs():
+@SUBSTITUTE
+def test_combine_rejects_misaligned_inputs(substitute):
+    submitted = _submission_script().submitted
     tail = pd.Series([np.nan, 1.0], index=[0, 1])
     with pytest.raises(ValueError):
         combine(pd.Series([1.0, 2.0], index=[5, 6]), tail)
     with pytest.raises(ValueError):
         combine(np.array([1.0]), tail)
+    # and the file refuses them under either setting
+    with pytest.raises(ValueError):
+        submitted(pd.Series([1.0, 2.0], index=[5, 6]), tail, None, substitute)
+    with pytest.raises(ValueError):
+        submitted(np.array([1.0]), tail, None, substitute)
+    with pytest.raises(ValueError):
+        submitted(
+            np.array([1.0, 2.0]), tail, pd.Series([np.nan] * 2, index=[7, 8]), substitute
+        )
 
 
 # --------------------------------------------------------------------------
@@ -675,7 +715,9 @@ def test_plan_shift_predict_reads_only_its_inputs_and_needs_a_fit():
         PlanShiftModel(term).predict(test)
 
 
-def test_combine_puts_the_term_first_then_the_class_then_the_model():
+@SUBSTITUTE
+def test_combine_puts_the_term_first_then_the_class_then_the_model(substitute):
+    submitted = _submission_script().submitted
     idx = pd.Index([10, 11, 12, 13])
     phys = pd.Series([900.0, 950.0, 1000.0, 1100.0], index=idx)
     tail = pd.Series([np.nan, 20000.0, np.nan, 30000.0], index=idx)
@@ -686,6 +728,17 @@ def test_combine_puts_the_term_first_then_the_class_then_the_model():
     assert combine(phys.to_numpy(), tail, plan).tolist() == out.tolist()
     with pytest.raises(ValueError):
         combine(phys, tail, pd.Series([np.nan] * 4, index=[0, 1, 2, 3]))
+    # what the file is written from: v7's order, or the physical model alone,
+    # equal on every row neither rule covers either way
+    written = submitted(phys, tail, plan, substitute)
+    assert written.index.equals(idx)
+    if substitute:
+        pd.testing.assert_series_equal(written, out)
+    else:
+        assert written.tolist() == phys.tolist()
+    untouched = (tail.isna() & plan.isna()).to_numpy()
+    assert written[untouched].tolist() == phys[untouched].tolist()
+    assert submitted(phys.to_numpy(), tail, plan, substitute).tolist() == written.tolist()
 
 
 def test_the_class_on_the_training_year_and_the_ranking_set():

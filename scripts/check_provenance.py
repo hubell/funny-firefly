@@ -332,16 +332,20 @@ def scanned_modules() -> list[str]:
 
 
 def _numeric(node: ast.AST) -> tuple[float, ...]:
-    """Every int or float literal anywhere in ``node``, in source order.
+    """Every int, float or bool literal anywhere in ``node``, in source order.
 
     Walks the whole value, so a number inside a tuple, list, dict, set or call
     argument is found. ``ast.walk`` is breadth-first, so the nodes are sorted by
     position to make the order the source's and not the traversal's.
+
+    A bool counts because a decision recorded as a constant is one: whether the
+    submission averages its seeds, whether it substitutes the tail rules. Left
+    out, such a constant could be flipped with no register entry to say why.
     """
     found = [
         n
         for n in ast.walk(node)
-        if isinstance(n, ast.Constant) and type(n.value) in (int, float)
+        if isinstance(n, ast.Constant) and type(n.value) in (int, float, bool)
     ]
     found.sort(key=lambda n: (n.lineno, n.col_offset))
     return tuple(n.value for n in found)
