@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""The scored file's own record, and write ``reports/submission-<date>.md``.
+"""The scored file's own record, and write ``reports/submission-<date>-v<n>.md``.
 
 Two sections, each computed here and neither changing anything it counts.
 
@@ -27,6 +27,14 @@ build of the same version was copied to, whether the two files are
 byte-identical and the two manifests differ in the time alone; and, once the
 one upload has been scored, the two values the upload rule allows to be read
 back.
+
+Each version gets its own record, named by its date and its version, so two
+uploads on one day do not share a file. The record of 4 October 2026,
+``reports/submission-2026-10-04.md``, was written before the version was in the
+name and is frozen under the date alone; nothing here rewrites it. Where the
+manifest records whether the tail rules were substituted, the record says so
+beside the term's count; a manifest written before that field existed renders
+as it always did.
 
 Every number is computed; nothing is hand-typed. The report carries
 aggregates only, and the generator refuses to write a movement identifier or a
@@ -291,6 +299,23 @@ def section_file(
         ["record-quality term: covered cells", num(m["record_quality_covered_cells"])],
         ["record-quality term: ranking rows", num(m["record_quality_rows"])],
         *(
+            [
+                [
+                    "the two tail rules' predictions substituted",
+                    "yes" if m["tail_rules_substituted"] else "no",
+                ],
+                [
+                    "rows each rule would have taken",
+                    ", ".join(
+                        f"{k.replace('_', ' ')} {num(v)}"
+                        for k, v in m["rows_each_rule_would_take"].items()
+                    ),
+                ],
+            ]
+            if "tail_rules_substituted" in m
+            else []
+        ),
+        *(
             [f"record-quality term: ranking rows in {label(k)}", num(v)]
             for k, v in sorted(by_month.items())
         ),
@@ -436,7 +461,7 @@ def main() -> int:
     if not (DATA / "ranking.parquet").exists():
         print(f"no challenge data under {DATA}; nothing to report", file=sys.stderr)
         return 1
-    out_path = REPO / "reports" / f"submission-{args.date}.md"
+    out_path = REPO / "reports" / f"submission-{args.date}-v{args.version}.md"
 
     print("building both frames ...")
     got = frames()
