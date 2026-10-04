@@ -10,8 +10,10 @@ np = pytest.importorskip("numpy")
 
 from taxiout.submission import (  # noqa: E402
     ID,
+    INT32_SQUARE_LIMIT_S,
     TARGET,
     SubmissionError,
+    above_square_limit,
     check_filename,
     prepare,
     read,
@@ -151,3 +153,21 @@ def test_write_refuses_bad_name_overwrite_and_invalid_frame(tmp_path):
     with pytest.raises(SubmissionError):
         write(_pred(t).iloc[:-1], t, tmp_path / "team_v2.parquet")
     assert not (tmp_path / "team_v2.parquet").exists()
+
+
+def test_square_limit_is_the_largest_residual_whose_square_fits_int32():
+    top = int(np.iinfo(np.int32).max)
+    assert INT32_SQUARE_LIMIT_S**2 <= top < (INT32_SQUARE_LIMIT_S + 1) ** 2
+    # What the limit is about: numpy squares an int32 array in int32 and wraps.
+    with np.errstate(over="ignore"):
+        d = np.array([INT32_SQUARE_LIMIT_S, INT32_SQUARE_LIMIT_S + 1], dtype=np.int32)
+        sq = d * d
+    assert sq[0] == INT32_SQUARE_LIMIT_S**2 and sq[1] < 0
+
+
+def test_above_square_limit_counts_strictly_above():
+    limit = INT32_SQUARE_LIMIT_S
+    values = np.array([0, 900, limit, limit + 1, 102_506], dtype=np.int32)
+    assert above_square_limit(values) == 2
+    assert above_square_limit(pa.array(values, type=pa.int32())) == 2
+    assert above_square_limit([]) == 0

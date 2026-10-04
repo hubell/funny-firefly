@@ -1832,6 +1832,18 @@ CONSTANTS: tuple[Constant, ...] = (
         ),
     ),
     *_mod(
+        "src/taxiout/submission.py",
+        (
+            "INT32_SQUARE_LIMIT_S",
+            (46_340,),
+            MECHANISM,
+            "the largest integer whose square fits a signed 32-bit integer:"
+            " 46,340 squared is 2,147,395,600 and 46,341 squared is"
+            " 2,147,488,281, against 2,147,483,647. Arithmetic on the"
+            " template's type, not a choice; `tests/test_submission.py` holds it",
+        ),
+    ),
+    *_mod(
         "src/taxiout/tails.py",
         ("HOUR", (3600.0,), MECHANISM, "seconds in an hour"),
         (
@@ -2211,6 +2223,15 @@ FROZEN_DOCUMENTS: tuple[Frozen, ...] = (
         " place its closing section lists and nowhere else, which"
         " `tests/test_preregistered_copies.py` checks against the note where the"
         " note is on hand",
+    ),
+    Frozen(
+        "reports/submission-2026-10-04.md",
+        "b1c3cbff97af1bc0df18469bf0dd2497c2f3e1c12e05fa25f198f53fcaeb225c",
+        "the record of the one upload: the scored file, `funny-firefly_v7.parquet`,"
+        " built twice byte for byte, its target's type, and the two values the"
+        " upload rule allows to be read back, `usedPairs` and the score, as the"
+        " scorer returned them on 4 October 2026. Regenerating it would read the"
+        " manifest of whatever file is on disk, and the readback happens once",
     ),
 )
 
@@ -2947,6 +2968,16 @@ PAPER_HISTORICAL_FIGURES: tuple[PaperFigure, ...] = (
             "+0.37",
             "0.19",
         )
+    ),
+    PaperFigure(
+        "§8.6",
+        "313.169",
+        "the organizers' score for the one upload, read back once on"
+        " 4 October 2026 under the upload rule of 19 September and recorded in"
+        " `reports/submission-2026-10-04.md`, a dated record. No live report"
+        " holds it: it is the scorer's figure over the ranking set's withheld"
+        " labels, which nothing in the repository reads. The abstract points"
+        " here and carries no number",
     ),
 )
 

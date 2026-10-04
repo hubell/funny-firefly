@@ -11,19 +11,20 @@ from __future__ import annotations
 
 import math
 
-import networkx as nx
 import pytest
 
-from taxiout.geo import geodesic_m
-from taxiout.graph import (
+nx = pytest.importorskip("networkx")
+
+from taxiout.geo import geodesic_m  # noqa: E402
+from taxiout.graph import (  # noqa: E402
     attach_point,
     attach_stands,
     build_graph,
     probe_distance,
     snap_and_split,
 )
-from taxiout.routing import aggregate, label_runway_edges, route_all
-from taxiout.runways import build_runways
+from taxiout.routing import aggregate, label_runway_edges, route_all  # noqa: E402
+from taxiout.runways import build_runways  # noqa: E402
 
 REF = (50.0, 8.0)
 

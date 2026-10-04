@@ -53,7 +53,8 @@ with all ten. Read with every month of 2025 held out in turn, a design that is
 not forward in time, the same model pools to 243.7 s over the year on those
 rows, 275.9 s over every row with the term, and seven recorded taxi-outs of over
 four hours that no term covers separate the two readings from a third, 217.8 s,
-printed as a diagnostic. The organizers' figure is **[score]**.
+printed as a diagnostic. The organizers' figure for the submitted file, read
+back once on 4 October 2026, is given in §8.6.
 
 ## 1. Introduction
 
@@ -149,7 +150,7 @@ Source: `docs/prior_art.md`, *External data: licence positions*; README.
 
 The repository ships GPLv3 in totality. The distance matrices it generates are a
 Derivative Database of OSM and carry ODbL, so they are regenerated rather than
-committed; the Zenodo deposit **[DOI]** carries them under ODbL, with the eleven
+committed; the Zenodo deposit [10.5281/zenodo.23133051](https://doi.org/10.5281/zenodo.23133051) carries them under ODbL, with the eleven
 Overpass answers they derive from, and beside them the two public-domain inputs
 the entry read and a later fetch would not return, the METAR observations and
 the OurAirports tables. The reports are Produced Works and carry the figures.
@@ -1528,15 +1529,16 @@ day-shift row in a cell the term does not cover is scored at its recorded value
 and can move the pooled figure by itself: seven such rows in 2025, at three
 airports, take the year from 217.8 s to 243.7, and January's figure from 231.8 s
 to 346.8 on two of them. And one ranking row is predicted by the rule of §4 at
-52,550 s, with the two outcomes that section prices. The organizers' figure,
-when it comes, is one number over 344,841 rows, and the three readings above are
-what it will be a mixture of: **[score]**.
+52,550 s, with the two outcomes that section prices. The organizers' figure is
+one number over 344,841 rows, and the three readings above are what it is a
+mixture of: 313.169 s, read once on 4 October 2026 over the 344,841 rows the
+scorer used.
 
 Sources: `reports/congestion.md`, *What it bounds*; `reports/data_review.md`,
 *Airports and months* and *Inventory*; `reports/tails.md`, *What it touches in
 the ranking set* and *The plan-shifted departures*; `reports/monthly_seeds.md`,
 *Per month and over the year*; `reports/planshift.md`, *The one ranking
-departure*.
+departure*; `reports/submission-2026-10-04.md`, *The file*, a dated record.
 
 ## 9. Discussion
 
@@ -1855,7 +1857,8 @@ prefix`* and *`+ plan differences` against `+ destination and holidays`*;
 
 ## 10. Reproducing this
 
-A reader brings four things to the repository at the tag: the challenge data,
+A reader brings four things to the repository at the commit this paper is
+committed in, tagged `entry-2026-10-04`: the challenge data,
 from the organizers, which is not redistributable; the eleven Overpass answers,
 fetched at their pins as described below or taken from the deposit; and, from
 the deposit, the METAR observations and the two OurAirports tables the entry
@@ -1889,7 +1892,15 @@ quote regenerate from those stored files by their named scripts without a fit,
 and the fits themselves repeat by the same scripts. Then the rule of §4 was
 added, under its pre-registration, with the booster, the residuals and every
 validation figure untouched. Last, the three candidates of Annex J were fitted
-and read, and the file was not rebuilt, because the rule adopted none.
+and read, and the file was not rebuilt, because the rule adopted none. Three tags mark the
+history: `freeze-2026-10-04` the model's freeze, `model-v7-2026-10-02` the rule
+of the plan-shifted departures, and `entry-2026-10-04` the file that was scored.
+The organizers' announcement channels, the ranking page's news box, the
+challenge's main page and the OSN Discord channel `#prc-data-competition`, were
+read on 4 October 2026, before the upload; they carried no final-phase file and
+no change to the ranking script, the file format, the naming rule or the
+deadline, only a note that a file is submitted with the MinIO command-line
+client and not through the web interface.
 
 **What repeats.** The booster is fitted in LightGBM's deterministic mode with
 column-wise histograms at a pinned thread count, and a fit repeats to the bit:

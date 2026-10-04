@@ -24,6 +24,10 @@ import importlib.util
 import math
 from pathlib import Path
 
+import pytest
+
+pytest.importorskip("numpy")
+
 REPO = Path(__file__).resolve().parents[1]
 
 

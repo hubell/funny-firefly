@@ -777,6 +777,7 @@ def test_the_geometry_report_cannot_disagree_with_the_graph_about_a_snap():
     equality**: two modules agreeing on 60.0 today is what the copy already
     did.
     """
+    pytest.importorskip("networkx")
     import report_geometry_gaps as rgg
     from taxiout import graph
 

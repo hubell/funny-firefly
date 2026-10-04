@@ -15,8 +15,10 @@ import math
 
 import pytest
 
-from taxiout.routing import AGGREGATED_FIELDS
-from taxiout.synthetic import (
+pytest.importorskip("networkx")
+
+from taxiout.routing import AGGREGATED_FIELDS  # noqa: E402
+from taxiout.synthetic import (  # noqa: E402
     DESIGNATORS,
     DISTANCE_TOL_M,
     FAR_STAND,

@@ -18,6 +18,9 @@ edge, and at which edge.
 
 **The file.** For a version already written: its size and sha256, read from
 the file and set beside the manifest ``make_submission.py`` wrote with it; the
+target's type as the file stores it, and how many of its values exceed
+``taxiout.submission.INT32_SQUARE_LIMIT_S``, past which a scorer that squares
+residuals in that type wraps; the
 manifest's own counts, with the record-quality term's rows recounted here from
 the same two frames; when ``--first-build`` names the directory an earlier
 build of the same version was copied to, whether the two files are
@@ -50,6 +53,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import pandas as pd
+import pyarrow.parquet as pq
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
@@ -89,6 +93,7 @@ from taxiout.features import (  # noqa: E402
 from taxiout.metar import load_metar, regime_by_hour  # noqa: E402
 from taxiout.occupancy import COVERAGE_MARGIN_S  # noqa: E402
 from taxiout.planlags import HALF_WINDOW_MIN  # noqa: E402
+from taxiout.submission import INT32_SQUARE_LIMIT_S, above_square_limit  # noqa: E402
 from taxiout.tails import TailModel  # noqa: E402
 from taxiout.windows import coverage_end, coverage_start, seconds  # noqa: E402
 
@@ -255,6 +260,10 @@ def section_file(
     m = json.loads(manifest.read_text(encoding="utf-8"))
     digest = sha256(path)
     template = sha256(DATA / SUBMITTING)
+    # The target's type and its exposure to a scorer that squares residuals in
+    # that type, read from the parquet itself rather than from the manifest.
+    target = pq.read_table(path, columns=[TARGET]).column(TARGET)
+    above = above_square_limit(target.to_numpy())
 
     def agrees(ok: bool) -> str:
         return "yes" if ok else "**no**"
@@ -266,6 +275,12 @@ def section_file(
         ["size (bytes)", num(path.stat().st_size)],
         ["sha256, read from the file", f"`{digest}`"],
         ["the manifest's sha256 agrees", agrees(digest == m.get("file_sha256"))],
+        [f"`{TARGET}` type, read from the file", f"`{target.type}`"],
+        [
+            f"values above {num(INT32_SQUARE_LIMIT_S)} s, the largest residual whose"
+            " square fits a signed 32-bit integer",
+            num(above),
+        ],
         ["template sha256, as read at the build", f"`{m.get('template_sha256')}`"],
         ["the template on disk now agrees", agrees(template == m.get("template_sha256"))],
         ["git revision at the build", f"`{m.get('git_revision')}`"],

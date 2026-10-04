@@ -25,15 +25,15 @@ the gate's job is to prove there is no fifth.
 
 ## The constants
 
-`taxiout.provenance.CONSTANTS` carries **258** entries, one
+`taxiout.provenance.CONSTANTS` carries **259** entries, one
 per module-level numeric assignment the scanner finds outside the
-authored artifact. The scanner finds **312** in all, of which
+authored artifact. The scanner finds **313** in all, of which
 **50** are in `src/taxiout/synthetic.py` and are covered by
 `AUTHORED_ARTIFACTS` as a module rather than one by one.
 
 | class | entries | what it means |
 | --- | ---: | --- |
-| `mechanism` | 113 | definitional or a unit conversion; nobody chose it |
+| `mechanism` | 114 | definitional or a unit conversion; nobody chose it |
 | `chosen` | 110 | somebody picked it, and the basis says what against |
 | `derived` | 1 | computed from the data and frozen into the source |
 | `quoted` | 34 | a measurement from a named run or document |
@@ -167,7 +167,7 @@ reported with their figure count rather than skipped.
 | section | why |
 | --- | --- |
 
-**28** historical figures stand, each with
+**29** historical figures stand, each with
 its reason.
 
 | section | figure | why |
@@ -200,6 +200,7 @@ its reason.
 | §7.1.1 | 224.7 | Experiment 2 or 3 of 20 September, run under the parameters then in force and not repeated under the parameters that ship, so the figure is that day's and matches only the dated record the experiments wrote. The subsection's heading, its first paragraph and the sentence quoting the figure all say so |
 | §7.1.1 | +0.37 | Experiment 2 or 3 of 20 September, run under the parameters then in force and not repeated under the parameters that ship, so the figure is that day's and matches only the dated record the experiments wrote. The subsection's heading, its first paragraph and the sentence quoting the figure all say so |
 | §7.1.1 | 0.19 | Experiment 2 or 3 of 20 September, run under the parameters then in force and not repeated under the parameters that ship, so the figure is that day's and matches only the dated record the experiments wrote. The subsection's heading, its first paragraph and the sentence quoting the figure all say so |
+| §8.6 | 313.169 | the organizers' score for the one upload, read back once on 4 October 2026 under the upload rule of 19 September and recorded in `reports/submission-2026-10-04.md`, a dated record. No live report holds it: it is the scorer's figure over the ranking set's withheld labels, which nothing in the repository reads. The abstract points here and carries no number |
 
 **22** figures are computed from report
 figures rather than quoted, each with the arithmetic the check verifies,
@@ -240,7 +241,7 @@ than this record claiming it.
 
 ## Frozen documents
 
-**14** dated records, each with a sha256. These need
+**15** dated records, each with a sha256. These need
 the opposite gate from every other file here: the risk is not that they go
 stale, it is that somebody edits them. A currency check over one would
 demand destroying the record.
@@ -261,6 +262,7 @@ demand destroying the record.
 | `reports/preregistered-2026-10-02.md` | the rule of the plan-shifted departures, fixed before it was evaluated or built, and the source of the class's definition in `taxiout.tails.PlanShiftModel`. What is frozen is this published copy, at the digest beside it. What fixed the order is the working note it was copied from, sha256 d62b48f32d3ba9da07aa346cb04a2560feaff9664a9734228d7523e669dda9a1, written on 2 October 2026 after the class was seen in the ranking set's exposed fields and before any fold, any v7 or any score existed. The copy differs from the note in the places its closing section lists and nowhere else, which `tests/test_tails.py` checks against the note where the note is on hand |
 | `reports/preregistered-2026-09-28.md` | the three candidates of 28 September, their legs, their reference and the four conditions they were first to be read under, fixed before any of them was fitted on top of the rung and the parameters that ship. The rule they were read under is `reports/preregistered-2026-10-03.md`, which keeps these, replaces the paragraph on what adoption costs, and adds the rows every figure is over and a fifth condition. What is frozen is this published copy, at the digest beside it. What fixed the order is the working note it was copied from, sha256 eee5b947e4c449eb7df5765ca62d25a3ca954f201ecefa23311eec8918813e60, recorded on 28 September 2026 when it was written. The copy differs from the note in the place its closing section lists and nowhere else, which `tests/test_preregistered_copies.py` checks against the note where the note is on hand |
 | `reports/preregistered-2026-10-03.md` | the rule the three candidates are read under: the four conditions of 28 September over the rows neither the record-quality term nor the plan-shift rule covers, a fifth on the twelve held-out months, and adoption as one recorded increment on the rung that ships. What is frozen is this published copy, at the digest beside it. What fixed the order is the working note it was copied from, sha256 91e3306ef2b5e0efd6ab8d0a5c0ed9e2fc29ed0b0015bb4af8e96c6a2a601662, written on 3 October 2026 after v7 was committed and before any candidate was fitted under it. The copy differs from the note in the place its closing section lists and nowhere else, which `tests/test_preregistered_copies.py` checks against the note where the note is on hand |
+| `reports/submission-2026-10-04.md` | the record of the one upload: the scored file, `funny-firefly_v7.parquet`, built twice byte for byte, its target's type, and the two values the upload rule allows to be read back, `usedPairs` and the score, as the scorer returned them on 4 October 2026. Regenerating it would read the manifest of whatever file is on disk, and the readback happens once |
 
 ## What a rebuild of an external input is pinned to
 

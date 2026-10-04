@@ -46,6 +46,20 @@ FILENAME = re.compile(
 INT32_MIN = np.iinfo(np.int32).min
 INT32_MAX = np.iinfo(np.int32).max
 
+# The largest residual, in seconds, whose square fits a signed 32-bit integer:
+# 46,340 squared is 2,147,395,600 and 46,341 squared is 2,147,488,281, against
+# a maximum of 2,147,483,647. The target is stored as int32, the template's
+# own type, so a scorer that squares residuals in that type wraps on any row
+# whose residual exceeds this, a checked one raises, and float64 is exact. It
+# is a property of the type and of the truth as much as of the prediction, so
+# it is recorded beside the file and changes nothing in it.
+INT32_SQUARE_LIMIT_S = 46_340
+
+
+def above_square_limit(values) -> int:
+    """How many values exceed ``INT32_SQUARE_LIMIT_S``."""
+    return int((np.asarray(values, dtype=np.int64) > INT32_SQUARE_LIMIT_S).sum())
+
 
 class SubmissionError(ValueError):
     """The frame or file would be rejected, or scored on the wrong rows."""

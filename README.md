@@ -111,7 +111,7 @@ modelling stage, measured against the target.
       a distance, the public-holiday calendar, and the plan's own differences:
       four blocks read against the submission rung in
       [`reports/baseline.md`](reports/baseline.md)
-- [ ] Write-up
+- [x] Write-up: [`docs/paper.md`](docs/paper.md)
 
 ## What the data turned out to contain
 
@@ -324,8 +324,11 @@ answer's database state beside its pin. A rebuild in which every mirror fails
 or refuses is a stop and not a fallback: the pin cannot be served that day.
 
 **What a reader brings, and what a clean checkout reproduces.** The
-repository at the tag `freeze-2026-10-04` tracks three files under `data/`
-and nothing else there. A reader brings the challenge data, from the
+repository at the commit the paper is committed in, tagged
+`entry-2026-10-04`, tracks three files under `data/` and nothing else there.
+Three tags mark the history: `freeze-2026-10-04` the model's freeze,
+`model-v7-2026-10-02` the rule of the plan-shifted departures, and
+`entry-2026-10-04` the file that was scored. A reader brings the challenge data, from the
 organizers, into `data/challenge/`; the eleven Overpass answers, fetched at
 their pins as above or copied from the deposit into `data/raw/`; and, from
 the deposit, the METAR cache into `data/raw/metar/` and the two OurAirports
@@ -355,7 +358,7 @@ matrices and the residuals unchanged.
 records both versions by size and digest, so a copy in hand can be told
 from the other.
 
-**The deposit.** The Zenodo deposit **[DOI]** holds, under ODbL, the 35
+**The deposit.** The Zenodo deposit [10.5281/zenodo.23133051](https://doi.org/10.5281/zenodo.23133051) holds, under ODbL, the 35
 matrix files and the eleven Overpass answers with their `PINS.json`, and,
 public domain, the METAR cache, the ten years of METARs before it and the
 two OurAirports tables, each with the manifest the fetcher wrote. Its `README.md` says how each part is verified
@@ -398,7 +401,7 @@ against this repository at the tag, and `SHA256SUMS` covers every file in it.
   norm in one table of `reports/monthly_ladder.md` and enters no model.
 
 Those two are the additional *datasets*. Both, as the entry read them, are in
-the Zenodo deposit **[DOI]** beside the OSM-derived matrices and answers, so a
+the Zenodo deposit [10.5281/zenodo.23133051](https://doi.org/10.5281/zenodo.23133051) beside the OSM-derived matrices and answers, so a
 reader has the exact inputs and not only the request that fetched them. One
 further external input is not a dataset at all and is listed separately so
 the distinction is not blurred:
@@ -546,6 +549,9 @@ scripts/
   check_licence_hygiene.py     verifies no OSM or challenge content is tracked
   check_provenance.py          verifies every number is categorised (+ docs/provenance.md)
 docs/
+  paper.md            the paper
+  paper.docx          the paper as a Word document, built by `make paper-docx`
+  review_headroom.md  the dated review of 8 September 2026
   provenance.md       generated; where every number comes from, and what is open
   modelling_notes.md  decisions, caveats, open questions, leakage rules
   prior_art.md        literature, external data licences, benchmarks
