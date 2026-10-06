@@ -35,6 +35,14 @@ The candidates, and what is passed to the fitting code:
 - **C7**, ``taxiout.thunder``'s block appended;
 - **C8**, the booster refitted with ``taxiout.regime_weights``'s weights.
 
+And the one candidate the amendment of 6 October 2026 adds, read under the
+same rule with its own stages and its own report,
+``reports/candidates-2026-10-07.md``:
+
+- **C8c**, C8 with each training row's odds multiplied by n0 / n1 before the
+  clip (``regime_weights``'s ``class_ratio``); if it clears, the configuration
+  adopted on 6 October with C8c's weights on its booster's fits.
+
 **Every fit's predictions are kept per row** in the form
 ``data/processed/candidates/`` keeps them, and so are the layers' applied
 predictions and the blends, each with a JSON record carrying its
@@ -51,8 +59,14 @@ Usage
     python scripts/candidates_board.py --amendment PATH --stage 7   # the amendment's
     python scripts/candidates_board.py --amendment PATH --report
 
+    python scripts/candidates_board.py --amendment PATH --prior PATH --c8c check
+    python scripts/candidates_board.py --amendment PATH --prior PATH --c8c alone
+    python scripts/candidates_board.py --amendment PATH --prior PATH --c8c combination
+    python scripts/candidates_board.py --amendment PATH --prior PATH --c8c report
+
 ``--amendment`` is the working note of the amendment, which this repository
-does not yet carry; its digest is checked before anything is read.
+does not yet carry; its digest is checked before anything is read. ``--prior``
+is the working note of the amendment of 6 October, checked the same way.
 """
 
 from __future__ import annotations
@@ -81,7 +95,12 @@ from taxiout.challenge import load_movements, to_pandas  # noqa: E402
 from taxiout.flight_history import FLIGHT, FLIGHT_HISTORY_FEATURES, flight_history  # noqa: E402
 from taxiout.metar import load_metar  # noqa: E402
 from taxiout.models import LADDER_BY_KEY, SUBMISSION_KEY, Booster  # noqa: E402
-from taxiout.provenance import FROZEN_DOCUMENTS, digest, report_inputs_footer  # noqa: E402
+from taxiout.provenance import (  # noqa: E402
+    FROZEN_DOCUMENTS,
+    digest,
+    parse_report_inputs,
+    report_inputs_footer,
+)
 from taxiout.regime_weights import regime_weights  # noqa: E402
 from taxiout.tails import plan_shift_threshold_s  # noqa: E402
 from taxiout.thunder import THUNDER_FEATURES, thunder_by_hour, thunder_features  # noqa: E402
@@ -190,6 +209,8 @@ class Member:
     backend: str = "lightgbm"
     weighted: bool | None = None
     gpu: bool | None = None
+    # C8c's factor on the weights' odds; ``None`` for C8's weights or none
+    class_ratio: bool | None = None
 
 
 @dataclass(frozen=True)
@@ -415,9 +436,23 @@ def fit_member(
     weight, weights = None, None
     if member.weighted:
         t0 = time.monotonic()
-        got = regime_weights(x, frame.dep["MVT_TIME_UTC_mvt"], rows, prep["valid"])
+        got = regime_weights(
+            x,
+            frame.dep["MVT_TIME_UTC_mvt"],
+            rows,
+            prep["valid"],
+            class_ratio=bool(member.class_ratio),
+        )
         weight = got.weights
         weights = {**got.distribution(), "classifier_s": time.monotonic() - t0}
+        for f in weights.get("folds", []):
+            print(
+                "  the classifier fitted on the {fitted_on}: n0 {n0:,}, n1 {n1:,}, its odds"
+                " times n0/n1 = {factor:.6f} on the {scored:,} rows it scored".format(
+                    **f
+                ),
+                flush=True,
+            )
         print(
             "  weights before the booster: min {min:.3f}, quartiles {q1:.3f} / {median:.3f} /"
             " {q3:.3f}, max {max:.3f}, clipped {share_clipped:.4%} ({clipped_low:,} low,"
@@ -940,19 +975,26 @@ def combination(keys: list[str], cands: dict, key: str, label: str) -> Candidate
     """The candidates ``keys`` combined as section 4 combines them."""
     blocks: tuple[str, ...] = ()
     weighted = False
+    class_ratio = False
     layers, members = [], []
     for k in keys:
         c = cands[k]
         if c.kind == "member":
             blocks += c.member.blocks
             weighted = weighted or bool(c.member.weighted)
+            class_ratio = class_ratio or bool(c.member.class_ratio)
         elif c.kind == "layer":
             layers.append(c.layer)
         elif c.kind == "blend":
             members.append(c.member)
     order = {"winter": 0, "recal": 1}
     booster = (
-        Member(f"{key}_booster", blocks=blocks, weighted=True if weighted else None)
+        Member(
+            f"{key}_booster",
+            blocks=blocks,
+            weighted=True if weighted else None,
+            class_ratio=True if class_ratio else None,
+        )
         if blocks or weighted
         else None
     )
@@ -1159,8 +1201,25 @@ def run_stage(number: int, amendment: Path) -> int:
         return cb.stage_end(stage, checks, before, {"floors": floors, "c3b": c3b_path()})
     cands = candidates(c3a_member())
     keys = stages()[number]
-    seed = board_rule().second_seed
     extra: dict = {"floors": floors, "candidates": list(keys)}
+    extra["verdicts"] = read_through(frame, hourly, stage, cands, keys)
+    return cb.stage_end(stage, checks, before, extra)
+
+
+def read_through(
+    frame: BoardFrame | None,
+    hourly: pd.DataFrame,
+    stage: dict,
+    cands: dict[str, Candidate],
+    keys: tuple[str, ...],
+) -> dict:
+    """Section 4's reading of ``keys``, as far as the rule reaches; their verdicts.
+
+    The three legs at the ladder's seed; the twelve held-out months for any
+    that holds the four leg conditions; the second seed on December and July
+    for any that holds all five.
+    """
+    seed = board_rule().second_seed
     # the legs at the ladder's seed
     fits = [cands[k] for k in keys if cands[k].kind != "layer"]
     if fits:
@@ -1207,8 +1266,7 @@ def run_stage(number: int, amendment: Path) -> int:
     verdicts = {k: verdict_of(measure_candidate(cands[k])) for k in keys}
     for k in keys:
         print(f"{cands[k].label}: {verdicts[k]['status']}", flush=True)
-    extra["verdicts"] = verdicts
-    return cb.stage_end(stage, checks, before, extra)
+    return verdicts
 
 
 SECTION4 = ("c1", "c2a", "c3a", "c4", "c5", "c3b")
@@ -2067,6 +2125,1102 @@ def report_inputs(records: dict) -> list[Path]:
 
 
 # --------------------------------------------------------------------------
+# C8c, the amendment of 6 October 2026
+
+
+REPORT_C8C = REPO / "reports" / "candidates-2026-10-07.md"
+
+
+@dataclass(frozen=True)
+class PriorRule:
+    """The amendment of 6 October's numbers, each in the words it is fixed in.
+
+    ``tests/test_candidates_board_c8c.py`` checks them against the working
+    note where it is on hand.
+    """
+
+    prior_sha256: str
+    deadline_utc: str
+    adopted: tuple[str, ...]
+
+
+def prior_rule() -> PriorRule:
+    """The numbers, held in a function for the reason ``board_rule`` gives.
+
+    - "The verdict is written by 7 October 2026, 18:00 UTC, or nothing is
+      adopted";
+    - the configuration adopted on 6 October, "C1 and C4 in one booster,
+      blended at equal weights with C3b's CatBoost member", which the records
+      of 6 October must settle to before anything is fitted.
+    """
+    return PriorRule(
+        prior_sha256="81871eeb4f43d82b6a0aca1b5f3302d40a65cd5446efc05cf7289cb3a6fc1e98",
+        deadline_utc="2026-10-07T18:00:00+00:00",
+        adopted=("c1", "c4", "c3b"),
+    )
+
+
+# The arms this amendment writes, and its stages, in the order they run.
+C8C_ARMS = ("reference_refit", "c8c", "combo8c_booster", "combo8c")
+C8C_STAGES = ("c8c_check", "c8c_alone", "c8c_combination")
+
+
+def c8c() -> Candidate:
+    return Candidate(
+        "c8c",
+        "C8c, C8's weights corrected for the class ratio",
+        "member",
+        Member("c8c", weighted=True, class_ratio=True),
+    )
+
+
+def c8c_combination() -> Candidate:
+    """The configuration of 6 October with C8c's weights on its booster's fits.
+
+    C1's and C4's features in one booster, fitted at the ladder's seed with
+    C8c's weights, blended at equal weights with C3b's member, which is read
+    from its stored predictions and stays unweighted.
+    """
+    cands = {**candidates(c3a_member()), "c8c": c8c()}
+    return combination(
+        [*prior_rule().adopted, "c8c"],
+        cands,
+        "combo8c",
+        "the configuration with C8c's weights",
+    )
+
+
+def ours(path: Path) -> bool:
+    """Whether a file under the records' directory is this amendment's to write."""
+    name = path.name
+    if name.startswith(("stage_c8c_", "clock_c8c")):
+        return True
+    parts = name.split("__")
+    return len(parts) == 3 and parts[1] in C8C_ARMS
+
+
+def inherited_now() -> dict[str, str]:
+    """Every file under the records' directory that is not this amendment's, by sha256."""
+    if not WORK.exists():
+        return {}
+    return {
+        str(p.relative_to(REPO)): digest(p)
+        for p in sorted(WORK.iterdir())
+        if p.is_file() and not ours(p)
+    }
+
+
+def inherited_check(checks: cb.Checks, manifest: dict[str, str] | None) -> dict[str, str]:
+    """The records of 5 and 6 October, read and never written here.
+
+    Against the digests the report of 5 October declares for every one of
+    them it read, and, once the first check has run, against the manifest it
+    took of every file under the directory that is not this amendment's.
+    """
+    now = inherited_now()
+    prefix = str(WORK.relative_to(REPO)) + "/"
+    declared = {
+        d.path: d.digest
+        for d in parse_report_inputs(REPORT.read_text(encoding="utf-8"))
+        if d.path.startswith(prefix)
+    }
+    same = sum(now.get(p) == sha for p, sha in declared.items())
+    checks.add(
+        f"the records of 5 and 6 October at the digests `{REPORT.relative_to(REPO)}` declares",
+        f"{len(declared):,} identical",
+        f"{same:,} identical",
+        bool(declared) and same == len(declared),
+    )
+    if manifest is not None:
+        moved = sorted(
+            (set(manifest) ^ set(now))
+            | {p for p in manifest if now.get(p) != manifest[p]}
+        )
+        checks.add(
+            "every other file under the records' directory as the first check found it",
+            f"{len(manifest):,} unchanged, none added",
+            "unchanged" if not moved else "moved: " + ", ".join(moved),
+            not moved,
+        )
+    return now
+
+
+def stage_passed(name: str) -> dict | None:
+    """The latest run of a stage, if every check held and nothing it may not write moved."""
+    got = cb.read_stage(name)
+    if got is None:
+        return None
+    latest = {k: v for k, v in got.items() if k != "previous"}
+    ok = (
+        bool(latest.get("checks"))
+        and all(r["ok"] for r in latest["checks"])
+        and not latest["fingerprint"]["touched"]
+    )
+    return latest if ok else None
+
+
+def begin_c8c(name: str, amendment: Path, prior: Path, manifest: dict | None):
+    before, stage, checks, floors = begin(name, amendment)
+    rule = prior_rule()
+    got = digest(prior)
+    checks.add(
+        "the working note of the amendment of 6 October at the digest it was fixed by",
+        rule.prior_sha256,
+        got,
+        got == rule.prior_sha256,
+    )
+    inherited = inherited_check(checks, manifest)
+    return before, stage, checks, floors, inherited
+
+
+def configuration_words(final: dict) -> str:
+    keys = final.get("config") or []
+    return (", ".join("C" + k[1:] for k in keys) or "none") + (
+        ", read as one combination" if final.get("combined") and len(keys) > 1 else ""
+    )
+
+
+WEIGHT_FIGURES = (
+    "rows",
+    "min",
+    "q1",
+    "median",
+    "q3",
+    "max",
+    "clipped_low",
+    "clipped_high",
+    "share_clipped",
+    "raw_mean",
+)
+
+
+def run_c8c_check(amendment: Path, prior: Path) -> int:
+    """Before C8c is fitted: what was adopted on 6 October, C8's weights, the reference.
+
+    The configuration the records of 6 October settle to; C8's December
+    weights recomputed with the option off against the stored fit's, every
+    figure of their distribution and their sum; then the December reference
+    refitted, against the ladder's stored residuals and the stored reference
+    fit. A disagreement is a stop.
+    """
+    if not reference_passed():
+        raise SystemExit("the reference stage has not passed its checks; nothing is read")
+    first = stage_passed("c8c_check")
+    before, stage, checks, floors, inherited = begin_c8c(
+        "c8c_check", amendment, prior, first["inherited"] if first else None
+    )
+    if first:
+        inherited = first["inherited"]
+    extra: dict = {"floors": floors, "inherited": inherited}
+    if checks.failed:
+        return cb.stage_end(stage, checks, before, extra)
+    final = settle(7).get("final") or {}
+    want = {"config": list(prior_rule().adopted), "combined": True}
+    extra["adopted_6_october"] = final
+    checks.add(
+        "the configuration the records of 6 October settle to",
+        configuration_words(want),
+        configuration_words(final),
+        final.get("config") == want["config"] and bool(final.get("combined")),
+    )
+    if checks.failed:
+        return cb.stage_end(stage, checks, before, extra)
+    frame = BoardFrame()
+    extra["frame_build_s"] = frame.build_seconds + frame.extra_seconds
+    leg = cb.leg_plan()[0]
+    prep = frame.prepare(leg)
+    stored = json.loads(
+        cb.record_path(cb.record_name(leg.name, "c8", 0)).read_text(encoding="utf-8")
+    )
+    print("\nC8's December weights, recomputed with the option off", flush=True)
+    t0 = time.monotonic()
+    got = regime_weights(
+        prep["frame"], frame.dep["MVT_TIME_UTC_mvt"], prep["rows"], prep["valid"]
+    )
+    again = {**got.distribution(), "classifier_s": time.monotonic() - t0}
+    weight_sum = float(np.sum(got.weights))
+    print(
+        "  weights: min {min:.3f}, quartiles {q1:.3f} / {median:.3f} / {q3:.3f},"
+        " max {max:.3f}, clipped {share_clipped:.4%} ({clipped_low:,} low,"
+        " {clipped_high:,} high), {classifier_s:.0f} s".format(**again),
+        flush=True,
+    )
+    extra["c8_december_weights"] = {
+        "stored": stored["weights"],
+        "recomputed": again,
+        "stored_weight_sum": stored["weight_sum"],
+        "recomputed_weight_sum": weight_sum,
+    }
+    w = stored["weights"]
+    differ = [k for k in WEIGHT_FIGURES if again[k] != w[k]]
+    if weight_sum != stored["weight_sum"]:
+        differ.append("weight_sum")
+    checks.add(
+        "C8's December weights recomputed with the option off, against the stored fit's",
+        "every figure of the distribution and the weight sum identical to the stored"
+        f" ({w['clipped_low'] / w['rows']:.1%} of rows clipped low, the largest weight"
+        f" {w['max']:.1f} after scaling)",
+        "identical" if not differ else "differ in " + ", ".join(differ),
+        not differ,
+    )
+    if not checks.failed:
+        print("\nthe December reference, refitted", flush=True)
+        refit = Member("reference_refit")
+        fit_and_record(frame, prep, refit, 0, stage)
+        name = cb.record_name(leg.name, refit.key, 0)
+        got_s, ok = cb.reproduces(
+            cb.read_kept(name),
+            REPO / cb.LADDER_RESIDUALS / f"{leg.name}_{SUBMISSION_KEY}.parquet",
+        )
+        checks.add(
+            "the December reference refitted, against the ladder's"
+            f" `{leg.name}_{SUBMISSION_KEY}.parquet`",
+            "a largest absolute difference of 0 on every row",
+            got_s,
+            ok,
+        )
+        new = json.loads(cb.record_path(name).read_text(encoding="utf-8"))["pred_sha256"]
+        old = json.loads(
+            cb.record_path(cb.record_name(leg.name, "reference", 0)).read_text(
+                encoding="utf-8"
+            )
+        )["pred_sha256"]
+        checks.add(
+            "the December reference refitted, against the stored reference fit's pred_sha256",
+            old,
+            new,
+            new == old,
+        )
+    del prep
+    inherited_check(checks, inherited)
+    return cb.stage_end(stage, checks, before, extra)
+
+
+def run_c8c_alone(amendment: Path, prior: Path) -> int:
+    """C8c read against the rung as section 4 reads a candidate, alone."""
+    check = stage_passed("c8c_check")
+    if check is None:
+        raise SystemExit(
+            "the check of 6 October's amendment has not passed; nothing is fitted"
+        )
+    before, stage, checks, floors, _ = begin_c8c(
+        "c8c_alone", amendment, prior, check["inherited"]
+    )
+    extra: dict = {"floors": floors, "candidates": ["c8c"]}
+    if checks.failed:
+        return cb.stage_end(stage, checks, before, extra)
+    frame = BoardFrame()
+    extra["verdicts"] = read_through(
+        frame, frame.winter_hourly, stage, {"c8c": c8c()}, ("c8c",)
+    )
+    inherited_check(checks, check["inherited"])
+    return cb.stage_end(stage, checks, before, extra)
+
+
+def projected_finish_c8c() -> tuple[datetime, dict]:
+    """When the combination would finish, from fit times measured on the same splits.
+
+    Each split still to fit costs the configuration's own booster on that
+    split (prepare, fit and predict, as recorded on 6 October) plus C8c's
+    classifiers on it, and the frame is built once, at the check's measured
+    time.
+    """
+    records = cb.read_records()
+    seconds = {}
+    for split in cb.leg_plan() + cb.month_plan():
+        if cb.record_name(split.name, "combo8c_booster", 0) in records:
+            continue
+        b = records[cb.record_name(split.name, "combo4_booster", 0)]
+        w = records[cb.record_name(split.name, "c8c", 0)]
+        seconds[split.name] = (
+            b["prepare_s"] + b["fit_s"] + b["predict_s"] + w["weights"]["classifier_s"]
+        )
+    frame_s = float((stage_passed("c8c_check") or {}).get("frame_build_s", 0.0))
+    finish = datetime.now(timezone.utc) + pd.Timedelta(
+        seconds=sum(seconds.values()) + frame_s
+    )
+    return finish, {"seconds": seconds, "frame_s": frame_s}
+
+
+def on_time_c8c() -> bool:
+    """Whether the combination can start and finish by the amendment's deadline."""
+    finish, parts = projected_finish_c8c()
+    deadline = datetime.fromisoformat(prior_rule().deadline_utc)
+    ok = finish <= deadline
+    print(
+        f"the combination: projected finish {finish:%Y-%m-%d %H:%M}Z against the deadline"
+        f" {deadline:%Y-%m-%d %H:%M}Z: {'starts' if ok else 'NOT STARTED'}",
+        flush=True,
+    )
+    (WORK / "clock_c8c.json").write_text(
+        json.dumps(
+            {
+                "finish_utc": finish.isoformat(timespec="seconds"),
+                "deadline_utc": deadline.isoformat(timespec="seconds"),
+                "ok": ok,
+                **parts,
+            },
+            indent=1,
+        ),
+        encoding="utf-8",
+    )
+    return ok
+
+
+def same_weights(split: str) -> tuple[str, bool]:
+    """The combination's booster weighted exactly as C8c on the same split.
+
+    The classifier reads the airport and the weather and congestion blocks
+    alone, so C1's and C4's columns beside them change no weight.
+    """
+    a, b = (
+        json.loads(
+            cb.record_path(cb.record_name(split, arm, 0)).read_text(encoding="utf-8")
+        )
+        for arm in ("combo8c_booster", "c8c")
+    )
+    keys = [*WEIGHT_FIGURES, "folds"]
+    differ = [k for k in keys if a["weights"].get(k) != b["weights"].get(k)]
+    if a["weight_sum"] != b["weight_sum"]:
+        differ.append("weight_sum")
+    return ("identical" if not differ else "differ in " + ", ".join(differ)), not differ
+
+
+def run_c8c_combination(amendment: Path, prior: Path) -> int:
+    """The amendment's combination, only if C8c holds all five and its second-seed check."""
+    check = stage_passed("c8c_check")
+    if check is None:
+        raise SystemExit(
+            "the check of 6 October's amendment has not passed; nothing is fitted"
+        )
+    status = verdict_of(measure_candidate(c8c()))["status"]
+    if status != "clears":
+        print(
+            f"C8c: {status}; no combination to measure, the configuration of 6 October"
+            " stands",
+            flush=True,
+        )
+        return 0
+    if not on_time_c8c():
+        return 0
+    before, stage, checks, floors, _ = begin_c8c(
+        "c8c_combination", amendment, prior, check["inherited"]
+    )
+    combo = c8c_combination()
+    extra: dict = {"floors": floors, "combination": asdict(combo)}
+    if checks.failed:
+        return cb.stage_end(stage, checks, before, extra)
+    frame = BoardFrame()
+    for split in cb.leg_plan() + cb.month_plan():
+        if not cb.record_path(cb.record_name(split.name, combo.member.key, 0)).exists():
+            prep = frame.prepare(split)
+            fit_and_record(frame, prep, combo.member, 0, stage)
+            del prep
+        got, ok = same_weights(split.name)
+        if not checks.add(
+            f"{split.name}: the booster's weights against C8c's own on the split",
+            "identical",
+            got,
+            ok,
+        ):
+            break
+        if not form(combo, split.name, 0, frame.winter_hourly):
+            raise SystemExit(
+                f"STOPPED: the combination could not be formed on {split.name}"
+            )
+    inherited_check(checks, check["inherited"])
+    if not checks.failed:
+        extra["settled"] = {
+            k: v for k, v in settle_c8c().items() if k in ("status", "before", "final")
+        }
+    return cb.stage_end(stage, checks, before, extra)
+
+
+def settle_c8c() -> dict:
+    """What the amendment of 6 October adopts, from what is on disk.
+
+    ``need`` names what is still to be measured; ``final`` carries the
+    verdict line, the configuration v9 is, and the rule's words for how it
+    was reached.
+    """
+    before = {"config": list(prior_rule().adopted), "combined": True}
+    m = measure_candidate(c8c())
+    status = verdict_of(m)["status"]
+    out: dict = {"c8c": m, "status": status, "before": before}
+    stands = {**before, "verdict": "C8c: not adopted"}
+    if status in ("fails the four", "fails the fifth", "fails the sign check"):
+        out["final"] = {
+            **stands,
+            "why": f"C8c {status}; the configuration of 6 October stands",
+        }
+        return out
+    if status != "clears":
+        out["need"] = "C8c"
+        return out
+    mc = measure_candidate(c8c_combination())
+    out["combo8c"] = mc
+    if any(verdict_of(mc)["conditions"][k] is None for k in cb.FIVE):
+        clock = WORK / "clock_c8c.json"
+        if clock.exists() and not json.loads(clock.read_text(encoding="utf-8"))["ok"]:
+            out["final"] = {
+                **stands,
+                "why": "the clock projected the combination past the deadline, so it was"
+                " not started; the configuration of 6 October stands",
+            }
+        else:
+            out["need"] = "the configuration with C8c's weights"
+        return out
+    if five_hold(mc):
+        out["final"] = {
+            "config": [*before["config"], "c8c"],
+            "combined": True,
+            "verdict": "C8c: ADOPTED, combined",
+            "why": "the configuration with C8c's weights holds the five, and is adopted in"
+            " place of the configuration of 6 October",
+        }
+    else:
+        out["final"] = {
+            **stands,
+            "why": "C8c clears, the configuration with C8c's weights fails the five; the"
+            " configuration of 6 October stands",
+        }
+    return out
+
+
+# --------------------------------------------------------------------------
+# C8c's report
+
+
+def c8c_records(records: dict) -> dict:
+    """This amendment's records, and the stored ones its readings read."""
+    read = {"reference", "base", "c8", "combo4", "combo4_booster"}
+    read.add(candidates(c3a_member())["c3b"].member.key)
+    return {n: r for n, r in records.items() if n.split("__")[1] in (*C8C_ARMS, *read)}
+
+
+def write_report_c8c(amendment: Path, prior: Path, generated: str) -> int:
+    check = stage_passed("c8c_check")
+    if check is None:
+        raise SystemExit(
+            "the check of 6 October's amendment has not passed; there is nothing to report"
+        )
+    records = c8c_records(cb.read_records())
+    checks = cb.Checks()
+    preflight(checks, amendment)
+    got = digest(prior)
+    checks.add(
+        "the working note of the amendment of 6 October at the digest it was fixed by",
+        prior_rule().prior_sha256,
+        got,
+        got == prior_rule().prior_sha256,
+    )
+    inherited_check(checks, check["inherited"])
+    twice_check(checks, records)
+    stands = set(json.loads((WORK / "stands.json").read_text(encoding="utf-8")))
+    movements: set[str] = set()
+    for name in records:
+        ids = pd.read_parquet(cb.kept_path(name), columns=["mvt_id"])["mvt_id"].dropna()
+        movements |= {f"{int(v)}" for v in ids.unique()}
+    before = cb.fingerprint(exempt=REPORT_C8C)
+    text = build_report_c8c(records, checks, check, generated)
+    cb.guard(text, stands, movements)
+    REPORT_C8C.write_text(text, encoding="utf-8")
+    moved = cb.touched(before, cb.fingerprint(exempt=REPORT_C8C))
+    if moved:
+        raise SystemExit(
+            "writing the report touched a file it must not: " + ", ".join(moved)
+        )
+    print(f"wrote {REPORT_C8C.relative_to(REPO)}")
+    return 1 if checks.failed else 0
+
+
+def twice_check(checks: cb.Checks, records: dict) -> None:
+    """The December leg and held-out December are one split, fitted twice: one digest."""
+    for arm in ("c8c", "combo8c_booster"):
+        a = records.get(cb.record_name("december", arm, 0))
+        b = records.get(cb.record_name("heldout-2025-12", arm, 0))
+        if a is None or b is None:
+            continue
+        checks.add(
+            f"`{arm}`: the December leg and held-out December, the same split fitted twice",
+            a["pred_sha256"],
+            b["pred_sha256"],
+            a["pred_sha256"] == b["pred_sha256"],
+        )
+
+
+def combination_status(m: dict) -> str:
+    v = verdict_of(m)["conditions"]
+    if any(v[k] is None for k in cb.FIVE):
+        return "not measured"
+    return "holds the five" if cb.clears(v, cb.FIVE) else "fails the five"
+
+
+def beside_rows(arm: str, base: str, splits: list[tuple[str, str]]) -> list[list[str]]:
+    """``arm`` against ``base`` on stored predictions, a reading beside the rule."""
+    d = cb.the_rule().contrast_decimals
+    rows = []
+    for split, which in splits:
+        if split == "year":
+            parts = [
+                (arm_kept_named(s.name, arm), arm_kept_named(s.name, base))
+                for s in cb.month_plan()
+            ]
+            if any(a is None or b is None for a, b in parts):
+                continue
+            a = pd.concat([p[0] for p in parts], ignore_index=True)
+            b = pd.concat([p[1] for p in parts], ignore_index=True)
+            label = "the twelve held-out months"
+        else:
+            a, b = arm_kept_named(split, arm), arm_kept_named(split, base)
+            if a is None or b is None:
+                continue
+            label = (
+                f"{split.capitalize()}, {'all ten' if which == 'all' else 'the three'}"
+            )
+        r = cb.reading(a, b, which)["rows"]
+        rows.append(
+            [
+                label,
+                cb.fmt(r["arm"], d),
+                cb.fmt(r["reference"], d),
+                cb.signed(r["contrast"], d),
+                cb.interval(r, d),
+            ]
+        )
+    return rows
+
+
+def arm_kept_named(split: str, arm: str) -> pd.DataFrame | None:
+    name = cb.record_name(split, arm, 0)
+    return cb.read_kept(name) if cb.record_path(name).exists() else None
+
+
+LEGS_AND_YEAR = (
+    ("december", "all"),
+    ("july", "all"),
+    ("july", "three"),
+    ("october", "all"),
+    ("year", "all"),
+)
+
+
+def months_rows(m: dict) -> list[list[str]]:
+    d = cb.the_rule().contrast_decimals
+    year = m.get("seed0", {}).get("year:all")
+    if year is None:
+        return []
+    return [
+        [
+            month,
+            f"{r['rows']['rows']:,}",
+            cb.fmt(r["rows"]["reference"], d),
+            cb.fmt(r["rows"]["arm"], d),
+            cb.signed(r["rows"]["contrast"], d),
+        ]
+        for month, r in year["months"].items()
+    ]
+
+
+def weights_rows(records: dict) -> list[list[str]]:
+    """Every weighted fit's distribution, C8's stored three first."""
+    out = []
+    fits = sorted(
+        (r for r in records.values() if r.get("weights")),
+        key=lambda r: (r["arm"]["key"] != "c8", r["written_utc"]),
+    )
+    for r in fits:
+        w = r["weights"]
+        folds = {f["fitted_on"]: f for f in w.get("folds", [])}
+        ratio = [
+            f"{folds[k]['n0']:,} / {folds[k]['n1']:,} = {folds[k]['factor']:.4f}"
+            if k in folds
+            else "none, C8"
+            for k in ("even days", "odd days")
+        ]
+        out.append(
+            [
+                f"`{r['name']}`",
+                f"{w['rows']:,}",
+                *ratio,
+                f"{w['min']:.3f}",
+                f"{w['q1']:.3f}",
+                f"{w['median']:.3f}",
+                f"{w['q3']:.3f}",
+                f"{w['max']:.3f}",
+                f"{w['clipped_low']:,}",
+                f"{w['clipped_high']:,}",
+                f"{w['share_clipped']:.4%}",
+            ]
+        )
+    return out
+
+
+def build_report_c8c(
+    records: dict, checks: cb.Checks, check: dict, generated: str
+) -> str:
+    rule = cb.the_rule()
+    d = rule.contrast_decimals
+    got = settle_c8c()
+    final = got.get("final")
+    stages = {s: cb.read_stage(s) for s in C8C_STAGES}
+    stopped = bool(checks.failed)
+    cands = {**candidates(c3a_member()), "c8c": c8c()}
+    c, combo = c8c(), c8c_combination()
+    m, mc = got["c8c"], got.get("combo8c") or {}
+    status = got["status"]
+    lines = [
+        "# C8c, C8's weights corrected for the class ratio, under the rule of 4 October",
+        "",
+        f"Generated by `scripts/candidates_board.py` on {generated} from the fits and the"
+        " predictions it recorded under `data/processed/candidates_board/`, beside the"
+        " records of 5 and 6 October there, which it reads and never writes; nothing is"
+        " refitted to write it, every figure and every verdict is computed from those"
+        " records, and the generator refuses to write a movement identifier or a literal"
+        " stand identifier. Nothing ships from it.",
+        "",
+    ]
+    if stopped:
+        lines += [cb.stop_line(checks.failed), ""]
+    elif final:
+        lines += [f"**{final['verdict']}.**", ""]
+    else:
+        lines += [f"**No verdict yet.** {got['need']} is still to be measured.", ""]
+    lines += [
+        "## What was measured",
+        "",
+        "C8, the training rows weighted toward the target month, is one of the two"
+        " candidates the amendment of 4 October adds to section 3 of"
+        " `reports/preregistered-2026-10-04.md`. It failed section 4's four leg"
+        " conditions, and its weights were set by the clip rather than by its classifier"
+        " (`reports/candidates-2026-10-05.md`): a classifier fitted on n1 target rows"
+        " against n0 training rows estimates its odds with the prior n1/n0 built in, so"
+        " with one month against eleven most training rows' odds fell under the clip's"
+        " floor whatever their regime.",
+        "",
+        "The amendment of 6 October 2026, fixed by its sha256"
+        f" (`{prior_rule().prior_sha256}`) before any fit of the candidate it defines and"
+        " stated there as a choice made after C8's figures, adds one candidate, C8c: C8"
+        " exactly, with each training row's odds multiplied, before the clip, by n0/n1,"
+        " the counts of label 0 and label 1 among the rows the classifier that scored"
+        " that row was fitted on. Section 4's rule reads it against the submission rung's"
+        " own fit at the ladder's seed, unchanged in its legs, its reference, its rows,"
+        " its floors and its second-seed check. If C8c holds all five conditions and its"
+        " second-seed check, the configuration adopted on 6 October (C1's and C4's"
+        " features in one booster, blended at equal weights with C3b's CatBoost member) is"
+        " refitted with C8c's weights on its booster's fits at the ladder's seed, C3b's"
+        " member read from its stored predictions and unweighted, and held to the same"
+        " five conditions; if it holds them it is adopted in place of that configuration,"
+        " and otherwise that configuration stands. The verdict is due by 7 October 2026,"
+        " 18:00 UTC.",
+        "",
+    ]
+    lines += cb.table(
+        ["candidate", "what is passed to the fitting code", "status"],
+        [
+            [
+                c.label,
+                "the rung refitted with `taxiout.regime_weights`'s row weights toward the"
+                " target month, each row's odds multiplied by n0/n1 of the fold whose"
+                " classifier scored it (`class_ratio`)",
+                status,
+            ],
+            [
+                combo.label[0].upper() + combo.label[1:],
+                what_combined(combo, cands),
+                combination_status(mc) if mc else "not run",
+            ],
+        ],
+        "---",
+    )
+    lines += [""]
+    counts = ((cb.read_stage("reference") or {}).get("counts")) or {}
+    if counts:
+        lines += ["### The rows, per leg", ""]
+        lines += cb.table(
+            [
+                "leg",
+                "validation rows",
+                "the term's",
+                "the plan-shift rule's",
+                "read",
+                "of them 4 h or less",
+            ],
+            [
+                [
+                    leg.capitalize(),
+                    f"{counts[leg]['valid']:,}",
+                    f"{counts[leg]['term']:,}",
+                    f"{counts[leg]['plan_shift']:,}",
+                    f"{counts[leg]['booster']:,}",
+                    f"{counts[leg]['four_hours_or_less']:,}",
+                ]
+                for leg in counts
+            ],
+            "-rrrrr",
+        )
+        lines += [""]
+    lines += [
+        f"**How a condition is read.** Every contrast is the candidate's RMSE minus the"
+        f" reference's over the same rows of the same split, both at the same seed, so"
+        f" negative is better, read at {d} decimals against the floor printed at the same"
+        " precision. The interval beside each is the day-clustered percentile interval of"
+        f" `taxiout.validation.cluster_bootstrap`, {cb.BOOTSTRAP_DRAWS:,} draws; it decides"
+        " nothing. The unrounded contrast and its reading are printed beside the rule's."
+        " The second seed moves the booster's seed alone: the classifier's seed is fixed,"
+        " so a split's weights are the same at both seeds. The combination is held to the"
+        " five conditions and no second seed, as section 4 holds a combination.",
+        "",
+        "## Before anything was read",
+        "",
+        "Checked again as this report was written:",
+        "",
+    ]
+    lines += cb.table(
+        ["check", "expected", "got", ""],
+        [
+            [r["what"], r["expected"], r["got"], "ok" if r["ok"] else "**stop**"]
+            for r in checks.rows
+        ],
+        "---r",
+    )
+    lines += ["", f"Checked before C8c was fitted, on {check['started_utc']}:", ""]
+    lines += cb.table(
+        ["check", "expected", "got", ""],
+        [
+            [r["what"], r["expected"], r["got"], "ok" if r["ok"] else "**stop**"]
+            for r in check["checks"]
+        ],
+        "---r",
+    )
+    lines += [""]
+    c8w = check.get("c8_december_weights")
+    if c8w:
+        lines += [
+            "## C8's December weights, recomputed with the option off",
+            "",
+            "C8's path through `taxiout.regime_weights` with `class_ratio` off, on the"
+            " December leg's rows, against the distribution its fit of 5 October stored.",
+            "",
+        ]
+        rows = [
+            [
+                k,
+                f"{c8w['stored'][k]!r}",
+                f"{c8w['recomputed'][k]!r}",
+                "identical"
+                if c8w["stored"][k] == c8w["recomputed"][k]
+                else "**differs**",
+            ]
+            for k in WEIGHT_FIGURES
+        ]
+        rows.append(
+            [
+                "weight sum",
+                f"{c8w['stored_weight_sum']!r}",
+                f"{c8w['recomputed_weight_sum']!r}",
+                "identical"
+                if c8w["stored_weight_sum"] == c8w["recomputed_weight_sum"]
+                else "**differs**",
+            ]
+        )
+        lines += cb.table(["figure", "stored", "recomputed", ""], rows, "-rr-")
+        lines += [""]
+    if not stopped and m:
+        lines += [f"## {c.label}", ""]
+        lines += cb.table(
+            [
+                "read on",
+                "reference (s)",
+                "candidate (s)",
+                "contrast (s)",
+                "interval (s)",
+                "condition, floor (s)",
+                "verdict",
+                "unrounded contrast, its reading",
+                "4 h or less: reference / candidate / contrast (s), diagnostic",
+            ],
+            condition_rows(c, m),
+            "-rrrr---r",
+        )
+        lines += [""]
+        mrows = months_rows(m)
+        if mrows:
+            lines += cb.table(
+                ["held out", "rows", "the rung (s)", "candidate (s)", "contrast (s)"],
+                mrows,
+                "-rrrr",
+            )
+            lines += [""]
+        sr = seed_rows(m)
+        if sr:
+            lines += cb.table(
+                [
+                    "leg, all ten",
+                    "reference at seed 1 (s)",
+                    "candidate at seed 1 (s)",
+                    "contrast at seed 0 (s)",
+                    "contrast at seed 1 (s)",
+                    "interval at seed 1 (s)",
+                    "the check",
+                ],
+                sr,
+                "-rrrrr-",
+            )
+            lines += [""]
+        br = beside_rows("c8c", "c8", list(LEGS_AND_YEAR[:4]))
+        if br:
+            lines += [
+                "Beside the rule, C8c against C8 as specified, on the same legs at the"
+                " ladder's seed (negative: C8c better):",
+                "",
+            ]
+            lines += cb.table(
+                ["read on", "C8c (s)", "C8 (s)", "contrast (s)", "interval (s)"],
+                br,
+                "-rrrr",
+            )
+            lines += [""]
+        lines += [f"**{c.label}: {status}.**", ""]
+    wrows = weights_rows(records)
+    if wrows:
+        lines += [
+            "## The weights, printed before each booster was fitted",
+            "",
+            "Every weighted fit's distribution after scaling, C8's three of 5 October first"
+            " for comparison; n0 / n1 is each fold's count of training rows against target"
+            " rows, named by the parity its classifier was fitted on.",
+            "",
+        ]
+        lines += cb.table(
+            [
+                "fit",
+                "rows",
+                "n0 / n1, fitted on even days",
+                "n0 / n1, fitted on odd days",
+                "min",
+                "q1",
+                "median",
+                "q3",
+                "max",
+                "clipped low",
+                "clipped high",
+                "share clipped",
+            ],
+            wrows,
+            "-r--rrrrrrrr",
+        )
+        lines += [""]
+    if not stopped and mc:
+        lines += [
+            f"## {combo.label[0].upper() + combo.label[1:]}",
+            "",
+            what_combined(combo, cands),
+            "",
+        ]
+        lines += cb.table(
+            [
+                "read on",
+                "reference (s)",
+                "combination (s)",
+                "contrast (s)",
+                "interval (s)",
+                "condition, floor (s)",
+                "verdict",
+                "unrounded contrast, its reading",
+                "4 h or less: reference / combination / contrast (s), diagnostic",
+            ],
+            condition_rows(combo, mc),
+            "-rrrr---r",
+        )
+        lines += [""]
+        mrows = months_rows(mc)
+        if mrows:
+            lines += cb.table(
+                ["held out", "rows", "the rung (s)", "combination (s)", "contrast (s)"],
+                mrows,
+                "-rrrr",
+            )
+            lines += [""]
+        br = beside_rows("combo8c", "combo4", list(LEGS_AND_YEAR))
+        if br:
+            lines += [
+                "Beside the rule, against the configuration of 6 October, read on the same"
+                " rows (negative: the configuration with C8c's weights better); the rule"
+                " adopts on the five conditions alone:",
+                "",
+            ]
+            lines += cb.table(
+                [
+                    "read on",
+                    "with C8c's weights (s)",
+                    "of 6 October (s)",
+                    "contrast (s)",
+                    "interval (s)",
+                ],
+                br,
+                "-rrrr",
+            )
+            lines += [""]
+        lines += [
+            f"**{combo.label[0].upper() + combo.label[1:]}: {combination_status(mc)}.**",
+            "",
+        ]
+    lines += ["## What the rule adopts", ""]
+    if final and not stopped:
+        lines += [f"{final['why'][0].upper() + final['why'][1:]}.", ""]
+        lines += [f"**{final['verdict']}.**", ""]
+        lines += [
+            f"v9 is {configuration_words(final)}, five seeds, both tail rules off. Its"
+            " predictions at the ladder's seed, per row:",
+            "",
+        ]
+        arm = "combo8c" if "c8c" in final["config"] else "combo4"
+        prow = []
+        for split in cb.leg_plan() + cb.month_plan():
+            r = records.get(cb.record_name(split.name, arm, 0))
+            if r is not None:
+                prow.append(
+                    [f"`{r['name']}`", f"{r['valid_rows']:,}", f"`{r['pred_sha256']}`"]
+                )
+        lines += cb.table(["record", "rows", "pred_sha256"], prow, "-r-")
+        lines += [""]
+    else:
+        lines += ["No verdict is written here.", ""]
+    lines += fits_section_c8c(records, stages)
+    lines += fingerprint_section_c8c(stages)
+    env = cb.environment()
+    lines += [
+        f"Run under {env['python']}, {env['lightgbm']}, pandas {env['pandas']}, numpy {env['numpy']}.",
+        "",
+    ]
+    lines += report_inputs_footer(REPO, report_inputs_c8c(records))
+    lines += ["", cb.ATTRIBUTION, ""]
+    return "\n".join(lines)
+
+
+def fits_section_c8c(records: dict, stages: dict) -> list[str]:
+    fitted = {
+        k: v for k, v in records.items() if "fit_s" in v and k.split("__")[1] in C8C_ARMS
+    }
+    lines = ["## Every fit", ""]
+    lines += [
+        "Each fit of this amendment's stages, its own time on the monotonic clock, which a"
+        " suspended machine does not advance, and each stage's whole, with the time the"
+        " machine spent suspended inside it. The classifiers' time is apart from the"
+        " booster's.",
+        "",
+    ]
+    lines += cb.table(
+        [
+            "fit",
+            "trees",
+            "columns",
+            "weighted",
+            "fit rows",
+            "classifiers (s)",
+            "prepare (s)",
+            "fit (s)",
+            "predict (s)",
+            "peak (GiB)",
+        ],
+        [
+            [
+                f"`{n}`",
+                f"{r['n_estimators']:,}",
+                f"{r['columns']}",
+                "C8c's" if r.get("weights") else "no",
+                f"{r['fit_rows']:,}",
+                f"{r['weights']['classifier_s']:,.0f}" if r.get("weights") else "",
+                f"{r['prepare_s']:,.0f}",
+                f"{r['fit_s']:,.0f}",
+                f"{r['predict_s']:,.0f}",
+                f"{r['peak_rss_gib']:,.1f}",
+            ]
+            for n, r in sorted(fitted.items(), key=lambda kv: kv[1]["written_utc"])
+        ],
+        "-rr-rrrrrr",
+    )
+    lines += [""]
+    srows = []
+    for name, s in stages.items():
+        for run in cb.runs(s):
+            srows.append(
+                [
+                    f"{name}, {run['started_utc']}",
+                    f"{len(run['fits'])}",
+                    f"{run['wall_s']:,.0f}",
+                    f"{run['suspended_s']:,.0f}",
+                    f"{run['peak_rss_gib']:,.1f}",
+                ]
+            )
+    lines += cb.table(
+        ["stage", "fits", "wall (s)", "suspended (s)", "peak (GiB)"], srows, "-rrrr"
+    )
+    lines += [""]
+    return lines
+
+
+def fingerprint_section_c8c(stages: dict) -> list[str]:
+    every = [(name, run) for name, s in stages.items() for run in cb.runs(s)]
+    moved = [name for name, run in every if run["fingerprint"]["touched"]]
+    lines = ["## What each run was allowed to write", ""]
+    lines += [
+        "Every file under `reports/`, the stored residuals and records of the ladder, the"
+        " held-out months and the earlier experiments, and the submissions, by size,"
+        " modification time and sha256, before each stage and after it; and every record"
+        " of 5 and 6 October under the records' directory, by sha256, at the start and the"
+        " end of each stage. "
+        + (
+            "No such file changed in any run; each wrote only its own records under"
+            " `data/processed/candidates_board/`, which git ignores."
+            if not moved
+            else "Files changed while these ran: " + ", ".join(sorted(set(moved))) + "."
+        ),
+        "",
+    ]
+    rows = []
+    for name, run in every:
+        inherited = [
+            r for r in run.get("checks", []) if "records of 5 and 6 October" in r["what"]
+        ]
+        rows.append(
+            [
+                f"{name}, {run['started_utc']}",
+                f"{run['fingerprint']['files']:,}",
+                ", ".join(run["fingerprint"]["touched"]) or "none",
+                ", ".join(r["got"] for r in inherited) or "not read",
+            ]
+        )
+    lines += cb.table(
+        ["stage", "files checked", "touched", "records of 5 and 6 October"], rows, "-r--"
+    )
+    lines.append("")
+    return lines
+
+
+def report_inputs_c8c(records: dict) -> list[Path]:
+    paths = [
+        REPO / BOARD_TEXT,
+        REPO / cb.BASELINE,
+        REPO / cb.CANDIDATES_TEXT,
+        REPO / cb.RULE_TEXT,
+        REPO / SEEDS_REPORT,
+        REPORT,
+        REPO / cb.LADDER_RESIDUALS / f"december_{SUBMISSION_KEY}.parquet",
+    ]
+    paths += [
+        WORK / n
+        for n in ("stands.json", "c3a_park.json", "c3b_path.json", "stage_reference.json")
+    ]
+    paths += [cb.stage_path(s) for s in C8C_STAGES if cb.stage_path(s).exists()]
+    paths += sorted(WORK.glob("clock_c8c.json"))
+    for name in sorted(records):
+        paths += [cb.record_path(name), cb.kept_path(name)]
+    return paths
+
+
+# --------------------------------------------------------------------------
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -2077,9 +3231,24 @@ def main(argv: list[str] | None = None) -> int:
     mode.add_argument("--stage", type=int, choices=sorted(stages()) + [6, 7])
     mode.add_argument("--report", action="store_true")
     mode.add_argument("--status", action="store_true")
+    mode.add_argument("--c8c", choices=("check", "alone", "combination", "report"))
+    ap.add_argument("--prior", type=Path)
     ap.add_argument("--date", default=datetime.now(timezone.utc).strftime("%Y-%m-%d"))
     args = ap.parse_args(argv)
     point_harness()
+    if args.c8c is not None:
+        if args.prior is None:
+            ap.error(
+                "--c8c needs --prior, the working note of the amendment of 6 October"
+            )
+        if args.c8c == "report":
+            return write_report_c8c(args.amendment, args.prior, args.date)
+        run = {
+            "check": run_c8c_check,
+            "alone": run_c8c_alone,
+            "combination": run_c8c_combination,
+        }[args.c8c]
+        return run(args.amendment, args.prior)
     if args.fit == "reference":
         return run_reference(args.amendment)
     if args.stage in (6, 7):

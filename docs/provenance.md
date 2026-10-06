@@ -91,7 +91,7 @@ either direction without somebody seeing it.
 
 ## What a report declares it was generated from
 
-**23** generators write a footer naming every
+**24** generators write a footer naming every
 path the run read, with a sha256 each; check 8 recomputes them and calls
 the report verified, stale or unverifiable. The rule for who carries one
 is the Makefile's own measured time: under five minutes and the generator
