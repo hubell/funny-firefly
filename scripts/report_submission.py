@@ -316,6 +316,31 @@ def section_file(
             else []
         ),
         *(
+            [
+                [
+                    "the term's rows predicted by",
+                    "C6b" if m["record_quality_from_c6b"] else "the term",
+                ],
+                [
+                    "rows each rule took",
+                    ", ".join(
+                        f"{k.replace('_', ' ')} {num(v)}"
+                        for k, v in m["rows_each_rule_took"].items()
+                    ),
+                ],
+                [
+                    "configuration",
+                    "the rung alone"
+                    if m["submission_configuration"] is None
+                    else ", ".join(m["submission_configuration"]["candidates"])
+                    + f"; {m['seeds']} seeds",
+                ],
+                ["booster file sha256", f"`{m['booster_file_sha256']}`"],
+            ]
+            if "record_quality_from_c6b" in m
+            else []
+        ),
+        *(
             [f"record-quality term: ranking rows in {label(k)}", num(v)]
             for k, v in sorted(by_month.items())
         ),

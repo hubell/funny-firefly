@@ -2368,6 +2368,18 @@ FROZEN_DOCUMENTS: tuple[Frozen, ...] = (
         " readback happens once",
     ),
     Frozen(
+        "reports/submission-2026-10-06-v9.md",
+        "2742d1311cffb30c34fe37e78f36c7d7c5709ec2554515845cce3b9be1217c30",
+        "the record of the third upload: `funny-firefly_v9.parquet`, the"
+        " adopted configuration at five seeds with C6b on the record-quality"
+        " term's rows and the plan-shift rule substituted, its target's type,"
+        " and the two values the upload rule allows to be read back,"
+        " `usedPairs` and the score, as the scorer returned them on 6 October"
+        " 2026. Frozen for the reason the records of v7 and v8 are:"
+        " regenerating it would read the manifest of whatever file is on disk,"
+        " and the readback happens once",
+    ),
+    Frozen(
         "reports/preregistered-2026-10-04.md",
         "568299d1f2fd63cd049c83d40bfab3a0af6ebe548ad0318d23c7a26a992d3990",
         "the decision that every file uploaded from 4 October 2026 predicts"
