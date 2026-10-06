@@ -2651,6 +2651,7 @@ REPORT_INPUTS_HEADING = "## What this report was generated from"
 REPORT_INPUTS_DECLARED: tuple[tuple[str, str], ...] = (
     ("scripts/build_taxi_graph.py", "reports/taxi_routing.md"),
     ("scripts/candidates.py", "reports/candidates-2026-10-03.md"),
+    ("scripts/candidates_board.py", "reports/candidates-2026-10-05.md"),
     ("scripts/check_penalty_sensitivity.py", "reports/penalty_sensitivity.md"),
     ("scripts/check_runways_ourairports.py", "reports/runway_crosscheck.md"),
     ("scripts/report_congestion.py", "reports/congestion.md"),
