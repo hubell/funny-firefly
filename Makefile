@@ -8,7 +8,7 @@ PYTHON ?= python3
 .PHONY: all data metar ourairports reports crosscheck data-review synthetic tails \
         geometry-gaps congestion occupancy residual headroom baseline transfer sweep \
         preregistered metar-history monthly monthly-fit monthly-ladder monthly-ladder-fit \
-        monthly-seeds monthly-seeds-fit monthly-pairs monthly-pairs-fit planshift \
+        monthly-seeds monthly-seeds-fit monthly-pairs monthly-pairs-fit planshift c6 \
         istanbul fiumicino submission paper-docx test lint licence-check provenance \
         clean help
 
@@ -35,6 +35,7 @@ help:
 	@echo "make monthly-seeds   five seeds per held-out month -> reports/monthly_seeds.md"
 	@echo "make monthly-pairs   the geometry claim by month  -> reports/monthly_pairs.md"
 	@echo "make planshift     the plan-shifted departures   -> reports/planshift.md"
+	@echo "make c6           the term's rows from the schedule -> reports/c6.md"
 	@echo "make istanbul      Istanbul's February and January 2026 -> reports/istanbul.md"
 	@echo "make fiumicino     the last three blocks at Fiumicino -> reports/fiumicino.md"
 	@echo "make paper-docx    the paper as a Word document  -> docs/paper.docx"
@@ -279,6 +280,13 @@ monthly-pairs:
 # on the one ranking departure of the class; without it the run stops there.
 planshift:
 	$(PYTHON) scripts/report_planshift.py --report
+
+# C6 under section 2 of reports/preregistered-2026-10-04-tails.md, from the
+# training and ranking files: the term and both candidates leave one month out,
+# the rule's verdict, and the adopted candidate on the ranking rows the term
+# covers. Fits its own small models and reads no stored residual.
+c6:
+	$(PYTHON) scripts/report_c6.py
 
 # From monthly-seeds' residuals, the training and ranking files and both METAR
 # caches.

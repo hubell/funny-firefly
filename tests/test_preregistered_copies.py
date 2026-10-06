@@ -172,3 +172,144 @@ def test_the_identical_copy_is_frozen_at_the_notes_digest(path):
     held = {f.path: f for f in FROZEN_DOCUMENTS}
     assert path in held
     assert digest(REPO / path) == held[path].sha256 == IDENTICAL[path][1]
+
+
+# Copies whose note ends with the credit paragraph. The note's substitutions
+# are applied as above, its credit paragraph is moved after the closing
+# section so that it stays the last paragraph, and nothing else changes. The
+# patterns name no note: a dated working note's file name and a numbered work
+# block are matched by form, as ``WORK_BLOCK_TOKEN`` matches one.
+NOTE_1004_TAILS = "4d388f1d65a56ee06a66c45598a3231bbac63e125dc0b229e931cddf6641efeb"
+NOTE_1004_C7C8 = "4ac17be6925d03255a2e52b1d1ee307e297e913ee42f33c063a03d8e36fbe8cd"
+_NOTE_FILE = r"[A-Za-z0-9_]+_\d{4}-\d{2}-\d{2}\.md"
+_WORK_BLOCK = r"Block\s+\d+[A-Za-z]*"
+_UNPUBLISHED = "a working note this repository does not publish"
+_MEASUREMENT = "the measurement of section 3's candidates"
+CREDIT = "\n\nMovement and flight data supplied by EUROCONTROL PRC"
+
+COPIES_WITH_CREDIT = {
+    "reports/preregistered-2026-10-04-tails.md": (
+        "preregistration_2026-10-04_tails_restored.md",
+        NOTE_1004_TAILS,
+        (
+            (
+                r"recorded in\n`" + _NOTE_FILE + r"`\.",
+                "recorded in\nhis statements, " + _UNPUBLISHED + ".",
+            ),
+            (
+                r"\(`workingdir/block\d+[a-z]*/[A-Za-z0-9_]+\.txt`\)",
+                "(a working file outside this repository)",
+            ),
+        ),
+        0,
+    ),
+    "reports/preregistered-2026-10-04-c7c8.md": (
+        "preregistration_2026-10-04_c7_c8.md",
+        NOTE_1004_C7C8,
+        (
+            (r"\(`" + _NOTE_FILE + r"`, item 26\)", "(his statements, item 26)"),
+            (
+                r"recorded in `" + _NOTE_FILE + r"`\.",
+                "recorded in his statements, " + _UNPUBLISHED + ".",
+            ),
+            (
+                _WORK_BLOCK
+                + r"'s record commit \(`93732cb`\) is HEAD; "
+                + _WORK_BLOCK
+                + r" has not started\.",
+                "The record commit of the second upload (`93732cb`) is HEAD; the"
+                " measurement of\nsection 3's candidates has not started.",
+            ),
+            (r"\(`" + _NOTE_FILE + r"`\) lists", "(" + _UNPUBLISHED + ") lists"),
+            # the three inside the combination rule
+            (
+                r"If " + _WORK_BLOCK + r" adopts a configuration",
+                "If " + _MEASUREMENT + " adopts a configuration",
+            ),
+            (
+                _WORK_BLOCK + r"'s configuration stands alone",
+                "the configuration of " + _MEASUREMENT + " stands alone",
+            ),
+            (
+                r"If " + _WORK_BLOCK + r"\nadopts nothing",
+                "If " + _MEASUREMENT + "\nadopts nothing",
+            ),
+        ),
+        3,
+    ),
+}
+
+
+def _split_credit(text: str) -> tuple[str, str]:
+    """The text up to its credit paragraph, and the credit paragraph."""
+    i = text.rindex(CREDIT)
+    return text[: i + 1], text[i + 2 :]
+
+
+@pytest.mark.parametrize("path", sorted(COPIES_WITH_CREDIT))
+def test_the_note_with_its_substitutions_and_its_credit_last_is_the_copy(path):
+    """Where the note is on hand: its digest, each listed substitution applied
+    once, and the result is the copy up to its closing section, and the note's
+    credit paragraph is the copy's last paragraph, byte for byte."""
+    name, note_sha, substitutions, _ = COPIES_WITH_CREDIT[path]
+    note = Path(NOTES or ".") / name
+    if not NOTES or not note.exists():
+        pytest.skip(
+            "the working note is not on hand; the copy is checked alone"
+            " (PREREGISTRATION_NOTES names the notes' directory)"
+        )
+    raw = note.read_bytes()
+    assert hashlib.sha256(raw).hexdigest() == note_sha
+    text = raw.decode("utf-8")
+    for pattern, words in substitutions:
+        text, n = re.subn(pattern, lambda _m, w=words: w, text)
+        assert n == 1, pattern
+    body, credit = _split_credit(text)
+    copy = _published(path)
+    assert copy.count(PUBLISHED_TAIL) == 1
+    assert copy[: copy.index(PUBLISHED_TAIL)] == body
+    assert copy.endswith("\n\n" + credit)
+
+
+@pytest.mark.parametrize("path", sorted(COPIES_WITH_CREDIT))
+def test_the_copy_with_its_credit_names_no_work_block_and_credits_once(path):
+    sys.path.insert(0, str(REPO / "scripts"))
+    import check_licence_hygiene as hygiene
+
+    copy = _published(path)
+    assert not re.search(WORK_BLOCK_TOKEN, copy)
+    assert not re.search(r"\bblock\d+[a-z]*\b", copy)
+    assert not re.search(r"\bcha[t]\b|\bsessio[n]\b", copy, re.IGNORECASE)
+    assert not re.search(NOTE_REFERENCE_TOKEN, copy)
+    assert not hygiene.attribution_in(copy)
+    assert copy.count(hygiene.ATTRIBUTION) == 1
+    # the credit is the last paragraph, after the closing section
+    assert copy.rindex(CREDIT) > copy.index(PUBLISHED_TAIL)
+    # the note's digest is named in full; the only other is the board's, which
+    # the note itself names
+    assert set(re.findall(r"`([0-9a-f]{64})`", copy)) == {
+        COPIES_WITH_CREDIT[path][1],
+        NOTE_1004,
+    }
+
+
+@pytest.mark.parametrize("path", sorted(COPIES_WITH_CREDIT))
+def test_the_closing_section_lists_every_place_and_those_inside_the_rule(path):
+    _, _, substitutions, inside = COPIES_WITH_CREDIT[path]
+    closing = _published(path).split(PUBLISHED_TAIL, 1)[1]
+    rows = [r for r in closing.split("\n") if r.startswith("| ") and "---" not in r]
+    assert len(rows) == 1 + len(substitutions)
+    assert sum("(inside the rule)" in r for r in rows) == inside
+    for _, words in substitutions:
+        assert " ".join(words.split()) in " ".join(closing.split())
+
+
+@pytest.mark.parametrize("path", sorted(COPIES_WITH_CREDIT))
+def test_the_copy_with_its_credit_is_frozen_at_its_digest(path):
+    sys.path.insert(0, str(REPO / "src"))
+    from taxiout.provenance import FROZEN_DOCUMENTS, digest
+
+    held = {f.path: f for f in FROZEN_DOCUMENTS}
+    assert path in held
+    assert digest(REPO / path) == held[path].sha256
+    assert COPIES_WITH_CREDIT[path][1] in held[path].why

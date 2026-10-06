@@ -477,9 +477,304 @@ def combine(physical, tail: pd.Series, plan_shift: pd.Series | None = None) -> p
     return pd.Series(out, index=tail.index, name="prediction", dtype=float)
 
 
+# --------------------------------------------------------------------------
+# C6: the term's rows predicted from the schedule
+#
+# Section 2 of ``reports/preregistered-2026-10-04-tails.md``, beside the term
+# and leaving it unchanged: the rows are the term's, in the cells it covers,
+# and the prediction keeps the term's form, share * lag + (1 - share) * rest
+# mean. Two things change. A row is *at the schedule* when its block time lies
+# within ``NEAR_S`` of its scheduled time, with no condition on the lag; the
+# share is the share of rows at the schedule and the rest mean is over the rows
+# that are not. And ``noflt:normal`` is split by lag into four sub-cells. That
+# is C6a. C6b, adopted by ``reports/c6.md`` under the section's rule, replaces
+# each row's share with a classifier's probability that the row is at the
+# schedule, and keeps C6a's rest mean for the row's sub-cell.
+#
+# Readings the section leaves open, fixed before any figure existed and kept
+# here as they were fixed: a missing ``STAND_mvt``, ``AIRCRAFT_TYPE_mvt`` or
+# callsign prefix is a level of its own under the ten-row rule; the bands are
+# [-1 h, 0], (0, 1 h], (1 h, 2 h] and (2 h, 4 h]; the scheduled hour, the
+# take-off hour and the weekday enter the classifier as integers, the sub-cell
+# and the three fields as LightGBM categoricals under its default categorical
+# settings; and a level the fit never saw is read as ``other`` at prediction.
+
+# The three fields the classifier reads beside the term's inputs, all exposed
+# for ranking departures; at fit time C6 reads the term's two hidden fields.
+C6_PREDICT_INPUTS: tuple[str, ...] = PREDICT_INPUTS + (
+    "FLIGHT_mvt",
+    "STAND_mvt",
+    "AIRCRAFT_TYPE_mvt",
+)
+C6_FIT_ONLY_INPUTS: tuple[str, ...] = FIT_ONLY_INPUTS
+
+# "A sub-cell with fewer than five fitting rows takes the values C6a computes
+# for its whole cell"; "each level with fewer than ten fitting rows read as one
+# level, `other`". Both the section's words.
+C6_SUB_MIN = 5
+C6_LEVEL_MIN = 10
+C6_OTHER = "other"
+C6_MISSING = "<missing>"
+C6_SPLIT_BUCKET = "noflt:normal"
+# The four sub-cells of ``noflt:normal``, edges in hours as the section gives
+# them; the first band is closed below, every band closed above.
+C6_SUB_EDGES_H: tuple[tuple[int, int], ...] = ((-1, 0), (0, 1), (1, 2), (2, 4))
+C6_SUB_NAMES: tuple[str, ...] = ("[-1h,0]", "(0,1h]", "(1h,2h]", "(2h,4h]")
+C6_CATEGORICAL: tuple[str, ...] = ("prefix", "STAND_mvt", "AIRCRAFT_TYPE_mvt")
+
+# "objective binary, 300 trees, learning rate 0.03, 15 leaves, minimum child
+# 20, no bagging, deterministic, column-wise, eight threads, seed 20260902".
+C6_CLASSIFIER_PARAMS: dict[str, object] = {
+    "objective": "binary",
+    "learning_rate": 0.03,
+    "num_leaves": 15,
+    "min_child_samples": 20,
+    "bagging_fraction": 1.0,
+    "bagging_freq": 0,
+    "feature_fraction": 1.0,
+    "deterministic": True,
+    "force_col_wise": True,
+    "num_threads": 8,
+    "seed": 20260902,
+    "verbose": -1,
+}
+C6_CLASSIFIER_ROUNDS = 300
+
+
+def at_schedule(frame: pd.DataFrame) -> pd.Series:
+    """Block time within ``NEAR_S`` of the scheduled time, no lag condition."""
+    gap = _utc(frame["BLOCK_TIME_UTC_mvt"]) - _utc(frame["SCHED_TIME_UTC_mvt"])
+    return (gap.dt.total_seconds().abs() <= NEAR_S).fillna(False).astype(bool)
+
+
+def c6_cell(frame: pd.DataFrame) -> pd.Series:
+    """The term's cell of each row, ``airport|bucket``."""
+    flags = flag(frame)
+    return frame["ADEP_mvt"].astype(str) + "|" + flags["tail_bucket"].astype(str)
+
+
+def c6_band(lag_s: np.ndarray) -> np.ndarray:
+    """The four bands of ``noflt:normal``; '' outside them (a missing lag included)."""
+    out = np.full(lag_s.shape, "", dtype=object)
+    for (lo_h, hi_h), name in zip(C6_SUB_EDGES_H, C6_SUB_NAMES):
+        lo, hi = lo_h * HOUR, hi_h * HOUR
+        inside = (lag_s > lo) & (lag_s <= hi)
+        if (lo_h, hi_h) == C6_SUB_EDGES_H[0]:
+            inside = (lag_s >= lo) & (lag_s <= hi)
+        out[inside] = name
+    return out
+
+
+def c6_sub_cell(frame: pd.DataFrame) -> pd.Series:
+    """The cell, with ``noflt:normal`` split into its four lag sub-cells."""
+    cell = c6_cell(frame).to_numpy(dtype=object)
+    lag = lag_seconds(frame).to_numpy(dtype=float)
+    split = np.array([c.endswith("|" + C6_SPLIT_BUCKET) for c in cell], dtype=bool)
+    sub = c6_band(lag)
+    if (split & (sub == "")).any():
+        raise ValueError("a noflt:normal row lies in no sub-cell (missing lag?)")
+    out = np.where(split, cell + "|" + sub, cell)
+    return pd.Series(out, index=frame.index, name="sub_cell")
+
+
+def _share_rest(at: np.ndarray, y: np.ndarray) -> tuple[float, float]:
+    share = float(at.mean())
+    rest = float(y[~at].mean()) if (~at).any() else float("nan")
+    return share, rest
+
+
+def c6_mix(share: np.ndarray, lag: np.ndarray, rest: np.ndarray) -> np.ndarray:
+    """share x lag + (1 - share) x rest; a NaN rest (every row at the schedule)
+    is read as 0 under weight 0, as the term reads it."""
+    rest = np.where(np.isnan(rest), 0.0, rest)
+    return share * lag + (1.0 - share) * rest
+
+
+class C6a:
+    """Share at the schedule and rest mean, per sub-cell, with the fallback.
+
+    ``cells`` holds ``(share, rest mean, n)`` per cell and ``subs``
+    ``(share, rest mean, n, fell back)`` per sub-cell. Aggregates only.
+    """
+
+    def fit(self, frame: pd.DataFrame) -> "C6a":
+        """``frame``: the fitting rows (the term's covered cells, target present)."""
+        y = pd.to_numeric(frame["TAXITIME_SEC_mvt"]).to_numpy(dtype=float)
+        at = at_schedule(frame).to_numpy()
+        cell = c6_cell(frame).to_numpy(dtype=object)
+        sub = c6_sub_cell(frame).to_numpy(dtype=object)
+        self.cells = {}
+        for c in sorted(set(cell)):
+            m = cell == c
+            self.cells[c] = (*_share_rest(at[m], y[m]), int(m.sum()))
+        self.subs = {}
+        for s in sorted(set(sub)):
+            m = sub == s
+            c = s.rsplit("|", 1)[0] if s.count("|") == 2 else s
+            n = int(m.sum())
+            if n < C6_SUB_MIN:
+                share, rest, _ = self.cells[c]
+                self.subs[s] = (share, rest, n, True)
+            else:
+                self.subs[s] = (*_share_rest(at[m], y[m]), n, False)
+        return self
+
+    def values(self, frame: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
+        """(share, rest mean) per row; a sub-cell unseen in the fit takes its cell's."""
+        sub = c6_sub_cell(frame).to_numpy(dtype=object)
+        cell = c6_cell(frame).to_numpy(dtype=object)
+        share = np.empty(len(frame))
+        rest = np.empty(len(frame))
+        for i, (s, c) in enumerate(zip(sub, cell)):
+            v = self.subs.get(s)
+            sh, re = (v[0], v[1]) if v is not None else self.cells[c][:2]
+            share[i], rest[i] = sh, re
+        return share, rest
+
+    def predict(self, frame: pd.DataFrame) -> np.ndarray:
+        share, rest = self.values(frame)
+        lag = lag_seconds(frame).to_numpy(dtype=float)
+        return c6_mix(share, lag, rest)
+
+
+def c6_levels(frame: pd.DataFrame) -> pd.DataFrame:
+    """The three categorical fields as strings, a missing value its own level."""
+    flight = frame["FLIGHT_mvt"].astype(object)
+    prefix = flight.where(flight.isna(), flight.astype(str).str[:3])
+    out = pd.DataFrame(index=frame.index)
+    out["prefix"] = prefix
+    out["STAND_mvt"] = frame["STAND_mvt"].astype(object)
+    out["AIRCRAFT_TYPE_mvt"] = frame["AIRCRAFT_TYPE_mvt"].astype(object)
+    for c in C6_CATEGORICAL:
+        v = out[c]
+        out[c] = np.where(v.isna().to_numpy(), C6_MISSING, v.astype(str).to_numpy())
+    return out
+
+
+def c6_fold_levels(
+    levels: pd.Series, kept: list[str] | None = None
+) -> tuple[pd.Series, list[str]]:
+    """Levels with fewer than ``C6_LEVEL_MIN`` rows (in the fit) read as ``other``."""
+    if kept is None:
+        counts = levels.value_counts()
+        kept = sorted(counts.index[counts >= C6_LEVEL_MIN].tolist())
+    out = levels.where(levels.isin(kept), C6_OTHER)
+    return out, kept
+
+
+class C6b:
+    """The classifier's probability as the share; C6a's rest mean."""
+
+    def __init__(self, c6a: C6a):
+        self.c6a = c6a
+
+    def features(self, frame: pd.DataFrame) -> pd.DataFrame:
+        sched = _utc(frame["SCHED_TIME_UTC_mvt"])
+        takeoff = _utc(frame["MVT_TIME_UTC_mvt"])
+        X = pd.DataFrame(index=frame.index)
+        X["lag"] = lag_seconds(frame).astype(float)
+        X["sub_cell"] = pd.Categorical(c6_sub_cell(frame), categories=self.sub_levels)
+        X["sched_hour"] = sched.dt.hour.astype(int)
+        X["takeoff_hour"] = takeoff.dt.hour.astype(int)
+        X["weekday"] = sched.dt.dayofweek.astype(int)
+        raw = c6_levels(frame)
+        for c in C6_CATEGORICAL:
+            folded, _ = c6_fold_levels(raw[c], self.kept[c])
+            X[c] = pd.Categorical(folded, categories=self.kept[c] + [C6_OTHER])
+        return X
+
+    def fit(self, frame: pd.DataFrame) -> "C6b":
+        import lightgbm as lgb
+
+        raw = c6_levels(frame)
+        self.kept = {c: c6_fold_levels(raw[c])[1] for c in C6_CATEGORICAL}
+        self.sub_levels = sorted(set(c6_sub_cell(frame)))
+        X = self.features(frame)
+        if X["sub_cell"].isna().any():
+            raise ValueError("sub-cell outside the fitted levels")
+        y = at_schedule(frame).astype(int).to_numpy()
+        cats = ["sub_cell", *C6_CATEGORICAL]
+        ds = lgb.Dataset(X, label=y, categorical_feature=cats, free_raw_data=False)
+        self.booster = lgb.train(
+            C6_CLASSIFIER_PARAMS, ds, num_boost_round=C6_CLASSIFIER_ROUNDS
+        )
+        return self
+
+    def predict(self, frame: pd.DataFrame) -> np.ndarray:
+        X = self.features(frame)
+        p = self.booster.predict(X)
+        _, rest = self.c6a.values(frame)
+        return c6_mix(p, X["lag"].to_numpy(dtype=float), rest)
+
+
+def c6_fitting_rows(term: TailModel, frame: pd.DataFrame) -> np.ndarray:
+    """The term's fitting rows in its covered cells: in a covered cell, target present."""
+    flags = flag(frame)
+    keys = _cell_keys(frame, flags)
+    cov = set(term.covered.index.tolist())
+    in_cov = np.fromiter((k in cov for k in keys), bool, len(frame))
+    y = pd.to_numeric(frame["TAXITIME_SEC_mvt"], errors="coerce")
+    return in_cov & y.notna().to_numpy()
+
+
+@dataclass
+class C6Model:
+    """C6b fitted on every fitting row of the term's cells, predicting the term's rows.
+
+    ``term`` is the fitted record-quality term; ``fit`` reads the rows the term
+    was fitted on and ``predict`` returns C6b's value on exactly the rows the
+    term predicts, NaN elsewhere, raw: the floor at zero and the rounding are
+    the file's, applied to every row alike, as for the term.
+    """
+
+    PREDICT_INPUTS: ClassVar[tuple[str, ...]] = C6_PREDICT_INPUTS
+    FIT_ONLY_INPUTS: ClassVar[tuple[str, ...]] = C6_FIT_ONLY_INPUTS
+
+    term: TailModel
+    c6a: C6a | None = None
+    c6b: C6b | None = None
+    fitting_rows: int | None = None
+
+    def fit(self, frame: pd.DataFrame) -> "C6Model":
+        rows = frame[c6_fitting_rows(self.term, frame)]
+        self.fitting_rows = int(len(rows))
+        self.c6a = C6a().fit(rows)
+        self.c6b = C6b(self.c6a).fit(rows)
+        return self
+
+    def predict(self, frame: pd.DataFrame) -> pd.Series:
+        if self.c6b is None:
+            raise RuntimeError("C6Model is not fitted")
+        covered = self.term.predict(frame).notna().to_numpy()
+        out = np.full(len(frame), np.nan)
+        if covered.any():
+            out[covered] = self.c6b.predict(frame[covered])
+        return pd.Series(out, index=frame.index, name="c6b", dtype=float)
+
+
 __all__ = [
     "BUCKETS",
+    "C6_CATEGORICAL",
+    "C6_CLASSIFIER_PARAMS",
+    "C6_CLASSIFIER_ROUNDS",
+    "C6_FIT_ONLY_INPUTS",
+    "C6_LEVEL_MIN",
+    "C6_PREDICT_INPUTS",
+    "C6_SUB_EDGES_H",
+    "C6_SUB_MIN",
+    "C6_SUB_NAMES",
+    "C6Model",
+    "C6a",
+    "C6b",
     "CELL_COLUMNS",
+    "at_schedule",
+    "c6_band",
+    "c6_cell",
+    "c6_fitting_rows",
+    "c6_fold_levels",
+    "c6_levels",
+    "c6_mix",
+    "c6_sub_cell",
     "FIT_ONLY_INPUTS",
     "FLAG_INPUTS",
     "LAG_BANDS",

@@ -395,7 +395,39 @@ SEED_AVERAGE_ADOPTED: bool = True
 # steps of ``reports/preregistered-2026-10-02.md``. True is the behavior v7
 # was built with; ``scripts/make_submission.py`` reads this and decides
 # nothing itself.
-TAIL_RULES_SUBSTITUTED: bool = False
+# False built v8. Restored by §1 of ``reports/preregistered-2026-10-04-tails.md``,
+# withdrawing that §1 after v8's score: "Every file uploaded from now (v9, v10)
+# substitutes the record-quality term and the plan-shift rule exactly as v7
+# did, as `reports/preregistered-2026-10-02.md` and the paper's §3.1, steps 6
+# and 7, describe: the same cells, shares, lags, rest means, coverage rule and
+# add-one share, fitted on the same rows. Nothing in either rule is refitted,
+# tuned or chosen on any score. Where §2 of this amendment adopts C6, C6
+# replaces the term on the term's rows and on nothing else."
+TAIL_RULES_SUBSTITUTED: bool = True
+
+# Whether the term's rows take C6b's prediction instead of the term's, when the
+# rules are substituted. §2 of ``reports/preregistered-2026-10-04-tails.md``
+# defines C6 and its rule, and ``reports/c6.md`` reads that rule from
+# ``taxiout.tails`` and prints "C6: ADOPTED C6b": pooled over the twelve
+# held-out months of 2025 it is lower than the term, the 95% interval of the
+# difference lies below zero, and it is not higher in January or in July. The
+# adopted candidate "is fitted on every fitting row of the term's cells and
+# predicts the term's ranking rows in v9 and v10" (``taxiout.tails.C6Model``).
+# False is the term itself, as v7 was built.
+RECORD_QUALITY_FROM_C6B: bool = True
+
+# The configuration the submission is fitted as, by the keys
+# ``scripts/candidates_board.py`` gives the candidates, or ``None`` for the
+# submission rung alone (v7 and v8). ``reports/candidates-2026-10-05.md`` reads
+# section 4 of ``reports/preregistered-2026-10-04.md`` and adopts C1, C4 and
+# C3b as its combination: C1's and C4's columns added to the rung in one
+# booster under ``BOOSTER_PARAMS``, blended at equal weights with C3b's
+# CatBoost member, holding the five conditions. ``reports/candidates-2026-10-07.md``
+# reads C8c under the amendment of 6 October and does not adopt it, so the
+# configuration stands. ``scripts/make_submission.py`` forms it through the
+# harness's own ``combination``, so the file is the configuration the reports
+# measured, at ``BAGGING_SEEDS`` seeds.
+SUBMISSION_CONFIGURATION: tuple[str, ...] | None = ("c1", "c4", "c3b")
 
 
 # The top rung's feature block, named once so the rungs that build on it say
@@ -1248,6 +1280,8 @@ __all__ = [
     "GATE_2C_RUNGS",
     "SEED_AVERAGE_ADOPTED",
     "TAIL_RULES_SUBSTITUTED",
+    "RECORD_QUALITY_FROM_C6B",
+    "SUBMISSION_CONFIGURATION",
     "TAIL_EXCLUSION_ADOPTED_H",
     "fit_rows",
     "LADDER_PROPER",

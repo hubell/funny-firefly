@@ -1714,7 +1714,7 @@ CONSTANTS: tuple[Constant, ...] = (
             "TAIL_EXCLUSION_ADOPTED_H",
             (4.0,),
             CHOSEN,
-            "lines 827 to 848: fixed at four hours on the mechanism and not by a sweep,"
+            "lines 859 to 880: fixed at four hours on the mechanism and not by a sweep,"
             " because no aircraft taxis for four hours, and reported against an"
             " un-excluded fit and a two-hour arm both fixed before the run",
         ),
@@ -1731,17 +1731,26 @@ CONSTANTS: tuple[Constant, ...] = (
         ),
         (
             "TAIL_RULES_SUBSTITUTED",
-            (False,),
+            (True,),
             CHOSEN,
-            "lines 384 to 397: §1 of `reports/preregistered-2026-10-04.md`,"
-            " fixed before any figure it governs existed: every file uploaded"
-            " from 4 October 2026 predicts every ranking row with the booster,"
-            " and the record-quality term and the plan-shift rule are still"
-            " fitted, still exclude their training rows from the physical fit,"
-            " and are still reported, but their predictions are not substituted."
-            " The reason is that section's table of four readings of the 384"
-            " rows' truth and the scorer's arithmetic, over which dropping both"
-            " rules costs at most 7.2 s and keeping them up to 290.8 s",
+            "lines 398 to 405: §1 of `reports/preregistered-2026-10-04-tails.md`,"
+            " fixed before any figure it governs existed, which withdraws §1 of"
+            " `reports/preregistered-2026-10-04.md`, the setting v8 was built"
+            " with and quoted in the comment above it, after v8's score: every"
+            " file uploaded from v9"
+            " substitutes the record-quality term and the plan-shift rule exactly"
+            " as v7 did, nothing in either refitted, tuned or chosen on any score,"
+            " and C6, where adopted, replaces the term on the term's rows alone",
+        ),
+        (
+            "RECORD_QUALITY_FROM_C6B",
+            (True,),
+            CHOSEN,
+            "lines 408 to 416: §2 of `reports/preregistered-2026-10-04-tails.md`"
+            " defines C6 and the rule that adopts it, and `reports/c6.md` reads"
+            " that rule from `taxiout.tails` and prints `C6: ADOPTED C6b`; the"
+            " adopted candidate is fitted on every fitting row of the term's"
+            " cells and predicts the term's ranking rows",
         ),
         (
             "Rung.diagnostic",
@@ -1950,6 +1959,45 @@ CONSTANTS: tuple[Constant, ...] = (
             "line 118, covering this too: five percent separates cells whose"
             " artifact share is a property of the feed from cells with a stray"
             " row",
+        ),
+        (
+            "C6_SUB_MIN",
+            (5,),
+            CHOSEN,
+            "§2 of `reports/preregistered-2026-10-04-tails.md`, fixed before any"
+            ' figure for C6 existed: "A sub-cell with fewer than five fitting rows'
+            ' takes the values C6a computes for its whole cell"',
+        ),
+        (
+            "C6_LEVEL_MIN",
+            (10,),
+            CHOSEN,
+            '§2 of `reports/preregistered-2026-10-04-tails.md`: "each level with'
+            ' fewer than ten fitting rows read as one level, `other`"',
+        ),
+        (
+            "C6_SUB_EDGES_H",
+            (1, 0, 0, 1, 1, 2, 2, 4),
+            CHOSEN,
+            "§2 of `reports/preregistered-2026-10-04-tails.md`: `noflt:normal` is"
+            " split by lag at 0, 1 h and 2 h into [-1 h, 0], (0, 1 h], (1 h, 2 h]"
+            " and (2 h, 4 h], the outer edges being the term's own band",
+        ),
+        (
+            "C6_CLASSIFIER_PARAMS",
+            (0.03, 15, 20, 1.0, 0, 1.0, True, True, 8, 20260902, 1),
+            CHOSEN,
+            "§2 of `reports/preregistered-2026-10-04-tails.md`, the classifier's"
+            " settings in its words: learning rate 0.03, 15 leaves, minimum child"
+            " 20, no bagging (fractions 1 and frequency 0), deterministic,"
+            " column-wise, eight threads, seed 20260902; the last 1 is LightGBM's"
+            " silent log level, which changes no fitted value",
+        ),
+        (
+            "C6_CLASSIFIER_ROUNDS",
+            (300,),
+            CHOSEN,
+            '§2 of `reports/preregistered-2026-10-04-tails.md`: "300 trees"',
         ),
         (
             "PLAN_SHIFT_ADD_ONE",
@@ -2334,6 +2382,38 @@ FROZEN_DOCUMENTS: tuple[Frozen, ...] = (
         " which `tests/test_preregistered_copies.py` checks against the note"
         " where the note is on hand",
     ),
+    Frozen(
+        "reports/preregistered-2026-10-04-tails.md",
+        "6bb2d5815bd0cbf57c4d113b97d36738ae08fd9c6c037796ce0e709152f9ab83",
+        "the amendment that withdraws §1 of `reports/preregistered-2026-10-04.md`"
+        " and restores the record-quality term and the plan-shift rule for every"
+        " file uploaded from v9, and adds C6 with its rule: the source of"
+        " `taxiout.models.TAIL_RULES_SUBSTITUTED` being True again and of"
+        " `taxiout.tails.C6Model`. What is frozen is this published copy, at the"
+        " digest beside it. What fixed the order is the working note it was"
+        " copied from, sha256"
+        " 4d388f1d65a56ee06a66c45598a3231bbac63e125dc0b229e931cddf6641efeb,"
+        " written on 4 October 2026 before any figure it governs existed. The"
+        " copy differs from it in the two places its closing section lists,"
+        " which `tests/test_preregistered_copies.py` checks against the note"
+        " where the note is on hand",
+    ),
+    Frozen(
+        "reports/preregistered-2026-10-04-c7c8.md",
+        "753186fa8ba96fe2f02a3cdbb514cf7f75a89a1895aaa1bebae4e5ec06426d9e",
+        "the amendment that adds C7 and C8 to the candidates of"
+        " `reports/preregistered-2026-10-04.md` and says how they join its"
+        " combination; neither was adopted. What is frozen is this published"
+        " copy, at the digest beside it. What fixed the order is the working"
+        " note it was copied from, sha256"
+        " 4ac17be6925d03255a2e52b1d1ee307e297e913ee42f33c063a03d8e36fbe8cd,"
+        " written on 4 October 2026 before any figure for either candidate"
+        " existed. The copy differs from it in the seven places its closing"
+        " section lists, three of them inside the combination rule by the"
+        " owner's decision of 6 October 2026, which"
+        " `tests/test_preregistered_copies.py` checks against the note where"
+        " the note is on hand",
+    ),
 )
 
 
@@ -2655,6 +2735,7 @@ REPORT_INPUTS_DECLARED: tuple[tuple[str, str], ...] = (
     ("scripts/candidates_board.py", "reports/candidates-2026-10-07.md"),
     ("scripts/check_penalty_sensitivity.py", "reports/penalty_sensitivity.md"),
     ("scripts/check_runways_ourairports.py", "reports/runway_crosscheck.md"),
+    ("scripts/report_c6.py", "reports/c6.md"),
     ("scripts/report_congestion.py", "reports/congestion.md"),
     ("scripts/report_coverage.py", "reports/stand_coverage.md"),
     ("scripts/report_fiumicino.py", "reports/fiumicino.md"),

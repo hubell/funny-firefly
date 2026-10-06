@@ -25,20 +25,20 @@ the gate's job is to prove there is no fifth.
 
 ## The constants
 
-`taxiout.provenance.CONSTANTS` carries **269** entries, one
+`taxiout.provenance.CONSTANTS` carries **275** entries, one
 per module-level numeric assignment the scanner finds outside the
-authored artifact. The scanner finds **324** in all, of which
+authored artifact. The scanner finds **330** in all, of which
 **50** are in `src/taxiout/synthetic.py` and are covered by
 `AUTHORED_ARTIFACTS` as a module rather than one by one.
 
 | class | entries | what it means |
 | --- | ---: | --- |
 | `mechanism` | 122 | definitional or a unit conversion; nobody chose it |
-| `chosen` | 112 | somebody picked it, and the basis says what against |
+| `chosen` | 118 | somebody picked it, and the basis says what against |
 | `derived` | 1 | computed from the data and frozen into the source |
 | `quoted` | 34 | a measurement from a named run or document |
 
-**Of the 112 chosen constants, 14 record
+**Of the 118 chosen constants, 14 record
 no reason at all, and a further
 15 record the method, the convention or a neighbouring
 use and not the value.** That is the finding this register was built to
@@ -91,7 +91,7 @@ either direction without somebody seeing it.
 
 ## What a report declares it was generated from
 
-**24** generators write a footer naming every
+**25** generators write a footer naming every
 path the run read, with a sha256 each; check 8 recomputes them and calls
 the report verified, stale or unverifiable. The rule for who carries one
 is the Makefile's own measured time: under five minutes and the generator
@@ -241,7 +241,7 @@ than this record claiming it.
 
 ## Frozen documents
 
-**17** dated records, each with a sha256. These need
+**19** dated records, each with a sha256. These need
 the opposite gate from every other file here: the risk is not that they go
 stale, it is that somebody edits them. A currency check over one would
 demand destroying the record.
@@ -265,6 +265,8 @@ demand destroying the record.
 | `reports/submission-2026-10-04.md` | the record of the one upload: the scored file, `funny-firefly_v7.parquet`, built twice byte for byte, its target's type, and the two values the upload rule allows to be read back, `usedPairs` and the score, as the scorer returned them on 4 October 2026. Regenerating it would read the manifest of whatever file is on disk, and the readback happens once |
 | `reports/submission-2026-10-04-v8.md` | the record of the second upload: `funny-firefly_v8.parquet`, the file with both tail rules fitted and not substituted, its target's type, and the two values the upload rule allows to be read back, `usedPairs` and the score, as the scorer returned them on 4 October 2026. Frozen for the reason the record of v7 is: regenerating it would read the manifest of whatever file is on disk, and the readback happens once |
 | `reports/preregistered-2026-10-04.md` | the decision that every file uploaded from 4 October 2026 predicts every ranking row with the booster, the rules the next candidates and the off-block measurement are read under, and the source of `taxiout.models.TAIL_RULES_SUBSTITUTED`. What is frozen is this published copy, at the digest beside it. What fixed the order is the working note it was copied from, sha256 568299d1f2fd63cd049c83d40bfab3a0af6ebe548ad0318d23c7a26a992d3990, written on 4 October 2026 before any figure it governs existed. It was written to need no change and the copy is the note byte for byte, which `tests/test_preregistered_copies.py` checks against the note where the note is on hand |
+| `reports/preregistered-2026-10-04-tails.md` | the amendment that withdraws §1 of `reports/preregistered-2026-10-04.md` and restores the record-quality term and the plan-shift rule for every file uploaded from v9, and adds C6 with its rule: the source of `taxiout.models.TAIL_RULES_SUBSTITUTED` being True again and of `taxiout.tails.C6Model`. What is frozen is this published copy, at the digest beside it. What fixed the order is the working note it was copied from, sha256 4d388f1d65a56ee06a66c45598a3231bbac63e125dc0b229e931cddf6641efeb, written on 4 October 2026 before any figure it governs existed. The copy differs from it in the two places its closing section lists, which `tests/test_preregistered_copies.py` checks against the note where the note is on hand |
+| `reports/preregistered-2026-10-04-c7c8.md` | the amendment that adds C7 and C8 to the candidates of `reports/preregistered-2026-10-04.md` and says how they join its combination; neither was adopted. What is frozen is this published copy, at the digest beside it. What fixed the order is the working note it was copied from, sha256 4ac17be6925d03255a2e52b1d1ee307e297e913ee42f33c063a03d8e36fbe8cd, written on 4 October 2026 before any figure for either candidate existed. The copy differs from it in the seven places its closing section lists, three of them inside the combination rule by the owner's decision of 6 October 2026, which `tests/test_preregistered_copies.py` checks against the note where the note is on hand |
 
 ## What a rebuild of an external input is pinned to
 
