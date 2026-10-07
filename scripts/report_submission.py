@@ -34,7 +34,8 @@ uploads on one day do not share a file. The record of 4 October 2026,
 name and is frozen under the date alone; nothing here rewrites it. Where the
 manifest records whether the tail rules were substituted, the record says so
 beside the term's count; a manifest written before that field existed renders
-as it always did.
+as it always did. Where it records the fusion (G1n), the record says which
+airports its gate keeps, how many rows it took and the model's sha256.
 
 Every number is computed; nothing is hand-typed. The report carries
 aggregates only, and the generator refuses to write a movement identifier or a
@@ -338,6 +339,19 @@ def section_file(
                 ["booster file sha256", f"`{m['booster_file_sha256']}`"],
             ]
             if "record_quality_from_c6b" in m
+            else []
+        ),
+        *(
+            [
+                ["the fusion applied (G1n)", "yes" if m["fusion_g1n_applied"] else "no"],
+                [
+                    "airports the fusion's gate keeps",
+                    ", ".join(a for a, g in m["fusion"]["gate"].items() if g["keeps"]),
+                ],
+                ["rows the fusion took", num(m["fusion"]["rows_taken"])],
+                ["fusion model sha256", f"`{m['fusion']['model_sha256']}`"],
+            ]
+            if m.get("fusion")
             else []
         ),
         *(
