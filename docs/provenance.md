@@ -25,22 +25,22 @@ the gate's job is to prove there is no fifth.
 
 ## The constants
 
-`taxiout.provenance.CONSTANTS` carries **275** entries, one
+`taxiout.provenance.CONSTANTS` carries **312** entries, one
 per module-level numeric assignment the scanner finds outside the
-authored artifact. The scanner finds **330** in all, of which
+authored artifact. The scanner finds **367** in all, of which
 **50** are in `src/taxiout/synthetic.py` and are covered by
 `AUTHORED_ARTIFACTS` as a module rather than one by one.
 
 | class | entries | what it means |
 | --- | ---: | --- |
-| `mechanism` | 122 | definitional or a unit conversion; nobody chose it |
-| `chosen` | 118 | somebody picked it, and the basis says what against |
+| `mechanism` | 128 | definitional or a unit conversion; nobody chose it |
+| `chosen` | 144 | somebody picked it, and the basis says what against |
 | `derived` | 1 | computed from the data and frozen into the source |
-| `quoted` | 34 | a measurement from a named run or document |
+| `quoted` | 39 | a measurement from a named run or document |
 
-**Of the 118 chosen constants, 14 record
+**Of the 144 chosen constants, 14 record
 no reason at all, and a further
-15 record the method, the convention or a neighbouring
+17 record the method, the convention or a neighbouring
 use and not the value.** That is the finding this register was built to
 produce: `HEADROOM_TRIGGER_S` was chosen with a stated reason and no
 recorded basis, and turned out to be an absolute line on a quantity
@@ -81,6 +81,8 @@ either direction without somebody seeing it.
 | `src/taxiout/validation.py` | `PAIR_FOLDS` | method recorded, value not argued |
 | `src/taxiout/validation.py` | `SEEN_FRACTION` | method recorded, value not argued |
 | `src/taxiout/validation.py` | `BOOTSTRAP_LEVEL` | method recorded, value not argued |
+| `src/taxiout/adsb.py` | `CLIMB_WINDOW_S` | method recorded, value not argued |
+| `src/taxiout/adsb.py` | `CLIMB_FT` | method recorded, value not argued |
 | `scripts/fetch_metar_history.py` | `FIRST_YEAR` | method recorded, value not argued |
 | `scripts/monthly.py` | `MIN_CELL_ROWS` | method recorded, value not argued |
 | `scripts/report_fiumicino.py` | `NAMED` | method recorded, value not argued |
@@ -91,7 +93,7 @@ either direction without somebody seeing it.
 
 ## What a report declares it was generated from
 
-**25** generators write a footer naming every
+**26** generators write a footer naming every
 path the run read, with a sha256 each; check 8 recomputes them and calls
 the report verified, stale or unverifiable. The rule for who carries one
 is the Makefile's own measured time: under five minutes and the generator
@@ -241,7 +243,7 @@ than this record claiming it.
 
 ## Frozen documents
 
-**20** dated records, each with a sha256. These need
+**26** dated records, each with a sha256. These need
 the opposite gate from every other file here: the risk is not that they go
 stale, it is that somebody edits them. A currency check over one would
 demand destroying the record.
@@ -268,6 +270,12 @@ demand destroying the record.
 | `reports/preregistered-2026-10-04.md` | the decision that every file uploaded from 4 October 2026 predicts every ranking row with the booster, the rules the next candidates and the off-block measurement are read under, and the source of `taxiout.models.TAIL_RULES_SUBSTITUTED`. What is frozen is this published copy, at the digest beside it. What fixed the order is the working note it was copied from, sha256 568299d1f2fd63cd049c83d40bfab3a0af6ebe548ad0318d23c7a26a992d3990, written on 4 October 2026 before any figure it governs existed. It was written to need no change and the copy is the note byte for byte, which `tests/test_preregistered_copies.py` checks against the note where the note is on hand |
 | `reports/preregistered-2026-10-04-tails.md` | the amendment that withdraws §1 of `reports/preregistered-2026-10-04.md` and restores the record-quality term and the plan-shift rule for every file uploaded from v9, and adds C6 with its rule: the source of `taxiout.models.TAIL_RULES_SUBSTITUTED` being True again and of `taxiout.tails.C6Model`. What is frozen is this published copy, at the digest beside it. What fixed the order is the working note it was copied from, sha256 4d388f1d65a56ee06a66c45598a3231bbac63e125dc0b229e931cddf6641efeb, written on 4 October 2026 before any figure it governs existed. The copy differs from it in the two places its closing section lists, which `tests/test_preregistered_copies.py` checks against the note where the note is on hand |
 | `reports/preregistered-2026-10-04-c7c8.md` | the amendment that adds C7 and C8 to the candidates of `reports/preregistered-2026-10-04.md` and says how they join its combination; neither was adopted. What is frozen is this published copy, at the digest beside it. What fixed the order is the working note it was copied from, sha256 4ac17be6925d03255a2e52b1d1ee307e297e913ee42f33c063a03d8e36fbe8cd, written on 4 October 2026 before any figure for either candidate existed. The copy differs from it in the seven places its closing section lists, three of them inside the combination rule by the owner's decision of 6 October 2026, which `tests/test_preregistered_copies.py` checks against the note where the note is on hand |
+| `reports/preregistered-2026-10-04-adsb-leg.md` | the amendment that keeps every adsb.lol position and fixes where a leg starts, the definition `taxiout.adsb` extracts. What is frozen is this published copy, at the digest beside it. What fixed the order is the working note it was copied from, sha256 6cdc0f76d32ea314e5df05216a56a8b63963538b4fe60b11a54ed3be2d7bc126, written on 4 October 2026 before any trace was extracted. The copy differs from it in the eight places its closing section lists, five of them inside a rule by the owner's decision of 7 October 2026, which `tests/test_preregistered_copies.py` checks against the note where the note is on hand |
+| `reports/preregistered-2026-10-04-opdi.md` | the amendment that adds OPDI's flight events beside adsb.lol, the definitions `taxiout.opdi` matches and the features `taxiout.fusion` reads. What is frozen is this published copy, at the digest beside it. What fixed the order is the working note it was copied from, sha256 3b22e7b49038d4d1216b59af7f9027f1521796a966236165278e034b0bea95c5, written on 4 October 2026 before any OPDI event was matched. The copy differs from it in the three places its closing section lists, one of them inside a definition by the owner's decision of 7 October 2026, which `tests/test_preregistered_copies.py` checks against the note where the note is on hand |
+| `reports/preregistered-2026-10-04-adsb-after-gate.md` | the amendment that takes adsb.lol's legs into the fusion model after the gate failed, leaves the two training pilot days out of every fit and adds the confirmation flag. What is frozen is this published copy, at the digest beside it. What fixed the order is the working note it was copied from, sha256 9b08c30924d70a65f842a78d96bb9241e76abe4d74914b4846548a95c30bde65, written on 4 October 2026 before any bulk extraction or fit. The copy differs from it in the six places its closing section lists, two of them inside a rule by the owner's decision of 7 October 2026, which `tests/test_preregistered_copies.py` checks against the note where the note is on hand |
+| `reports/preregistered-2026-10-04-opdi-tie.md` | the amendment that ties event flights whose id is in no flight list, the rule `taxiout.opdi` applies. What is frozen is this published copy, at the digest beside it. What fixed the order is the working note it was copied from, sha256 e3c8f7216722fed756371a4dd8f5d8b8058e86a6d580f1594bbf4155db43fcd3, written on 4 October 2026 before any OPDI flight was matched. The copy differs from it in the three places its closing section lists, none inside a rule, which `tests/test_preregistered_copies.py` checks against the note where the note is on hand |
+| `reports/preregistered-2026-10-06-last-week.md` | the pre-registration of the last week: group A for v10, read and closed, and group B for v11, which governs later candidates. What is frozen is this published copy, at the digest beside it. What fixed the order is the working note it was copied from, sha256 eb35ecd3eb802b077307d5dba6ab07ca0cc5277b6fc7d5522d1b65a86bc9f1d5, written on 6 October 2026 before any figure it governs existed. The copy differs from it in the eight places its closing section lists, four of them inside a rule by the owner's decision of 7 October 2026, which `tests/test_preregistered_copies.py` checks against the note where the note is on hand |
+| `reports/preregistered-2026-10-06-g1n.md` | the amendment that defines G1n, the fusion gated by coverage and by airport out of fold, and C9b, and fixes v10's configuration: the source of `taxiout.models.FUSION_G1N_APPLIED`. Both candidates were chosen after 22d's figures were seen, and the copy says so in its opening paragraph. What is frozen is this published copy, at the digest beside it. What fixed the order is the working note it was copied from, sha256 4e6958eb394e72d663234ce364ee93982447834909436f593c2416e7080805f4, written on 6 October 2026 before any figure it governs existed. The copy differs from it in the six places its closing section lists, three of them inside a rule by the owner's decision of 7 October 2026, which `tests/test_preregistered_copies.py` checks against the note where the note is on hand |
 
 ## What a rebuild of an external input is pinned to
 

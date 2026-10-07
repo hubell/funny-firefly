@@ -10,7 +10,7 @@ PYTHON ?= python3
         preregistered metar-history monthly monthly-fit monthly-ladder monthly-ladder-fit \
         monthly-seeds monthly-seeds-fit monthly-pairs monthly-pairs-fit planshift c6 \
         istanbul fiumicino submission paper-docx test lint licence-check provenance \
-        clean help
+        adsb opdi fusion clean help
 
 help:
 	@echo "make data     fetch and cache OSM geometry      -> data/raw/<ICAO>.json.gz"
@@ -36,6 +36,9 @@ help:
 	@echo "make monthly-pairs   the geometry claim by month  -> reports/monthly_pairs.md"
 	@echo "make planshift     the plan-shifted departures   -> reports/planshift.md"
 	@echo "make c6           the term's rows from the schedule -> reports/c6.md"
+	@echo "make adsb         verify the adsb.lol event tables -> data/raw/adsb/"
+	@echo "make opdi         fetch OPDI and match it          -> data/interim/opdi/matched/"
+	@echo "make fusion       the fusion model and its gates   -> reports/fusion.md"
 	@echo "make istanbul      Istanbul's February and January 2026 -> reports/istanbul.md"
 	@echo "make fiumicino     the last three blocks at Fiumicino -> reports/fiumicino.md"
 	@echo "make paper-docx    the paper as a Word document  -> docs/paper.docx"
@@ -287,6 +290,27 @@ planshift:
 # covers. Fits its own small models and reads no stored residual.
 c6:
 	$(PYTHON) scripts/report_c6.py
+
+# adsb.lol's per-leg event tables for section 5's 245 days, under ODbL 1.0, in
+# data/raw/adsb/ with a manifest and the notice. With the cache in place this
+# verifies it against the manifest and touches no network; fetching the days
+# from scratch is `python scripts/fetch_adsb.py --all`, about 750 GB of
+# releases, set by the download.
+adsb:
+	$(PYTHON) scripts/fetch_adsb.py --verify
+
+# Network, then offline. OPDI's flight events and lists into data/raw/opdi/,
+# fetched where missing, then reduced, tied and matched to every departure of
+# the training year and the ranking months: data/interim/opdi/matched/. Needs
+# the challenge data. Neither directory is ever deposited.
+opdi:
+	$(PYTHON) scripts/fetch_opdi.py
+
+# From both caches above, the training and ranking files and the adopted
+# configuration's held-out months: the feature tables in
+# data/processed/fusion/, twelve fits, and reports/fusion.md.
+fusion:
+	$(PYTHON) scripts/report_fusion.py
 
 # From monthly-seeds' residuals, the training and ranking files and both METAR
 # caches.

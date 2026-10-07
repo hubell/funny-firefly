@@ -313,3 +313,274 @@ def test_the_copy_with_its_credit_is_frozen_at_its_digest(path):
     assert path in held
     assert digest(REPO / path) == held[path].sha256
     assert COPIES_WITH_CREDIT[path][1] in held[path].why
+
+
+# The copies of 7 October 2026: four amendments of the board pre-registration
+# and the two notes of 6 October. Made as the two above are, with the owner's
+# decision of 7 October 2026 for the places inside a rule or a definition: the
+# work that a rule reads is named in words. Each note names other digests than
+# its own (the documents it amends, the files it reads), and the copy names
+# exactly those and its note's.
+_REPORT = "a working report this repository does not publish"
+_OUTSIDE = "a working file outside this repository"
+_PILOT_REPORT = "(the pilot's report, "
+_FETCH = "the OPDI fetch of 4 October"
+_FUSION = "the fusion model's measurement"
+_LANDING = "the landing of v10"
+_REPORT_FILE = r"\(`" + _NOTE_FILE + r"`\)"
+
+COPIES_OF_7_OCTOBER = {
+    "reports/preregistered-2026-10-04-adsb-leg.md": (
+        "preregistration_2026-10-04_adsb_leg.md",
+        "6cdc0f76d32ea314e5df05216a56a8b63963538b4fe60b11a54ed3be2d7bc126",
+        (
+            (
+                r"after "
+                + _WORK_BLOCK
+                + r" stopped at the end of its Step 3\n"
+                + _REPORT_FILE,
+                "after the pilot stopped at the end of its Step 3\n(" + _REPORT + ")",
+            ),
+            (
+                r"recorded in\n`" + _NOTE_FILE + r"`\.",
+                "recorded in\nhis statements, " + _UNPUBLISHED + ".",
+            ),
+            (
+                r"\(" + _WORK_BLOCK + r", sections 2 and 3\)",
+                _PILOT_REPORT + "sections 2 and 3)",
+            ),
+            (r"\(" + _WORK_BLOCK + r", section 3\)", _PILOT_REPORT + "section 3)"),
+            (r"The " + _WORK_BLOCK + r" prompt's", "The pilot's instruction"),
+            (
+                r"\(" + _WORK_BLOCK + r", section 4\.2, the sample D-AILL\)",
+                _PILOT_REPORT + "section 4.2, the sample D-AILL)",
+            ),
+            (
+                r"as " + _WORK_BLOCK + r" describes it",
+                "as the pilot's report describes it",
+            ),
+            (_WORK_BLOCK + r" read the first motion", "The pilot read the first motion"),
+        ),
+        5,
+    ),
+    "reports/preregistered-2026-10-04-opdi.md": (
+        "preregistration_2026-10-04_opdi.md",
+        "3b22e7b49038d4d1216b59af7f9027f1521796a966236165278e034b0bea95c5",
+        (
+            (
+                r"\(`" + _NOTE_FILE + r"`, items 24 and 25\)",
+                "(his statements, items 24 and 25)",
+            ),
+            (
+                r"recorded in `" + _NOTE_FILE + r"`\.",
+                "recorded in his statements, " + _UNPUBLISHED + ".",
+            ),
+            (
+                r"\(OurAirports, as " + _WORK_BLOCK + r" uses them\)",
+                "(OurAirports, as the pilot uses them)",
+            ),
+        ),
+        1,
+    ),
+    "reports/preregistered-2026-10-04-adsb-after-gate.md": (
+        "preregistration_2026-10-04_adsb_after_gate.md",
+        "9b08c30924d70a65f842a78d96bb9241e76abe4d74914b4846548a95c30bde65",
+        (
+            (
+                r"after " + _WORK_BLOCK + r"'s gate failed",
+                "after the pilot's gate failed",
+            ),
+            (r"after [A-Z][a-z]+'s\nexploratory check", "after an\nexploratory check"),
+            (
+                r"recorded in `" + _NOTE_FILE + r"`, item 31\.",
+                "recorded in his statements, item 31.",
+            ),
+            (r"\(`" + _NOTE_FILE + r"` §8\)", "(the pilot's report, §8)"),
+            (
+                r"the runner " + _WORK_BLOCK + r" built and tested\n"
+                r"\(`workingdir/block\d+[a-z]*/portable/`\)",
+                "the runner the pilot built and tested\n"
+                "(a working directory outside this repository)",
+            ),
+            (_WORK_BLOCK + r" found 42\.0%", "The pilot found 42.0%"),
+        ),
+        2,
+    ),
+    "reports/preregistered-2026-10-04-opdi-tie.md": (
+        "preregistration_2026-10-04_opdi_tie.md",
+        "e3c8f7216722fed756371a4dd8f5d8b8058e86a6d580f1594bbf4155db43fcd3",
+        (
+            (
+                r"after "
+                + _WORK_BLOCK
+                + r" stopped at the end of its Step 3\n"
+                + _REPORT_FILE,
+                "after "
+                + _FETCH
+                + " stopped at the end of its Step 3\n("
+                + _REPORT
+                + ")",
+            ),
+            (
+                r"to be recorded in\n`" + _NOTE_FILE + r"`\.",
+                "to be recorded in\nhis statements, " + _UNPUBLISHED + ".",
+            ),
+            (r"\(" + _WORK_BLOCK + r"\)", "(" + _FETCH + ")"),
+        ),
+        0,
+    ),
+    "reports/preregistered-2026-10-06-last-week.md": (
+        "preregistration_2026-10-06_last_week.md",
+        "eb35ecd3eb802b077307d5dba6ab07ca0cc5277b6fc7d5522d1b65a86bc9f1d5",
+        (
+            (r"item 40 of `" + _NOTE_FILE + r"`", "item 40 of his statements"),
+            (r"others " + _WORK_BLOCK + r" checked", "others " + _FUSION + " checked"),
+            (
+                r"\*\*" + _WORK_BLOCK + r"'s fusion\*\* " + _REPORT_FILE,
+                "**The fusion model's measurement** (" + _REPORT + ")",
+            ),
+            (
+                r"`" + _NOTE_FILE + r"` computed",
+                "A working note this repository does not publish computed",
+            ),
+            (
+                _WORK_BLOCK + r"'s twelve leave-one-month-out fits "
+                r"\(`workingdir/block\d+[a-z]*/fits/\nlomo_MM`\)",
+                "The twelve leave-one-month-out fits of " + _FUSION + " (working\n"
+                "files outside this repository)",
+            ),
+            (
+                r"on " + _WORK_BLOCK + r"'s scored rows \(989,825\)",
+                "on the scored rows of " + _FUSION + " (989,825)",
+            ),
+            (
+                r"on " + _WORK_BLOCK + r"'s scored\nrows",
+                "on the scored\nrows of " + _FUSION,
+            ),
+            (
+                r"as §5 and " + _WORK_BLOCK + r"\ndefine it",
+                "as §5 and " + _LANDING + "\ndefine it",
+            ),
+        ),
+        4,
+    ),
+    "reports/preregistered-2026-10-06-g1n.md": (
+        "preregistration_2026-10-06_g1n_c9b.md",
+        "4e6958eb394e72d663234ce364ee93982447834909436f593c2416e7080805f4",
+        (
+            (
+                r"after " + _WORK_BLOCK + r"'s verdicts",
+                "after the verdicts of the measurement of group A",
+            ),
+            (
+                r"\*\*" + _WORK_BLOCK + r"\*\* " + _REPORT_FILE,
+                "**The measurement of group A** (" + _REPORT + ")",
+            ),
+            (
+                r"`workingdir/block\d+[a-z]*/v10_candidate\.parquet`, sha256",
+                "(" + _OUTSIDE + "), sha256",
+            ),
+            (
+                r"\(`workingdir/block\d+[a-z]*/out/g1_rows\.parquet`, sha256",
+                "(" + _OUTSIDE + ", sha256",
+            ),
+            (
+                r"\(`workingdir/block\d+[a-z]*/out/c9_lirf_rows\.parquet`, sha256",
+                "(" + _OUTSIDE + ", sha256",
+            ),
+            (
+                _WORK_BLOCK + r" reproduces it from committed code",
+                _LANDING + " reproduces it from committed code",
+            ),
+        ),
+        3,
+    ),
+}
+
+
+def _applied(path: str) -> str | None:
+    """The note with its substitutions, or ``None`` where it is not on hand."""
+    name, note_sha, substitutions, _ = COPIES_OF_7_OCTOBER[path]
+    note = Path(NOTES or ".") / name
+    if not NOTES or not note.exists():
+        return None
+    raw = note.read_bytes()
+    assert hashlib.sha256(raw).hexdigest() == note_sha
+    text = raw.decode("utf-8")
+    for pattern, words in substitutions:
+        text, n = re.subn(pattern, lambda _m, w=words: w, text)
+        assert n == 1, pattern
+    return text
+
+
+@pytest.mark.parametrize("path", sorted(COPIES_OF_7_OCTOBER))
+def test_the_note_of_7_october_with_its_substitutions_is_the_copy(path):
+    """Where the note is on hand: its digest, each listed substitution applied
+    once, and the result is the copy up to its closing section, and the note's
+    credit paragraph is the copy's last paragraph, byte for byte."""
+    text = _applied(path)
+    if text is None:
+        pytest.skip(
+            "the working note is not on hand; the copy is checked alone"
+            " (PREREGISTRATION_NOTES names the notes' directory)"
+        )
+    body, credit = _split_credit(text)
+    copy = _published(path)
+    assert copy.count(PUBLISHED_TAIL) == 1
+    assert copy[: copy.index(PUBLISHED_TAIL)] == body
+    assert copy.endswith("\n\n" + credit)
+
+
+@pytest.mark.parametrize("path", sorted(COPIES_OF_7_OCTOBER))
+def test_the_copy_of_7_october_names_no_work_block_and_credits_once(path):
+    sys.path.insert(0, str(REPO / "scripts"))
+    import check_licence_hygiene as hygiene
+
+    copy = _published(path)
+    assert not re.search(WORK_BLOCK_TOKEN, copy)
+    assert not re.search(r"\bblock\d+[a-z]*\b", copy)
+    assert not re.search(r"\bcha[t]\b|\bsessio[n]\b", copy, re.IGNORECASE)
+    assert not re.search(NOTE_REFERENCE_TOKEN, copy)
+    assert not hygiene.attribution_in(copy)
+    assert copy.count(hygiene.ATTRIBUTION) == 1
+    assert copy.rindex(CREDIT) > copy.index(PUBLISHED_TAIL)
+    # its note's digest is named in the closing section; every other digest is
+    # one the note itself names, above the closing section
+    above, closing = copy.split(PUBLISHED_TAIL, 1)
+    assert set(re.findall(r"`([0-9a-f]{64})`", closing)) == {COPIES_OF_7_OCTOBER[path][1]}
+    text = _applied(path)
+    if text is not None:
+        assert set(re.findall(r"`([0-9a-f]{64})`", above)) == set(
+            re.findall(r"`([0-9a-f]{64})`", _split_credit(text)[0])
+        )
+
+
+@pytest.mark.parametrize("path", sorted(COPIES_OF_7_OCTOBER))
+def test_the_closing_of_7_october_lists_every_place_and_those_inside_a_rule(path):
+    _, _, substitutions, inside = COPIES_OF_7_OCTOBER[path]
+    closing = _published(path).split(PUBLISHED_TAIL, 1)[1]
+    rows = [r for r in closing.split("\n") if r.startswith("| ") and "---" not in r]
+    assert len(rows) == 1 + len(substitutions)
+    assert sum("(inside the rule)" in r for r in rows) == inside
+    for _, words in substitutions:
+        assert " ".join(words.split()) in " ".join(closing.split())
+
+
+@pytest.mark.parametrize("path", sorted(COPIES_OF_7_OCTOBER))
+def test_the_copy_of_7_october_is_frozen_at_its_digest(path):
+    sys.path.insert(0, str(REPO / "src"))
+    from taxiout.provenance import FROZEN_DOCUMENTS, digest
+
+    held = {f.path: f for f in FROZEN_DOCUMENTS}
+    assert path in held
+    assert digest(REPO / path) == held[path].sha256
+    assert COPIES_OF_7_OCTOBER[path][1] in held[path].why
+
+
+def test_the_g1n_copy_says_it_was_chosen_after_the_figures():
+    """The disclosure the G1n amendment requires, in its own words."""
+    copy = _published("reports/preregistered-2026-10-06-g1n.md")
+    assert (
+        "**Both candidates are chosen after 22d's numbers were seen, and the\n"
+        "paper says so.**"
+    ) in copy

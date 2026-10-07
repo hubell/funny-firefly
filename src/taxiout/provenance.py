@@ -209,7 +209,7 @@ _SCRIPTS: tuple[Constant, ...] = (
             "LEAK_THRESHOLD",
             (3,),
             CHOSEN,
-            "line 263, and the module docstring: one match is a coincidence and"
+            "line 265, and the module docstring: one match is a coincidence and"
             " a list is a leak, so a file is flagged only at three or more",
         ),
     ),
@@ -1714,7 +1714,7 @@ CONSTANTS: tuple[Constant, ...] = (
             "TAIL_EXCLUSION_ADOPTED_H",
             (4.0,),
             CHOSEN,
-            "lines 859 to 880: fixed at four hours on the mechanism and not by a sweep,"
+            "lines 878 to 899: fixed at four hours on the mechanism and not by a sweep,"
             " because no aircraft taxis for four hours, and reported against an"
             " un-excluded fit and a two-hour arm both fixed before the run",
         ),
@@ -2137,6 +2137,294 @@ CONSTANTS: tuple[Constant, ...] = (
             "a sentinel span guarding the stamp-resolution check, not a quantity",
         ),
     ),
+    # ---- the fusion model: adsb.lol, OPDI and the gates ------------------
+    *_mod(
+        "src/taxiout/models.py",
+        (
+            "FUSION_G1N_APPLIED",
+            (True,),
+            CHOSEN,
+            "the recorded decision that v10 applies G1n, chosen after 22d's figures"
+            " were seen, as §1 of `reports/preregistered-2026-10-06-g1n.md` says"
+            ' ("Both candidates are chosen after 22d\'s numbers were seen"): that'
+            " copy defines G1n and its rule and makes it v10's fusion part, and"
+            " `reports/fusion.md` reads the rule from `taxiout.fusion` and prints"
+            " `G1n: ADOPTED`; fixed before any figure it governs existed",
+        ),
+    ),
+    *_mod(
+        "src/taxiout/adsb.py",
+        ("EARTH_KM", (6371.0,), MECHANISM, "the Earth's mean radius in km, a unit"),
+        ("KM_PER_DEG", (180,), MECHANISM, "degrees to radians, a unit conversion"),
+        (
+            "GAP_S",
+            (20, 60),
+            CHOSEN,
+            "§2 (ii) of "
+            + "`reports/preregistered-2026-10-04-adsb-leg.md`"
+            + ": a leg starts at the first position after a"
+            " gap of 20 minutes or more, chosen from the format and one sample"
+            " trace before any trace was extracted",
+        ),
+        (
+            "LONG_STILL_S",
+            (20, 60),
+            CHOSEN,
+            "§2 (iii) of "
+            + "`reports/preregistered-2026-10-04-adsb-leg.md`"
+            + ": a run of ground positions below 1 kt"
+            " lasting 20 minutes or more, chosen with GAP_S",
+        ),
+        (
+            "STILL_KT",
+            (1.0,),
+            CHOSEN,
+            "§5 of `reports/preregistered-2026-10-04.md`"
+            + ": stationary means below 1 kt",
+        ),
+        (
+            "MOVING_KT",
+            (5.0,),
+            CHOSEN,
+            "§5 of `reports/preregistered-2026-10-04.md`"
+            + ": E2 is the first ground position at 5 kt or more",
+        ),
+        (
+            "E3_RUN_S",
+            (120.0,),
+            CHOSEN,
+            "§5 of `reports/preregistered-2026-10-04.md`"
+            + ": E3 ends the last stationary run of at least 120 s",
+        ),
+        (
+            "STATIONARY_RUN_S",
+            (60.0,),
+            CHOSEN,
+            "§5 of `reports/preregistered-2026-10-04.md`"
+            + ": the stationary time counts runs of at least 60 s",
+        ),
+        (
+            "CLIMB_WINDOW_S",
+            (300.0,),
+            CHOSEN,
+            "VALUE NOT JUSTIFIED: the reading of a climbing take-off the pilot fixed"
+            " before any departure was matched, written in the module's docstring;"
+            " no reason for 300 s rather than another window is recorded",
+        ),
+        (
+            "CLIMB_FT",
+            (300,),
+            CHOSEN,
+            "VALUE NOT JUSTIFIED: the same reading's 300 ft, fixed with"
+            " CLIMB_WINDOW_S; no reason for the value is recorded",
+        ),
+        (
+            "RADIUS_KM",
+            (8.0,),
+            CHOSEN,
+            "§5 of `reports/preregistered-2026-10-04.md`"
+            + ": legs ending in a take-off within 8 km of the reference point",
+        ),
+        (
+            "REFERENCE_POINTS",
+            (
+                50.026706,
+                8.55835,
+                48.353802,
+                11.7861,
+                51.470748,
+                0.459909,
+                52.308601,
+                4.76389,
+                41.2971,
+                2.07846,
+                40.493407,
+                3.572249,
+                49.00896,
+                2.554117,
+                41.804532,
+                12.251998,
+                47.458056,
+                8.548056,
+                36.898701,
+                30.800501,
+                41.274874,
+                28.732136,
+            ),
+            QUOTED,
+            "OurAirports' `airports.csv`, `latitude_deg` and `longitude_deg` of the"
+            " eleven airports, as cached by `scripts/fetch_ourairports.py`;"
+            " `tests/test_adsb.py` checks them against the cache where it is on"
+            " hand. Regenerable",
+        ),
+    ),
+    *_mod(
+        "src/taxiout/opdi.py",
+        (
+            "O0_RADIUS_M",
+            (4000.0,),
+            CHOSEN,
+            "§2 of `reports/preregistered-2026-10-04-opdi.md`"
+            + ": O0 within 4 km of the airport's reference point",
+        ),
+        ("EARTH_R", (6371008.8,), MECHANISM, "the Earth's mean radius in metres, a unit"),
+        (
+            "MATCH_AFTER_S",
+            (600,),
+            CHOSEN,
+            "§2 of `reports/preregistered-2026-10-04-opdi.md`"
+            + ": first_seen no later than 600 s after the take-off",
+        ),
+        (
+            "COVER_S",
+            (120,),
+            CHOSEN,
+            "§2 of `reports/preregistered-2026-10-04-opdi.md`"
+            + ": OPDI-covered where O0, O1 or O2 lies at least 120 s before the take-off",
+        ),
+        (
+            "INBOUND_S",
+            (12, 3600),
+            CHOSEN,
+            "§2 of `reports/preregistered-2026-10-04-opdi.md`"
+            + ": the inbound within the 12 hours before",
+        ),
+        (
+            "LINK_S",
+            (30, 60),
+            CHOSEN,
+            "§2 of `reports/preregistered-2026-10-04-opdi.md`"
+            + ": linked within 30 minutes of the inbound's last_seen",
+        ),
+        (
+            "TIE_WINDOW_S",
+            (3, 3600),
+            CHOSEN,
+            "§1 of `reports/preregistered-2026-10-04-opdi-tie.md`: within 3 hours,"
+            " the window its §2 tested on OPDI alone before any departure was matched",
+        ),
+        (
+            "GRID_ANCHOR",
+            (2025, 1, 5),
+            QUOTED,
+            "a day of OPDI v0.0.2's ten-day event-file grid, read from the"
+            " published file names (`flight_events_20250105_20250115`)",
+        ),
+        (
+            "GRID_STEP_DAYS",
+            (10,),
+            QUOTED,
+            "OPDI v0.0.2's event files span ten days each, as published",
+        ),
+        ("MATCH_MONTHS", (1, 13), MECHANISM, "the twelve months of 2025, as a range"),
+        ("LIST_MONTHS", (12,), MECHANISM, "a slice of MATCH_MONTHS, the twelve of 2025"),
+    ),
+    *_mod(
+        "src/taxiout/fusion.py",
+        (
+            "MATCH_S",
+            (120.0,),
+            CHOSEN,
+            "§5 of `reports/preregistered-2026-10-04.md`"
+            + ": the leg whose take-off lies within 120 s",
+        ),
+        (
+            "COVER_S",
+            (120.0,),
+            CHOSEN,
+            "§5 of `reports/preregistered-2026-10-04.md`"
+            + ": covered if E1 lies at least 120 s before take-off",
+        ),
+        (
+            "EARLY_H",
+            (1,),
+            CHOSEN,
+            "§5 of `reports/preregistered-2026-10-04.md`"
+            + ": a departure before 01:00 UTC is read only with the previous day's file",
+        ),
+        (
+            "PEER_WINDOW_S",
+            (1800.0,),
+            CHOSEN,
+            "§5 of `reports/preregistered-2026-10-04.md`"
+            + ": the peers within 30 minutes of the subject's take-off",
+        ),
+        (
+            "SEED",
+            (20260902,),
+            CHOSEN,
+            "§5 of `reports/preregistered-2026-10-04.md`"
+            + ": the fusion model's seed 20260902",
+        ),
+        (
+            "ROUNDS",
+            (1000,),
+            CHOSEN,
+            "§5 of `reports/preregistered-2026-10-04.md`" + ": 1,000 trees",
+        ),
+        (
+            "PARAMS",
+            (0.05, 63, 50, 0.9, 0.8, 1, True, True, 8),
+            CHOSEN,
+            "§5 of `reports/preregistered-2026-10-04.md`"
+            + ": learning rate 0.05, 63 leaves, minimum child 50, column sample"
+            " 0.9, row sample 0.8 (every round), deterministic, column-wise, eight"
+            " threads",
+        ),
+        (
+            "ADSB_FIRST_2025",
+            (2025, 1, 1),
+            CHOSEN,
+            "§5 of `reports/preregistered-2026-10-04.md`"
+            + "'s scale-up: every second day of 2025 from 1 January",
+        ),
+        (
+            "ADSB_STEP_DAYS",
+            (2,),
+            CHOSEN,
+            "§5 of `reports/preregistered-2026-10-04.md`"
+            + "'s scale-up: every second day",
+        ),
+        (
+            "RANKING_MONTHS",
+            (2026, 1, 2026, 7),
+            QUOTED,
+            "the ranking set's two months, January and July 2026",
+        ),
+        ("MONTHS", (1, 13), MECHANISM, "the twelve months, as a range"),
+        (
+            "BASE_RECORDS",
+            (
+                153706,
+                143732,
+                164449,
+                175288,
+                185202,
+                183142,
+                190713,
+                191182,
+                183950,
+                185674,
+                162332,
+                165677,
+            ),
+            QUOTED,
+            "the rows of the adopted configuration's twelve held-out months at"
+            " the ladder's seed, beside their predictions' sha256, as"
+            " `reports/candidates-2026-10-07.md` tabulates them; each is checked"
+            " against the file and its record on read",
+        ),
+    ),
+    *_mod(
+        "scripts/report_fusion.py",
+        (
+            "DRAWS",
+            (2000,),
+            CHOSEN,
+            "the day-clustered interval's 2,000 draws, as every reading of the"
+            " fusion model's rule printed them beside the rule; it decides nothing",
+        ),
+    ),
     *_SCRIPTS,
 )
 
@@ -2425,6 +2713,94 @@ FROZEN_DOCUMENTS: tuple[Frozen, ...] = (
         " owner's decision of 6 October 2026, which"
         " `tests/test_preregistered_copies.py` checks against the note where"
         " the note is on hand",
+    ),
+    Frozen(
+        "reports/preregistered-2026-10-04-adsb-leg.md",
+        "d3f44aee08780381333810fb2b64df090f1108b2b55694461b80a67ab2cfee64",
+        "the amendment that keeps every adsb.lol position and fixes where a"
+        " leg starts, the definition `taxiout.adsb` extracts. What is frozen is"
+        " this published copy, at the digest beside it. What fixed the order is"
+        " the working note it was copied from, sha256"
+        " 6cdc0f76d32ea314e5df05216a56a8b63963538b4fe60b11a54ed3be2d7bc126,"
+        " written on 4 October 2026 before any trace was extracted. The copy"
+        " differs from it in the eight places its closing section lists, five"
+        " of them inside a rule by the owner's decision of 7 October 2026,"
+        " which `tests/test_preregistered_copies.py` checks against the note"
+        " where the note is on hand",
+    ),
+    Frozen(
+        "reports/preregistered-2026-10-04-opdi.md",
+        "94b9b7af14bb8246dc4e0bc262f8f408e12f89293f8c440eeccb534725846cc5",
+        "the amendment that adds OPDI's flight events beside adsb.lol, the"
+        " definitions `taxiout.opdi` matches and the features"
+        " `taxiout.fusion` reads. What is frozen is this published copy, at the"
+        " digest beside it. What fixed the order is the working note it was"
+        " copied from, sha256"
+        " 3b22e7b49038d4d1216b59af7f9027f1521796a966236165278e034b0bea95c5,"
+        " written on 4 October 2026 before any OPDI event was matched. The"
+        " copy differs from it in the three places its closing section lists,"
+        " one of them inside a definition by the owner's decision of 7 October"
+        " 2026, which `tests/test_preregistered_copies.py` checks against the"
+        " note where the note is on hand",
+    ),
+    Frozen(
+        "reports/preregistered-2026-10-04-adsb-after-gate.md",
+        "1180ae378fe8977c327b3e7ff0146ecc4c5e9ed0f17ebbe56c0cd62599c0fc07",
+        "the amendment that takes adsb.lol's legs into the fusion model after"
+        " the gate failed, leaves the two training pilot days out of every fit"
+        " and adds the confirmation flag. What is frozen is this published"
+        " copy, at the digest beside it. What fixed the order is the working"
+        " note it was copied from, sha256"
+        " 9b08c30924d70a65f842a78d96bb9241e76abe4d74914b4846548a95c30bde65,"
+        " written on 4 October 2026 before any bulk extraction or fit. The copy"
+        " differs from it in the six places its closing section lists, two of"
+        " them inside a rule by the owner's decision of 7 October 2026, which"
+        " `tests/test_preregistered_copies.py` checks against the note where"
+        " the note is on hand",
+    ),
+    Frozen(
+        "reports/preregistered-2026-10-04-opdi-tie.md",
+        "88b84e321c76ef1214f495087c20e5ae4088f6ddfea5df6b784415e93f1fc41e",
+        "the amendment that ties event flights whose id is in no flight list,"
+        " the rule `taxiout.opdi` applies. What is frozen is this published"
+        " copy, at the digest beside it. What fixed the order is the working"
+        " note it was copied from, sha256"
+        " e3c8f7216722fed756371a4dd8f5d8b8058e86a6d580f1594bbf4155db43fcd3,"
+        " written on 4 October 2026 before any OPDI flight was matched. The"
+        " copy differs from it in the three places its closing section lists,"
+        " none inside a rule, which `tests/test_preregistered_copies.py` checks"
+        " against the note where the note is on hand",
+    ),
+    Frozen(
+        "reports/preregistered-2026-10-06-last-week.md",
+        "c690856a1d6d2c6ffa9ed34648b262b5c3195e9aeddc36163437d923e6e42b3a",
+        "the pre-registration of the last week: group A for v10, read and"
+        " closed, and group B for v11, which governs later candidates. What is"
+        " frozen is this published copy, at the digest beside it. What fixed"
+        " the order is the working note it was copied from, sha256"
+        " eb35ecd3eb802b077307d5dba6ab07ca0cc5277b6fc7d5522d1b65a86bc9f1d5,"
+        " written on 6 October 2026 before any figure it governs existed. The"
+        " copy differs from it in the eight places its closing section lists,"
+        " four of them inside a rule by the owner's decision of 7 October 2026,"
+        " which `tests/test_preregistered_copies.py` checks against the note"
+        " where the note is on hand",
+    ),
+    Frozen(
+        "reports/preregistered-2026-10-06-g1n.md",
+        "f316a78087408d802646b0214fddf40776ca1d9eb39f79d1f345dc35b344179a",
+        "the amendment that defines G1n, the fusion gated by coverage and by"
+        " airport out of fold, and C9b, and fixes v10's configuration: the"
+        " source of `taxiout.models.FUSION_G1N_APPLIED`. Both candidates"
+        " were chosen after 22d's figures were seen, and the copy says so in"
+        " its opening paragraph. What is frozen is this published copy, at the"
+        " digest beside it. What fixed the order is the working note it was"
+        " copied from, sha256"
+        " 4e6958eb394e72d663234ce364ee93982447834909436f593c2416e7080805f4,"
+        " written on 6 October 2026 before any figure it governs existed. The"
+        " copy differs from it in the six places its closing section lists,"
+        " three of them inside a rule by the owner's decision of 7 October"
+        " 2026, which `tests/test_preregistered_copies.py` checks against the"
+        " note where the note is on hand",
     ),
 )
 
@@ -2751,6 +3127,7 @@ REPORT_INPUTS_DECLARED: tuple[tuple[str, str], ...] = (
     ("scripts/report_congestion.py", "reports/congestion.md"),
     ("scripts/report_coverage.py", "reports/stand_coverage.md"),
     ("scripts/report_fiumicino.py", "reports/fiumicino.md"),
+    ("scripts/report_fusion.py", "reports/fusion.md"),
     ("scripts/report_geometry_gaps.py", "reports/geometry_gaps.md"),
     ("scripts/report_headroom.py", "reports/headroom.md"),
     ("scripts/report_istanbul.py", "reports/istanbul.md"),

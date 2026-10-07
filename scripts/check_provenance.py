@@ -263,6 +263,13 @@ PROSE_EXEMPT: tuple[tuple[str, str, str], ...] = (
 # repository carries deliberately and checks by another instrument.
 PROSE_EXEMPT_ASSIGNMENTS: tuple[tuple[str, str, str], ...] = (
     (
+        "src/taxiout/adsb.py",
+        "NOTICE",
+        "the notice ODbL 1.0 requires of a Derivative Database, word for word:"
+        " its 1.0 is the licence's version, not a measured figure, and every"
+        " event table carries these exact bytes in its metadata",
+    ),
+    (
         "scripts/preregistered.py",
         "PREREGISTRATION",
         "the pre-registration's own carried text, quoted from a dated note."

@@ -281,3 +281,50 @@ def test_a_source_file_without_the_licence_line_is_named(tmp_path, monkeypatch):
     monkeypatch.setattr(hygiene, "REPO", tmp_path)
     files = ["scripts/ok.py", "scripts/late.py", "Makefile", "notes.txt"]
     assert hygiene.spdx_missing(files) == ["scripts/late.py", "Makefile"]
+
+
+def _stand_case(tmp_path, monkeypatch, files: dict[str, str]):
+    _quiet(monkeypatch)
+    monkeypatch.setattr(
+        hygiene, "osm_stand_identifiers", lambda: {"C10", "C11", "C12", "B7X", "A9Z"}
+    )
+    credit = "\n\nData (c) OpenStreetMap contributors, ODbL 1.0.\n"
+    for rel, text in files.items():
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel).write_text(text + credit)
+    monkeypatch.setattr(hygiene, "REPO", tmp_path)
+    return hygiene.main()
+
+
+def test_the_exempt_names_pass_in_their_own_file_only(tmp_path, monkeypatch, capsys):
+    """Candidate names that coincide with stands are exempt in the named file
+    and nowhere else, and only those names."""
+    names = "Candidates C10, C11 and C12."
+    exempt = "reports/preregistered-2026-10-06-last-week.md"
+    assert exempt in hygiene.IDENTIFIER_EXEMPTIONS
+    assert _stand_case(tmp_path, monkeypatch, {exempt: names}) == 0
+    capsys.readouterr()
+
+
+def test_the_same_names_fail_in_another_file(tmp_path, monkeypatch, capsys):
+    names = "Candidates C10, C11 and C12."
+    assert _stand_case(tmp_path, monkeypatch, {"reports/other.md": names}) == 1
+    assert "reports/other.md" in capsys.readouterr().out
+
+
+def test_other_identifiers_still_count_in_the_exempt_file(tmp_path, monkeypatch, capsys):
+    text = "Candidates C10, C11 and C12, and stands B7X, A9Z and C10."
+    exempt = "reports/preregistered-2026-10-06-last-week.md"
+    # two others is below the threshold, so it passes; a third makes it a list
+    assert _stand_case(tmp_path, monkeypatch, {exempt: text}) == 0
+    capsys.readouterr()
+    monkeypatch.setattr(
+        hygiene,
+        "osm_stand_identifiers",
+        lambda: {"C10", "C11", "C12", "B7X", "A9Z", "D4Q"},
+    )
+    (tmp_path / exempt).write_text(
+        text + " And D4Q.\n\nData (c) OpenStreetMap contributors, ODbL 1.0.\n"
+    )
+    assert hygiene.main() == 1
+    assert exempt in capsys.readouterr().out

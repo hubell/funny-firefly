@@ -31,7 +31,7 @@ Five checks:
    identifier is an extract. The challenge side is checked only where the
    data is present locally, which CI is not.
 
-   Three deliberate limits, stated rather than hidden, because a check that
+   Four deliberate limits, stated rather than hidden, because a check that
    cries wolf gets ignored, and printed with the verdict so that it is not
    read as wider than it is:
 
@@ -45,6 +45,8 @@ Five checks:
    - A file is flagged only at three or more distinct matches. One match is a
      coincidence; a list is a leak, and a list is what the reports would carry
      if this regressed.
+   - A name that coincides with a stand identifier is exempt only in the one
+     file and for the tokens ``IDENTIFIER_EXEMPTIONS`` names, with its reason.
 
    So this catches the realistic failure -- a report reverting to printing
    examples -- and not a single unlucky string in a test.
@@ -263,6 +265,19 @@ NEEDS_SPDX = ("*.py", "*.sh", "*.yml", "Makefile", "Containerfile")
 # Below this many distinct matches in one file, treat it as coincidence.
 LEAK_THRESHOLD = 3
 
+# Tokens that are names in a named file and happen to be stand identifiers
+# too, each file with its tokens and the reason. Narrow on purpose: a token is
+# exempt in its file alone, and any other identifier in that file still counts.
+# The owner's decision of 7 October 2026.
+IDENTIFIER_EXEMPTIONS: dict[str, tuple[frozenset[str], str]] = {
+    "reports/preregistered-2026-10-06-last-week.md": (
+        frozenset({"C10", "C11", "C12"}),
+        "the names of three candidates of group B, inside the copy's rules,"
+        " which may not change a word; that stands carry the same names at"
+        " some airports is a coincidence of form",
+    ),
+}
+
 
 def osm_stand_identifiers() -> set[str]:
     """Distinctive stand identifiers present in the local OSM cache.
@@ -465,9 +480,10 @@ def main() -> int:
                 continue
             # The substring test first: it decides nothing the pattern would
             # not, and spares the pattern on every identifier the file lacks.
+            exempt = IDENTIFIER_EXEMPTIONS.get(f, (frozenset(), ""))[0]
             found = sorted(
                 i
-                for i in ids
+                for i in ids - exempt
                 if i in text
                 and re.search(r"(?<![\w])" + re.escape(i) + r"(?![\w])", text)
             )

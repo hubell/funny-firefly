@@ -46,6 +46,22 @@ looked up over the whole training year (``fit_flight_history``).
 leg (January to November 2025 against December) and compares its predictions
 with the harness's stored ones, to the bit, writing nothing.
 
+**The fusion.** Where ``taxiout.models.FUSION_G1N_APPLIED`` is True the ranking
+rows a measured ground event covers take the fusion model's prediction where
+their airport keeps it, G1n of ``reports/preregistered-2026-10-06-g1n.md``,
+chosen after 22d's figures were seen and read in ``reports/fusion.md``. The
+fusion is fitted here, as ``taxiout.fusion`` defines it, on the feature tables
+``make fusion`` writes under ``data/processed/fusion/`` and the configuration's
+held-out months at the ladder's seed as the 2025 base: twelve fits leaving one
+month out decide the gate per airport over all twelve months' covered rows,
+and one fit on every fitting row predicts the ranking rows, with the booster's
+prediction below as their base. A row takes it where it is covered, neither
+rule covers it and its airport keeps the fusion; every other row is as without
+it. The booster file must be ``FUSION_BASE_BOOSTER_SHA256``'s bytes, the base
+the gate was measured on, or nothing is written. The manifest records the
+decision, the gate per airport, the model's sha256, its inputs' sha256 and the
+rows the fusion took.
+
 Beside the file it writes ``<team>_v<n>.booster.parquet``: the model's
 prediction for every ranking row before any substitution, in the template's
 order, as written (``TAXITIME_SEC_mvt``) and unrounded (``prediction``).
@@ -141,6 +157,8 @@ from taxiout.features import (  # noqa: E402
 )
 from taxiout.models import (  # noqa: E402
     BAGGING_SEEDS,
+    FUSION_BASE_BOOSTER_SHA256,
+    FUSION_G1N_APPLIED,
     RECORD_QUALITY_FROM_C6B,
     SUBMISSION_CONFIGURATION,
     TOP_RUNG,
@@ -164,6 +182,8 @@ MATRICES = REPO / "data" / "processed" / "taxi_distance"
 METAR = REPO / "data" / "raw" / "metar"
 OURAIRPORTS = REPO / "data" / "raw" / "ourairports_airports.csv"
 SUBMISSIONS = REPO / "data" / "submissions"
+FUSION = REPO / "data" / "processed" / "fusion"
+BOARD = REPO / "data" / "processed" / "candidates_board"
 
 ID = "MVT_ID_mvt"
 
@@ -807,6 +827,97 @@ def write_booster_file(path: Path, rank, physical, template, submission) -> Path
     return path
 
 
+def with_fusion(
+    values: np.ndarray, prediction: np.ndarray, take: np.ndarray
+) -> np.ndarray:
+    """The written values with the fusion's on the rows it takes, floored and rounded.
+
+    Every other row keeps its value exactly; ``take`` comes from
+    ``taxiout.fusion.applied_rows``, which leaves out the rules' rows, the
+    uncovered rows and the rows of an airport the gate drops.
+    """
+    out = np.asarray(values, dtype=float).copy()
+    take = np.asarray(take, dtype=bool)
+    out[take] = np.rint(np.clip(np.asarray(prediction, dtype=float)[take], 0.0, None))
+    return out
+
+
+def fusion_stage(rank, physical, rules_row: np.ndarray, model_path: Path) -> dict:
+    """G1n on the ranking rows: the gate, the fusion's prediction, the rows it takes.
+
+    ``physical`` is the booster's prediction for ``rank``'s rows, the fusion's
+    base; ``rules_row`` marks the rows either rule covers, which must be the
+    feature table's rules' rows. The final model is written to ``model_path``.
+    """
+    from taxiout import fusion
+    from taxiout.tails import plan_shift_threshold_s
+
+    fit_path, rank_path = FUSION / "fit_2025.parquet", FUSION / "rank_2026.parquet"
+    for p in (fit_path, rank_path):
+        if not p.exists():
+            raise SystemExit(f"no {p.relative_to(REPO)}; make fusion")
+    inputs = {str(p.relative_to(REPO)): sha256(p) for p in (fit_path, rank_path)}
+    for name in fusion.BASE_RECORDS:
+        p = BOARD / f"{name}.parquet"
+        inputs[str(p.relative_to(REPO))] = sha256(p)
+    print("fitting the fusion ...")
+    t0 = time.time()
+    frame = fusion.fit_frame(
+        pd.read_parquet(fit_path), fusion.read_base(BOARD), plan_shift_threshold_s()
+    )
+    fits: dict = {}
+    oof = fusion.leave_one_month_out(frame, log=fits)
+    gate = fusion.gate_all(oof)
+    cov = oof[fusion.covered(oof)]
+    model = fusion.train(frame[frame["fit_row"]])
+    model.save_model(str(model_path))
+    print(
+        f"  twelve fits and the final fit on {int(frame['fit_row'].sum()):,} rows in"
+        f" {time.time() - t0:.0f} s; kept at "
+        + ", ".join(a for a in fusion.AIRPORTS if gate[a])
+    )
+    base = pd.Series(physical.to_numpy(dtype=float), index=rank[ID].to_numpy(dtype=float))
+    table = pd.read_parquet(rank_path)
+    rf = fusion.rank_frame(table, base)
+    want = pd.Series(rules_row, index=rank[ID].to_numpy(dtype=float))
+    got = pd.Series(rf["rules_row"].to_numpy() == 1, index=rf["MVT_ID_mvt"].to_numpy())
+    if len(rf) != len(rank) or not got.reindex(want.index).equals(want):
+        raise SystemExit("the feature table's rows or rules' rows are not this build's")
+    pred = pd.Series(fusion.predict(model, rf), index=got.index)
+    applied = pd.Series(fusion.applied_rows(rf, gate), index=got.index)
+    month = rf["day"].str[:7].to_numpy()
+    by = (
+        pd.Series(applied.to_numpy())
+        .groupby([rf["ADEP_mvt"].astype(str).to_numpy(), month])
+        .sum()
+    )
+    return {
+        "prediction": pred.reindex(want.index),
+        "applied": applied.reindex(want.index).to_numpy(dtype=bool),
+        "record": {
+            "decision": "FUSION_G1N_APPLIED",
+            "gate": {
+                a: {
+                    "keeps": bool(gate[a]),
+                    "covered_rows": int((cov["ADEP_mvt"] == a).sum()),
+                }
+                for a in fusion.AIRPORTS
+            },
+            "model_sha256": sha256(model_path),
+            "model_file": model_path.name,
+            "fit_rows": int(frame["fit_row"].sum()),
+            "out_of_fold_pred_sha256": {m: f["pred_sha256"] for m, f in fits.items()},
+            "inputs_sha256": inputs,
+            "base_booster_sha256": FUSION_BASE_BOOSTER_SHA256,
+            "rows_taken": int(applied.sum()),
+            "rows_taken_by_airport_month": {
+                f"{a} {m}": int(n) for (a, m), n in by.items() if n
+            },
+            "prediction_sha256": fusion.pred_sha256(pred.reindex(want.index)),
+        },
+    }
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--team", help="team name, as the organisers hold it")
@@ -861,8 +972,9 @@ def main() -> int:
     path = SUBMISSIONS / f"{args.team}_v{version}.parquet"
     manifest = SUBMISSIONS / f"{args.team}_v{version}.manifest.json"
     booster_path = SUBMISSIONS / f"{args.team}_v{version}.booster.parquet"
+    fusion_path = SUBMISSIONS / f"{args.team}_v{version}.fusion.txt"
     submission.check_filename(path)
-    for p in (path, manifest, booster_path):
+    for p in (path, manifest, booster_path, fusion_path):
         if not is_ignored(p):
             print(
                 f"refusing to write {p.relative_to(REPO)}: git does not ignore it, and "
@@ -969,13 +1081,33 @@ def main() -> int:
         f"max {pred.max():,.0f} s"
     )
 
-    out = pd.DataFrame({ID: rank[ID].to_numpy(), TARGET: np.rint(pred.to_numpy())})
-    written = submission.write(out, template, path, overwrite=args.overwrite)
-    print(f"wrote {written.relative_to(REPO)} ({written.stat().st_size:,} bytes)")
     booster_file = write_booster_file(booster_path, rank, physical, template, submission)
     print(
         f"wrote {booster_file.relative_to(REPO)} ({booster_file.stat().st_size:,} bytes)"
     )
+    values = np.rint(pred.to_numpy())
+    fused = None
+    if FUSION_G1N_APPLIED:
+        if not TAIL_RULES_SUBSTITUTED:
+            print(
+                "the fusion is defined beside the substituted rules; refusing",
+                file=sys.stderr,
+            )
+            return 1
+        if sha256(booster_file) != FUSION_BASE_BOOSTER_SHA256:
+            print(
+                f"{booster_file.name} is not the booster file the fusion was measured on"
+                f" ({FUSION_BASE_BOOSTER_SHA256}); refusing to write the submission",
+                file=sys.stderr,
+            )
+            return 1
+        rules_row = (record_quality.notna() | shifted).to_numpy(dtype=bool)
+        fused = fusion_stage(rank, physical, rules_row, fusion_path)
+        values = with_fusion(values, fused["prediction"].to_numpy(), fused["applied"])
+        print(f"  the fusion takes {int(fused['applied'].sum()):,} rows")
+    out = pd.DataFrame({ID: rank[ID].to_numpy(), TARGET: values})
+    written = submission.write(out, template, path, overwrite=args.overwrite)
+    print(f"wrote {written.relative_to(REPO)} ({written.stat().st_size:,} bytes)")
 
     # Written only once the file has read back and validated against the
     # template, so a manifest never describes a file that was refused.
@@ -1048,6 +1180,8 @@ def main() -> int:
         "file_sha256": sha256(written),
         "booster_file": booster_file.name,
         "booster_file_sha256": sha256(booster_file),
+        "fusion_g1n_applied": FUSION_G1N_APPLIED,
+        "fusion": None if fused is None else fused["record"],
         "written_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "scorer_used_pairs": None,
         "scorer_score": None,

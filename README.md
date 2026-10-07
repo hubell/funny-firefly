@@ -249,6 +249,8 @@ data review and everything after it need `pip install -e ".[modelling]"`.
 | `scripts/fetch_metar.py` | Iowa State Mesonet ASOS archive | `data/raw/metar/<ICAO>_<period>.csv`, `MANIFEST.json` |
 | `scripts/fetch_metar_history.py` | `data/challenge/` (which airports have departures), Iowa State Mesonet ASOS archive, 2015 to 2024 | `data/raw/metar_history/<ICAO>_<period>.csv`, `MANIFEST.json` |
 | `scripts/fetch_ourairports.py` | OurAirports `airports.csv` | `data/raw/ourairports_airports.csv`, `ourairports_MANIFEST.json` |
+| `scripts/fetch_adsb.py` | adsb.lol globe history on GitHub (`adsblol/globe_history_2025`, `_2026`), the `prod` release of each of 245 days | `data/raw/adsb/<day>.parquet` (ODbL 1.0), `MANIFEST.json`, `ODbL-NOTICE.md`; `--verify` reads the cache offline |
+| `scripts/fetch_opdi.py` | OPDI v0.0.2 flight events and flight lists (EUROCONTROL), `data/challenge/` | `data/raw/opdi/` (`MANIFEST.json`), `data/interim/opdi/matched/<YYYYMM>.parquet`; never deposited |
 | `scripts/report_coverage.py` | `data/raw/` | `reports/stand_coverage.md` |
 | `scripts/build_taxi_graph.py` | `data/raw/` | `data/processed/taxi_distance/`, `reports/taxi_routing.md` |
 | `scripts/check_penalty_sensitivity.py` | `data/raw/` | `reports/penalty_sensitivity.md` |

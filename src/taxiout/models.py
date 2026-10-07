@@ -429,6 +429,25 @@ RECORD_QUALITY_FROM_C6B: bool = True
 # measured, at ``BAGGING_SEEDS`` seeds.
 SUBMISSION_CONFIGURATION: tuple[str, ...] | None = ("c1", "c4", "c3b")
 
+# Whether the ranking rows that a measured ground event covers take the fusion
+# model's prediction where its airport keeps it (G1n). §1 of
+# ``reports/preregistered-2026-10-06-g1n.md`` defines G1n, chosen after 22d's
+# figures were seen, and ``reports/fusion.md`` reads its rule from
+# ``taxiout.fusion`` and prints "G1n: ADOPTED": against G1, better pooled over
+# the twelve held-out months, not worse in any month by more than its floor,
+# and better on December. §3 of that amendment makes it v10's fusion part, on
+# v9's booster prediction as its base, the term's rows from C6b and the
+# plan-shift rule as in v9. ``scripts/make_submission.py`` reads this and
+# decides nothing itself; False is v9.
+FUSION_G1N_APPLIED: bool = True
+
+# The booster file the fusion's ranking base was measured on, v9's: a rebuild
+# whose booster prediction is not these bytes is not the base the candidate
+# was built on, and the build refuses to write a file.
+FUSION_BASE_BOOSTER_SHA256 = (
+    "59b27527f4cf50a3837cc46e005a127387f23711d46b74e0593f13d1bd85be61"
+)
+
 
 # The top rung's feature block, named once so the rungs that build on it say
 # so rather than repeating fifteen tuples and drifting from one another.
@@ -1282,6 +1301,8 @@ __all__ = [
     "TAIL_RULES_SUBSTITUTED",
     "RECORD_QUALITY_FROM_C6B",
     "SUBMISSION_CONFIGURATION",
+    "FUSION_G1N_APPLIED",
+    "FUSION_BASE_BOOSTER_SHA256",
     "TAIL_EXCLUSION_ADOPTED_H",
     "fit_rows",
     "LADDER_PROPER",
