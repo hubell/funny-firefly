@@ -495,6 +495,25 @@ COPIES_OF_7_OCTOBER = {
         ),
         3,
     ),
+    # the airports amendment of 6 October, made the same way on 7 October
+    "reports/preregistered-2026-10-06-airports.md": (
+        "preregistration_2026-10-06_airports.md",
+        "9ef5691f36365e2691204380b5f4e984d7049a0e2a8922f80943ed5309724a4a",
+        (
+            (
+                r"after " + _WORK_BLOCK + r"'s verdicts and before " + _WORK_BLOCK + r",",
+                "after the verdicts of the measurement of group A and before"
+                " the measurement of G1n and C9b,",
+            ),
+            (r"\(" + _WORK_BLOCK + r"\)", "(the measurement of group A)"),
+            (
+                r"Per-fit times measured in " + _WORK_BLOCK + r" " + _REPORT_FILE,
+                "Per-fit times measured in the reading of the candidates C1 to"
+                " C5, C7 and C8 (" + _REPORT + ")",
+            ),
+        ),
+        0,
+    ),
 }
 
 

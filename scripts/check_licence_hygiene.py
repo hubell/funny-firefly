@@ -268,13 +268,25 @@ LEAK_THRESHOLD = 3
 # Tokens that are names in a named file and happen to be stand identifiers
 # too, each file with its tokens and the reason. Narrow on purpose: a token is
 # exempt in its file alone, and any other identifier in that file still counts.
-# The owner's decision of 7 October 2026.
+# The owner's decisions of 7 October 2026, one for each file.
 IDENTIFIER_EXEMPTIONS: dict[str, tuple[frozenset[str], str]] = {
     "reports/preregistered-2026-10-06-last-week.md": (
         frozenset({"C10", "C11", "C12"}),
         "the names of three candidates of group B, inside the copy's rules,"
         " which may not change a word; that stands carry the same names at"
         " some airports is a coincidence of form",
+    ),
+    "reports/preregistered-2026-10-06-airports.md": (
+        frozenset({"C10", "C11", "C12", "C13", "C14"}),
+        "the names of five candidates of group B, inside the copy's rules,"
+        " which may not change a word; that stands carry the same names at"
+        " some airports is a coincidence of form",
+    ),
+    "reports/group-b.md": (
+        frozenset({"C10", "C11", "C12", "C13", "C14"}),
+        "the same five candidate names in the report that reads them, whose"
+        " verdict lines are the rule's words; its generator's guard exempts"
+        " the same five and refuses every other identifier",
     ),
 }
 

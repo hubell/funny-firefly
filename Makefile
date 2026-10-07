@@ -10,7 +10,7 @@ PYTHON ?= python3
         preregistered metar-history monthly monthly-fit monthly-ladder monthly-ladder-fit \
         monthly-seeds monthly-seeds-fit monthly-pairs monthly-pairs-fit planshift c6 \
         istanbul fiumicino submission paper-docx test lint licence-check provenance \
-        adsb opdi fusion clean help
+        adsb opdi fusion group-b fusion-new-base clean help
 
 help:
 	@echo "make data     fetch and cache OSM geometry      -> data/raw/<ICAO>.json.gz"
@@ -39,6 +39,8 @@ help:
 	@echo "make adsb         verify the adsb.lol event tables -> data/raw/adsb/"
 	@echo "make opdi         fetch OPDI and match it          -> data/interim/opdi/matched/"
 	@echo "make fusion       the fusion model and its gates   -> reports/fusion.md"
+	@echo "make group-b      group B of the last week, read   -> reports/group-b.md"
+	@echo "make fusion-new-base  the fusion on group B's base -> reports/fusion-new-base.md"
 	@echo "make istanbul      Istanbul's February and January 2026 -> reports/istanbul.md"
 	@echo "make fiumicino     the last three blocks at Fiumicino -> reports/fiumicino.md"
 	@echo "make paper-docx    the paper as a Word document  -> docs/paper.docx"
@@ -311,6 +313,20 @@ opdi:
 # data/processed/fusion/, twelve fits, and reports/fusion.md.
 fusion:
 	$(PYTHON) scripts/report_fusion.py
+
+# From the records of group B's fits and the configuration's under
+# data/processed/candidates_board/: every derived prediction formed again and
+# checked against its record, every rule read, reports/group-b.md. Refits
+# nothing; `python scripts/report_group_b.py --refit NAME --refit-out DIR`
+# refits one recorded fit and compares it to the bit.
+group-b:
+	$(PYTHON) scripts/report_group_b.py --json data/processed/candidates_board/group_b.json
+
+# From make fusion's fitting table and out-of-fold rows and group B's new base:
+# the twelve fits on the new base, G1 and G1n read again,
+# reports/fusion-new-base.md.
+fusion-new-base:
+	$(PYTHON) scripts/report_fusion_new_base.py
 
 # From monthly-seeds' residuals, the training and ranking files and both METAR
 # caches.

@@ -232,6 +232,8 @@ make monthly-pairs   # needs monthly-pairs-fit's residuals; writes reports/month
 make planshift   # needs the challenge data, monthly's residuals and v6; writes reports/planshift.md
 make istanbul    # needs monthly-seeds' residuals and the METAR history; writes reports/istanbul.md
 make fiumicino   # needs monthly-ladder's residuals; writes reports/fiumicino.md
+make group-b     # needs group B's records; writes reports/group-b.md
+make fusion-new-base  # needs make fusion's tables and group B's records; writes reports/fusion-new-base.md
 make submission TEAM=<name>   # needs the challenge data; writes a submission
 make licence-check  # verify no OSM-derived or challenge content is tracked
 make provenance     # verify every number is categorised; writes docs/provenance.md
@@ -273,6 +275,8 @@ data review and everything after it need `pip install -e ".[modelling]"`.
 | `scripts/report_planshift.py` | `data/challenge/`, `data/processed/monthly/`, `data/submissions/funny-firefly_v6.parquet`, `reports/preregistered-2026-10-02.md` | `reports/planshift.md` |
 | `scripts/report_istanbul.py` | `data/challenge/`, `data/processed/monthly_seeds/`, `data/raw/metar/`, `data/raw/metar_history/` | `reports/istanbul.md` |
 | `scripts/report_fiumicino.py` | `data/challenge/`, `data/processed/monthly_ladder/` | `reports/fiumicino.md` |
+| `scripts/report_group_b.py` | `data/challenge/`, `data/processed/candidates_board/`, `data/raw/metar/`, `reports/monthly_seeds.md` | `reports/group-b.md`; `--refit` refits one recorded fit |
+| `scripts/report_fusion_new_base.py` | `data/processed/fusion/`, `data/processed/candidates_board/`, `reports/monthly_seeds.md` | `reports/fusion-new-base.md` |
 | `scripts/sweep_params.py` | `data/challenge/`, `data/processed/taxi_distance/`, `data/raw/metar/` | `data/processed/sweep_october.csv` (gitignored) |
 | `scripts/make_submission.py` | `data/challenge/`, `data/processed/taxi_distance/`, `data/raw/metar/` | `data/submissions/<team>_v<n>.parquet` (gitignored) |
 

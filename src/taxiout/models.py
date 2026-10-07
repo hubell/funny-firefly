@@ -448,6 +448,41 @@ FUSION_BASE_BOOSTER_SHA256 = (
     "59b27527f4cf50a3837cc46e005a127387f23711d46b74e0593f13d1bd85be61"
 )
 
+# Whether the ranking rows take group B's combination as their base, the new
+# base the fusion is then fitted on and applied over (v11). §4 of
+# ``reports/preregistered-2026-10-06-airports.md``: if the airport-by-airport
+# selector holds its rule, the new base is its choice per airport, and group
+# A's adopted pieces are refitted on the new base's out-of-fold predictions
+# and re-read by their own rules. ``reports/group-b.md`` reads group B from
+# the overnight run's records and prints "GROUP B: C14's choice per airport";
+# ``reports/fusion-new-base.md`` refits the fusion on that base and prints
+# "V11 FUSION PART: G1n", by the working program's reading of the amendment's
+# branches, made before any fit and confirmed by the owner on 7 October 2026.
+# Two disclosures belong to the basis: the blend weight is
+# a selection among four weights, and the selector's forward legs let months
+# after a leg's month inform its choice. ``scripts/make_submission.py`` reads
+# this and ``GROUP_B_BASE`` and decides nothing itself; False is v10.
+GROUP_B_APPLIED: bool = True
+
+# The new base per airport for the ranking rows, as ``taxiout.group_b`` names
+# the menu: the selector's choice over all twelve held-out months, which
+# ``reports/group-b.md`` tabulates and ``tests/test_group_b_switch.py`` checks
+# against the records where they are on hand. "c11" is the configuration's
+# booster and C11's member at equal weights; "w0.7" the configuration's two
+# members with the booster at that weight.
+GROUP_B_BASE: dict[str, str] = {
+    "EDDF": "c11",
+    "EDDM": "c11",
+    "EGLL": "c11",
+    "EHAM": "c11",
+    "LEBL": "c11",
+    "LEMD": "c11",
+    "LFPG": "c11",
+    "LIRF": "w0.7",
+    "LSZH": "c11",
+    "LTFM": "c11",
+}
+
 
 # The top rung's feature block, named once so the rungs that build on it say
 # so rather than repeating fifteen tuples and drifting from one another.
@@ -1303,6 +1338,8 @@ __all__ = [
     "SUBMISSION_CONFIGURATION",
     "FUSION_G1N_APPLIED",
     "FUSION_BASE_BOOSTER_SHA256",
+    "GROUP_B_APPLIED",
+    "GROUP_B_BASE",
     "TAIL_EXCLUSION_ADOPTED_H",
     "fit_rows",
     "LADDER_PROPER",

@@ -67,6 +67,20 @@ Usage
 ``--amendment`` is the working note of the amendment, which this repository
 does not yet carry; its digest is checked before anything is read. ``--prior``
 is the working note of the amendment of 6 October, checked the same way.
+
+**Group B of the last week**, for v11 (§3 of
+``reports/preregistered-2026-10-06-last-week.md`` as
+``reports/preregistered-2026-10-06-airports.md`` amends it), is formed here
+too, from ``taxiout.group_b``'s blends and selector: W, C2a's winter layer on
+the base's out-of-fold residuals; C10, the blend weight, chosen among four
+(a selection, and disclosed as one); C11, C3b's CatBoost member with C1's and
+C4's eleven columns; C12, the configuration's booster at 9,000 trees; C13,
+one booster per airport; C14, the airport-by-airport selector over the eight
+menu items, whose forward legs let later months inform their choice; and the
+combination. ``fit_group_b`` fits one part as the overnight run of 6 October
+fitted it, ``GroupB`` forms and checks every derived prediction, and
+``group_b_readings`` reads every rule. ``scripts/report_group_b.py`` writes
+``reports/group-b.md`` from the records.
 """
 
 from __future__ import annotations
@@ -89,6 +103,7 @@ sys.path.insert(0, str(REPO / "scripts"))
 
 import candidates as cb  # noqa: E402
 import run_baselines as rb  # noqa: E402
+from taxiout import group_b  # noqa: E402
 from taxiout.aobt3 import AOBT3_FEATURES, aobt3_features  # noqa: E402
 from taxiout.aobt3 import REQUIRED_COLUMNS as AOBT3_COLUMNS  # noqa: E402
 from taxiout.challenge import load_movements, to_pandas  # noqa: E402
@@ -389,6 +404,8 @@ def member_params(member: Member, seed: int) -> dict:
         c = board_rule().catboost
         params["n_estimators"] = int(c["iterations"])
         params["learning_rate"] = float(c["learning_rate"])
+    if member.key == "c12_booster":
+        params["n_estimators"] = int(group_b_rule().c12_trees)
     return params
 
 
@@ -3221,6 +3238,696 @@ def report_inputs_c8c(records: dict) -> list[Path]:
 
 
 # --------------------------------------------------------------------------
+
+
+# --------------------------------------------------------------------------
+# group B of the last week, for v11
+
+
+GROUP_B_TEXT = "reports/preregistered-2026-10-06-last-week.md"
+AIRPORTS_TEXT = "reports/preregistered-2026-10-06-airports.md"
+
+
+@dataclass(frozen=True)
+class GroupBRule:
+    """Group B's numbers, each in the words it is fixed in.
+
+    ``tests/test_group_b.py`` checks each against the published copies of the
+    last-week note's §3 and of the airports amendment.
+    """
+
+    grid: tuple[float, ...]
+    c12_trees: int
+    w_winter: tuple[tuple[str, str | None, str, float, str], ...]
+    w_legs: tuple[tuple[str, str, str, float], ...]
+    month_floors: dict[str, float]
+    short_floors: dict[str, float]
+    deadline_utc: str
+    last_week_sha256: str
+    airports_sha256: str
+
+
+def group_b_rule() -> GroupBRule:
+    """The numbers, held in a function for the reason ``board_rule`` gives.
+
+    - C10, "w in {0.3, 0.4, 0.6, 0.7}";
+    - C12, "`combo4_booster` refitted at `n_estimators` 9,000";
+    - W, "better on January by more than 0.47 s; not worse on February by
+      more than 1.59 s or on December by more than 0.23 s; not worse over the
+      twelve held-out months' short rows by more than 0.15 s", and on the
+      forward legs "not worse than the leg floors (December 0.23, July 0.54,
+      the three July airports 1.02, October 0.21 s)";
+    - the floors of the last-week note's §1, "over core rows Jan 0.33, Feb
+      1.56, Mar 0.36, Apr 0.07, May 0.13, Jun 0.21, Jul 0.58, Aug 0.26, Sep
+      0.21, Oct 0.29, Nov 0.39, Dec 0.23, year 0.16 s; over short rows Jan
+      0.47, Feb 1.59, Dec 0.23, year 0.15 s", which the report checks against
+      ``reports/monthly_seeds.md``;
+    - the deadline, "Verdicts by 9 October 2026, 18:00 UTC";
+    - the working notes' digests, as the copies' closing sections name them.
+    """
+    return GroupBRule(
+        grid=(0.3, 0.4, 0.6, 0.7),
+        c12_trees=9000,
+        w_winter=(
+            ("january", "2025-01", "better", 0.47, "short"),
+            ("february", "2025-02", "not worse", 1.59, "short"),
+            ("december", "2025-12", "not worse", 0.23, "short"),
+            ("year", None, "not worse", 0.15, "short"),
+        ),
+        w_legs=(
+            ("leg_december", "december", "all", 0.23),
+            ("leg_july", "july", "all", 0.54),
+            ("leg_july_three", "july", "three", 1.02),
+            ("leg_october", "october", "all", 0.21),
+        ),
+        month_floors={
+            "Jan": 0.33,
+            "Feb": 1.56,
+            "Mar": 0.36,
+            "Apr": 0.07,
+            "May": 0.13,
+            "Jun": 0.21,
+            "Jul": 0.58,
+            "Aug": 0.26,
+            "Sep": 0.21,
+            "Oct": 0.29,
+            "Nov": 0.39,
+            "Dec": 0.23,
+            "year": 0.16,
+        },
+        short_floors={"Jan": 0.47, "Feb": 1.59, "Dec": 0.23, "year": 0.15},
+        deadline_utc="2026-10-09T18:00:00+00:00",
+        last_week_sha256="eb35ecd3eb802b077307d5dba6ab07ca0cc5277b6fc7d5522d1b65a86bc9f1d5",
+        airports_sha256="9ef5691f36365e2691204380b5f4e984d7049a0e2a8922f80943ed5309724a4a",
+    )
+
+
+def group_b_members() -> dict[str, Member]:
+    """The fitted parts of group B, as the overnight run of 6 October fitted them.
+
+    The configuration's booster (``combo4_booster``: the rung, C1's nine and
+    C4's two columns), C11's member (C3b's CatBoost member with those eleven
+    columns added), C12's booster (``combo4_booster`` at C12's trees) and C13's
+    (one booster per airport on ``combo4_booster``'s columns).
+    """
+    blocks = ("aobt3", "flight")
+    return {
+        "combo4_booster": Member("combo4_booster", blocks=blocks),
+        "c11_member": Member("c11_member", blocks=blocks, backend="catboost"),
+        "c12_booster": Member("c12_booster", blocks=blocks),
+        "c13_booster": Member("c13_booster", blocks=blocks),
+    }
+
+
+def fit_c13(
+    frame: BoardFrame, prep: dict, member: Member, seed: int
+) -> tuple[dict, pd.DataFrame]:
+    """Ten boosters, one per airport, each on its airport's fitting rows only.
+
+    The airport column stays in the frame and is constant within a fit; the
+    ten predictions are joined in row order, every validation row once.
+    """
+    split = prep["split"]
+    columns = member_columns(member)
+    x = prep["frame"].copy(deep=False)
+    for b in member.blocks:
+        got = frame.block(b, prep)
+        for c in got.columns:
+            x[c] = got[c]
+    missing = [c for c in columns if c not in x.columns]
+    if missing:
+        raise RuntimeError(f"the frame lacks {missing}")
+    params = member_params(member, seed)
+    rows, valid = prep["rows"], prep["valid"]
+    icao = frame.dep["ADEP_mvt"].astype(str)
+    airports = sorted(set(icao[rows]))
+    valid_icao = icao[valid].to_numpy()
+    if tuple(airports) != fusion_airports() or set(valid_icao) - set(airports):
+        raise RuntimeError(
+            f"{split.name}: fitting airports {airports}, validation {sorted(set(valid_icao))}"
+        )
+    parts, per = {}, {}
+    fit_s = predict_s = 0.0
+    for a in airports:
+        ra = rows & (icao == a)
+        va = valid & (icao == a)
+        t0 = time.monotonic()
+        model = Booster(columns, params).fit(x.loc[ra], frame.y[ra])
+        f = time.monotonic() - t0
+        t1 = time.monotonic()
+        p = np.asarray(model.predict(x.loc[va]), dtype=float)
+        q = time.monotonic() - t1
+        del model
+        parts[a] = p
+        per[a] = {
+            "fit_rows": int(ra.sum()),
+            "valid_rows": int(va.sum()),
+            "fit_s": f,
+            "predict_s": q,
+            "pred_sha256": group_b.pred_sha256(p),
+        }
+        fit_s += f
+        predict_s += q
+        print(
+            f"    {a}: {int(ra.sum()):,} fit rows, {int(va.sum()):,} validation rows,"
+            f" fit {f:.0f} s",
+            flush=True,
+        )
+    pred = group_b.join_by_airport(valid_icao, parts)
+    kept = kept_frame(frame, prep, pred)
+    record = {
+        "name": cb.record_name(split.name, member.key, seed),
+        "split": split.name,
+        "train_months": list(split.train_months),
+        "valid_month": split.valid_month,
+        "arm": {"key": member.key},
+        "member": {**asdict(member), "per_airport": True},
+        "seed": int(seed),
+        "random_state": int(params["random_state"]),
+        "n_estimators": int(params["n_estimators"]),
+        "objective": str(params["objective"]),
+        "backend": "lightgbm",
+        "backend_params": None,
+        "columns": len(columns),
+        "fit_rows": int(rows.sum()),
+        "valid_rows": int(valid.sum()),
+        "airports": per,
+        "prepare_s": float(prep["seconds"]),
+        "fit_s": fit_s,
+        "predict_s": predict_s,
+        "peak_rss_gib": cb.peak_gib(),
+        "pred_sha256": group_b.pred_sha256(pred),
+        "written_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    }
+    return record, kept
+
+
+def fusion_airports() -> tuple[str, ...]:
+    from taxiout.fusion import AIRPORTS as airports
+
+    return tuple(airports)
+
+
+def fit_group_b(
+    frame: BoardFrame, prep: dict, member: Member, seed: int
+) -> tuple[dict, pd.DataFrame]:
+    """One fit of a group B part, checked as the overnight run checked it."""
+    name = cb.record_name(prep["split"].name, member.key, seed)
+    s0 = cb.suspended_s()
+    if member.key == "c13_booster":
+        record, kept = fit_c13(frame, prep, member, seed)
+    else:
+        record, kept = fit_member(frame, prep, member, seed)
+    if member.backend == "catboost":
+        want = board_rule().catboost
+        got = record["backend_params"]
+        bad = {
+            k: got.get(k) for k, v in want.items() if not same_parameter(got.get(k), v)
+        }
+        record["backend_params_checked"] = not bad
+        if bad:
+            raise RuntimeError(f"{name}: the CatBoost fit ran with {got}, not {want}")
+    if member.key == "c12_booster" and record["n_estimators"] != group_b_rule().c12_trees:
+        raise RuntimeError(f"{name}: {record['n_estimators']} trees")
+    record["suspended_during_s"] = cb.suspended_s() - s0
+    return record, kept
+
+
+def group_b_plan() -> list[tuple[str, int]]:
+    """The seventeen fits of a fitted candidate: the legs, the twelve months, the second seed."""
+    second = board_rule().second_seed
+    out = [(s.name, 0) for s in cb.leg_plan()]
+    out += [(s.name, 0) for s in cb.month_plan()]
+    out += [(s.name, second) for s in cb.leg_plan()[:2]]
+    return out
+
+
+class GroupB:
+    """Group B's predictions and readings, from the records under ``cb.WORK``.
+
+    Every fitted prediction is read only after it hashes to its record's
+    ``pred_sha256``. Every derived one (a blend, the winter layer, C14's
+    selection) is formed here; where a record of it exists, the formed
+    prediction must hash to that record, and where none does it is written.
+    """
+
+    def __init__(self) -> None:
+        self.cache: dict[str, pd.DataFrame] = {}
+        self.derived: dict[str, str] = {}
+        self.checked: dict[str, str] = {}
+        self._hourly = None
+
+    # the predictions
+
+    def read(self, name: str) -> pd.DataFrame | None:
+        if name in self.cache:
+            return self.cache[name]
+        if not cb.record_path(name).exists():
+            return None
+        rec = json.loads(cb.record_path(name).read_text(encoding="utf-8"))
+        kept = cb.read_kept(name)
+        got = group_b.pred_sha256(kept["pred"].to_numpy(dtype=float))
+        if got != rec["pred_sha256"]:
+            raise RuntimeError(f"{name}: prediction {got} against its record")
+        self.cache[name] = kept
+        self.checked[name] = got
+        return kept
+
+    def kept(self, key: str, split: str, seed: int) -> pd.DataFrame | None:
+        return self.read(cb.record_name(split, key, seed))
+
+    def derive(self, name: str, frame: pd.DataFrame, how: dict) -> pd.DataFrame:
+        got = group_b.pred_sha256(frame["pred"].to_numpy(dtype=float))
+        if cb.record_path(name).exists():
+            rec = json.loads(cb.record_path(name).read_text(encoding="utf-8"))
+            if rec["pred_sha256"] != got:
+                raise RuntimeError(
+                    f"{name}: formed again to {got}, its record {rec['pred_sha256']}"
+                )
+        else:
+            write_derived(name, frame, how)
+        self.derived[name] = got
+        self.cache[name] = frame
+        return frame
+
+    def blended(
+        self, key: str, split: str, seed: int, bkey: str, mkey: str, w: float
+    ) -> pd.DataFrame | None:
+        name = cb.record_name(split, key, seed)
+        if name in self.cache:
+            return self.cache[name]
+        b, m = self.kept(bkey, split, seed), self.kept(mkey, split, seed)
+        if b is None or m is None:
+            return None
+        cb.aligned(b, m)
+        frame = replace_pred(
+            b, group_b.blend(b["pred"].to_numpy(), m["pred"].to_numpy(), w)
+        )
+        how = {
+            "blend": [
+                cb.record_name(split, bkey, seed),
+                cb.record_name(split, mkey, seed),
+            ],
+            "weights": [w, 1.0 - w],
+        }
+        return self.derive(name, frame, how)
+
+    def base(self, split: str, seed: int) -> pd.DataFrame | None:
+        """v9's configuration: stored at seed 0, the second-seed members' half-and-half otherwise."""
+        if seed == 0:
+            return self.kept("combo4", split, 0)
+        half = board_rule().blend_weight
+        return self.blended("combo4", split, seed, "combo4_booster", "c3b_member", half)
+
+    def item(self, it: str):
+        """A menu item's prediction for a split and seed, as a function."""
+        if it == "base":
+            return self.base
+        booster, member, w = group_b.item_blend(it)
+        key = {"c11": "c11", "c12": "c12", "c13": "c13"}.get(it)
+        if key is None:
+            key = f"c10_w{int(round(w * 10)):02d}"
+
+        def of(split: str, seed: int):
+            return self.blended(key, split, seed, booster, member, w)
+
+        return of
+
+    def menu(self) -> dict:
+        """The eight items, in the amendment's order."""
+        items = ["base"] + [group_b.weight_item(w) for w in group_b_rule().grid]
+        return {it: self.item(it) for it in items + ["c11", "c12", "c13"]}
+
+    # the readings
+
+    def per_airport(self, arm: pd.DataFrame, ref: pd.DataFrame) -> dict:
+        rows = cb.booster_rows(arm)
+        icao = arm["icao"].to_numpy()
+        return {a: cb.paired(arm, ref, rows & (icao == a)) for a in fusion_airports()}
+
+    def measure(self, arm_of, ref_of, seeds=(0, 1)) -> dict:
+        """Every contrast §4 reads, in ``measure_candidate``'s shape, airports beside."""
+        out: dict = {}
+        beside: dict = {}
+        for seed in seeds:
+            for leg in cb.leg_plan():
+                a, r = arm_of(leg.name, seed), ref_of(leg.name, seed)
+                if a is None or r is None:
+                    continue
+                slot = out.setdefault(f"seed{seed}", {})
+                slot[f"{leg.name}:all"] = cb.reading(a, r, "all")
+                slot[f"{leg.name}:three"] = cb.reading(a, r, "three")
+                if seed == 0 and leg.name in ("december", "july"):
+                    beside[leg.name] = self.per_airport(a, r)
+        arms, refs, months = [], [], {}
+        for split in cb.month_plan():
+            a, r = arm_of(split.name, 0), ref_of(split.name, 0)
+            if a is None or r is None:
+                out["beside_airports"] = beside
+                return out
+            months[split.valid_month] = cb.reading(a, r, "all")
+            arms.append(a)
+            refs.append(r)
+        ay, ry = pd.concat(arms, ignore_index=True), pd.concat(refs, ignore_index=True)
+        out.setdefault("seed0", {})["year:all"] = {
+            **cb.reading(ay, ry, "all"),
+            "months": months,
+        }
+        beside["year"] = self.per_airport(ay, ry)
+        out["beside_airports"] = beside
+        return out
+
+    def verdict(self, m: dict) -> dict:
+        v = verdict_of(m)
+        rule = cb.the_rule()
+        other = {}
+        for c in cb.conditions(rule):
+            got = m.get("seed0", {}).get(f"{c.split}:{c.rows}")
+            if got is None:
+                continue
+            other[c.key] = {
+                r: cb.holds_read(r, c.kind, got["rows"], c.floor, rule.contrast_decimals)
+                for r in ("rule", *cb.OTHER_READINGS)
+            }
+        v["other_readings"] = other
+        return v
+
+    # W
+
+    def hourly(self) -> pd.DataFrame:
+        if self._hourly is None:
+            self._hourly = winter_hourly()
+        return self._hourly
+
+    def w_layer(self, of, split: str, seed: int, key: str) -> pd.DataFrame | None:
+        """W applied to ``of(split, seed)``, its means from ``of``'s held-out months at seed 0."""
+        name = cb.record_name(split, key, seed)
+        if name in self.cache:
+            return self.cache[name]
+        target = of(split, seed)
+        if target is None:
+            return None
+        months = w_fit_months(split)
+        parts = []
+        for mm in months:
+            k = of(f"heldout-{mm}", 0)
+            parts.append(k.loc[oof_rows(k)])
+        rows = pd.concat(parts, ignore_index=True)
+        layer = fit_layer("winter", rows, self.hourly())
+        pred = apply_layer("winter", layer, target, self.hourly())
+        how = {
+            "layer": "winter",
+            "fitted_on_months": months,
+            "fitted_rows": int(len(rows)),
+            "fitted": layer_summary("winter", layer),
+        }
+        return self.derive(name, replace_pred(target, pred), how)
+
+    def w_rule(self, m: dict) -> dict:
+        d = cb.the_rule().contrast_decimals
+        rule = group_b_rule()
+        out = {}
+        year = m.get("seed0", {}).get("year:all")
+        for key, month, kind, floor, rows in rule.w_winter:
+            r = year[rows] if month is None else year["months"][month][rows]
+            out[key] = {
+                "kind": kind,
+                "floor": floor,
+                "rows": rows,
+                "contrast": r["contrast"],
+                "holds": cb.holds(kind, r["contrast"], floor, d),
+                "other": {
+                    x: cb.holds_read(x, kind, r, floor, d) for x in cb.OTHER_READINGS
+                },
+            }
+        for key, leg, rows, floor in rule.w_legs:
+            r = m["seed0"][f"{leg}:{rows}"]["rows"]
+            out[key] = {
+                "kind": "not worse",
+                "floor": floor,
+                "rows": f"core, {rows}",
+                "contrast": r["contrast"],
+                "holds": cb.holds("not worse", r["contrast"], floor, d),
+                "other": {
+                    x: cb.holds_read(x, "not worse", r, floor, d)
+                    for x in cb.OTHER_READINGS
+                },
+            }
+        return out
+
+    # C14
+
+    def item_sse(self, of) -> dict:
+        """Per held-out month and airport, an item's squared error and count over core rows."""
+        out = {}
+        for mm in cb.MONTHS:
+            k = of(f"heldout-{mm}", 0)
+            rows = cb.booster_rows(k)
+            r = (k["y"] - k["pred"]).to_numpy(dtype=float)
+            icao = k["icao"].to_numpy()
+            out[mm] = {}
+            for a in fusion_airports():
+                sel = rows & (icao == a) & np.isfinite(r)
+                out[mm][a] = (float(np.sum(r[sel] ** 2)), int(sel.sum()))
+        return out
+
+    def c14_choices(self) -> dict:
+        items = self.menu()
+        sse = {it: self.item_sse(of) for it, of in items.items()}
+        names = list(items)
+        table, scores = {}, {}
+        for mm in cb.MONTHS:
+            table[mm], scores[mm] = {}, {}
+            for a in fusion_airports():
+                table[mm][a], scores[mm][a] = group_b.choose(sse, names, a, mm)
+        ranking, ranking_scores = {}, {}
+        for a in fusion_airports():
+            ranking[a], ranking_scores[a] = group_b.choose(sse, names, a, None)
+        return {
+            "items": names,
+            "table": table,
+            "scores": scores,
+            "ranking": ranking,
+            "ranking_scores": ranking_scores,
+            "sse": sse,
+        }
+
+    def c14_of(self, choices: dict):
+        items = self.menu()
+        leg_month = {s.name: s.valid_month for s in cb.leg_plan()}
+
+        def of(split: str, seed: int):
+            name = cb.record_name(split, "c14", seed)
+            if name in self.cache:
+                return self.cache[name]
+            month = (
+                split.removeprefix("heldout-")
+                if split.startswith("heldout-")
+                else leg_month[split]
+            )
+            choice = choices["table"][month]
+            frames = {}
+            for it in set(choice.values()) | {"base"}:
+                f = items[it](split, seed)
+                if f is None:
+                    return None
+                frames[it] = f
+            b = frames["base"]
+            for f in frames.values():
+                cb.aligned(f, b)
+            pred = group_b.apply_choice(
+                b["icao"].to_numpy(),
+                b["pred"].to_numpy(dtype=float),
+                {it: f["pred"].to_numpy(dtype=float) for it, f in frames.items()},
+                choice,
+            )
+            how = {"selector": choice, "choice_month": month}
+            return self.derive(name, replace_pred(b, pred), how)
+
+        return of
+
+
+def w_fit_months(split: str) -> list[str]:
+    """W's months: leave one out on a held-out month; strictly before on a forward leg."""
+    if split.startswith("heldout-"):
+        month = split.removeprefix("heldout-")
+        return [m for m in cb.MONTHS if m != month]
+    leg = next(s for s in cb.leg_plan() if s.name == split)
+    return months_before(leg)
+
+
+def group_b_why_not(v: dict) -> str:
+    failed = [k for k, ok in v["conditions"].items() if ok is False]
+    unsigned = [k for k, ok in v["signs"].items() if ok is False]
+    parts = [v["status"]]
+    if failed:
+        parts.append("fails " + ", ".join(failed))
+    if unsigned:
+        parts.append("sign changes on " + ", ".join(unsigned))
+    return "; ".join(parts)
+
+
+def group_b_line(label: str, v: dict, extra: str = "") -> str:
+    if v["status"] == "clears":
+        return f"{label}: clears{extra}"
+    return f"{label}: does not clear{extra} ({group_b_why_not(v)})"
+
+
+def group_b_readings(g: GroupB | None = None) -> dict:
+    """Every reading group B's rules make, in the order the overnight run of 6 October made them.
+
+    W; C10's grid and its chosen weight; C11, C12 and C13 alone; C14's choice
+    table, then C14; the combination. Each verdict line is the rule's.
+    """
+    g = GroupB() if g is None else g
+    rule = group_b_rule()
+    half = board_rule().blend_weight
+    out: dict = {}
+    # the base, as the mean of its members at seed 0, on every split
+    base_checks = {}
+    for s in cb.leg_plan() + cb.month_plan():
+        c4 = g.kept("combo4", s.name, 0)
+        b, m = g.kept("combo4_booster", s.name, 0), g.kept("c3b_member", s.name, 0)
+        cb.aligned(b, c4)
+        cb.aligned(m, c4)
+        mean = np.mean(
+            np.vstack([b["pred"].to_numpy(dtype=float), m["pred"].to_numpy(dtype=float)]),
+            axis=0,
+        )
+        base_checks[s.name] = {
+            "stored": group_b.pred_sha256(c4["pred"].to_numpy(dtype=float)),
+            "mean": group_b.pred_sha256(mean),
+            "half": group_b.pred_sha256(
+                group_b.blend(b["pred"].to_numpy(), m["pred"].to_numpy(), half)
+            ),
+        }
+    year = pd.concat([g.base(s.name, 0) for s in cb.month_plan()], ignore_index=True)
+    rows = cb.booster_rows(year)
+    out["base"] = {
+        "checks": base_checks,
+        "rmse": cb.rmse((year["y"] - year["pred"]).to_numpy(dtype=float)[rows]),
+        "core_rows": int(rows.sum()),
+    }
+
+    def w_of(split, seed):
+        return g.w_layer(g.base, split, seed, "w")
+
+    m = g.measure(w_of, g.base, seeds=(0,))
+    wr = g.w_rule(m)
+    ok = all(r["holds"] for r in wr.values())
+    out["w"] = {
+        "measured": m,
+        "rule": wr,
+        "clears": ok,
+        "line": "W: clears; W2 is due"
+        if ok
+        else "W: does not clear (fails "
+        + ", ".join(k for k, r in wr.items() if not r["holds"])
+        + ")",
+    }
+    grid = {}
+    for w in rule.grid:
+        of = g.item(group_b.weight_item(w))
+        frames = [of(s.name, 0) for s in cb.month_plan()]
+        for s in cb.leg_plan():
+            of(s.name, 0)
+        y = pd.concat(frames, ignore_index=True)
+        r = cb.booster_rows(y)
+        grid[f"{w:.1f}"] = cb.rmse((y["y"] - y["pred"]).to_numpy(dtype=float)[r])
+    chosen = min(rule.grid, key=lambda w: (grid[f"{w:.1f}"], rule.grid.index(w)))
+    m10 = g.measure(g.item(group_b.weight_item(chosen)), g.base)
+    v10 = g.verdict(m10)
+    out["c10"] = {
+        "grid_rmse": grid,
+        "base_rmse": out["base"]["rmse"],
+        "chosen": chosen,
+        "measured": m10,
+        "verdict": v10,
+        "line": group_b_line(
+            "C10", v10, f" (w = {chosen:.1f}, chosen among four weights)"
+        ),
+    }
+    out["alone"] = {}
+    for key in ("c11", "c12", "c13"):
+        ma = g.measure(g.item(key), g.base)
+        va = g.verdict(ma)
+        out["alone"][key] = {
+            "measured": ma,
+            "verdict": va,
+            "line": group_b_line(key.upper(), va),
+        }
+    choices = g.c14_choices()
+    out["c14_choices"] = choices
+    m14 = g.measure(g.c14_of(choices), g.base)
+    v14 = g.verdict(m14)
+    out["c14"] = {"measured": m14, "verdict": v14, "line": group_b_line("C14", v14)}
+    out["combination"] = group_b_combination(g, out)
+    out["derived"] = dict(g.derived)
+    out["checked"] = dict(g.checked)
+    return out
+
+
+def group_b_combination(g: GroupB, got: dict) -> dict:
+    """§4 of the airports amendment: C14's choice if it holds, else the last-week combination."""
+    half = board_rule().blend_weight
+    clears = {
+        "c10": got["c10"]["verdict"]["status"] == "clears",
+        "c11": got["alone"]["c11"]["verdict"]["status"] == "clears",
+        "c12": got["alone"]["c12"]["verdict"]["status"] == "clears",
+        "c13": got["alone"]["c13"]["verdict"]["status"] == "clears",
+        "c14": got["c14"]["verdict"]["status"] == "clears",
+        "w": bool(got["w"]["clears"]),
+    }
+    if clears["c14"]:
+        new_of, words = g.c14_of(got["c14_choices"]), ["C14's choice per airport"]
+    else:
+        bkey = "c12_booster" if clears["c12"] else "combo4_booster"
+        mkey = "c11_member" if clears["c11"] else "c3b_member"
+        wt = float(got["c10"]["chosen"]) if clears["c10"] else half
+        if not (clears["c10"] or clears["c11"] or clears["c12"]):
+            new_of, words = g.base, []
+        else:
+
+            def new_of(s, seed, bkey=bkey, mkey=mkey, wt=wt):
+                return g.blended("nb", s, seed, bkey, mkey, wt)
+
+            words = [
+                f"booster {'C12' if clears['c12'] else '`combo4_booster`'}",
+                f"member {'C11' if clears['c11'] else '`c3b_member`'}",
+                f"w = {wt:.1f}{' (C10)' if clears['c10'] else ''}",
+            ]
+    if clears["w"]:
+
+        def comb_of(s, seed):
+            return g.w_layer(new_of, s, seed, "groupb")
+
+        words.append("W on top, its means from the new base's out-of-fold residuals")
+    else:
+        comb_of = new_of
+    out = {"clears": clears, "configuration": words}
+    if not words:
+        out["line"] = "GROUP B: nothing, no v11"
+        out["why"] = "nothing in group B cleared; the configuration is v9's"
+        return out
+    m = g.measure(comb_of, g.base)
+    v = g.verdict(m)
+    five = cb.clears(v["conditions"], cb.FIVE)
+    winter = g.w_rule(m) if clears["w"] else None
+    winter_ok = winter is None or all(
+        winter[k]["holds"] for k in ("january", "february", "december", "year")
+    )
+    config = "; ".join(words)
+    out.update(
+        measured=m,
+        verdict=v,
+        five=five,
+        winter=winter,
+        winter_ok=winter_ok,
+        line=f"GROUP B: {config}" if five and winter_ok else "GROUP B: nothing, no v11",
+    )
+    if not (five and winter_ok):
+        out["why"] = f"the combination ({config}) fails: " + group_b_why_not(v)
+    return out
 
 
 def main(argv: list[str] | None = None) -> int:

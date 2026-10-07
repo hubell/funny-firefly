@@ -1714,7 +1714,7 @@ CONSTANTS: tuple[Constant, ...] = (
             "TAIL_EXCLUSION_ADOPTED_H",
             (4.0,),
             CHOSEN,
-            "lines 878 to 899: fixed at four hours on the mechanism and not by a sweep,"
+            "lines 913 to 934: fixed at four hours on the mechanism and not by a sweep,"
             " because no aircraft taxis for four hours, and reported against an"
             " un-excluded fit and a two-hour arm both fixed before the run",
         ),
@@ -2150,6 +2150,23 @@ CONSTANTS: tuple[Constant, ...] = (
             " copy defines G1n and its rule and makes it v10's fusion part, and"
             " `reports/fusion.md` reads the rule from `taxiout.fusion` and prints"
             " `G1n: ADOPTED`; fixed before any figure it governs existed",
+        ),
+        (
+            "GROUP_B_APPLIED",
+            (True,),
+            CHOSEN,
+            "the recorded decision that v11 takes group B's combination as its"
+            " base, by §4 of `reports/preregistered-2026-10-06-airports.md`:"
+            " the selector holds its rule, so the new base is its choice per"
+            " airport (`GROUP_B_BASE`), and `reports/group-b.md` reads it from"
+            " the overnight run's records and prints `GROUP B:` with that"
+            " choice; `reports/fusion-new-base.md` refits the fusion on the new"
+            " base and prints `V11 FUSION PART: G1n`, by the working program's"
+            " reading of the amendment's branches, made before any fit and"
+            " confirmed by the owner on 7 October 2026. The blend"
+            " weight is a selection among four weights, and the selector's"
+            " forward legs let months after a leg's month inform its choice;"
+            " both copies and the report say so",
         ),
     ),
     *_mod(
@@ -2813,6 +2830,22 @@ FROZEN_DOCUMENTS: tuple[Frozen, ...] = (
         " 2026, which `tests/test_preregistered_copies.py` checks against the"
         " note where the note is on hand",
     ),
+    Frozen(
+        "reports/preregistered-2026-10-06-airports.md",
+        "5a5ccb98e93a1ee0d4aee69553c3edbcd5a6098d552600e4b2ed870475632d8a",
+        "the amendment of the last week's group B, airport by airport: every"
+        " held-out month fitted for the new member and the longer booster, one"
+        " booster per airport, the airport-by-airport selector and the"
+        " combination rewritten around it; the source of"
+        " `taxiout.models.GROUP_B_APPLIED`. What is frozen"
+        " is this published copy, at the digest beside it. What fixed the"
+        " order is the working note it was copied from, sha256"
+        " 9ef5691f36365e2691204380b5f4e984d7049a0e2a8922f80943ed5309724a4a,"
+        " written on 6 October 2026 before any figure it governs existed. The"
+        " copy differs from it in the three places its closing section lists,"
+        " none inside a rule, which `tests/test_preregistered_copies.py`"
+        " checks against the note where the note is on hand",
+    ),
 )
 
 
@@ -3139,7 +3172,9 @@ REPORT_INPUTS_DECLARED: tuple[tuple[str, str], ...] = (
     ("scripts/report_coverage.py", "reports/stand_coverage.md"),
     ("scripts/report_fiumicino.py", "reports/fiumicino.md"),
     ("scripts/report_fusion.py", "reports/fusion.md"),
+    ("scripts/report_fusion_new_base.py", "reports/fusion-new-base.md"),
     ("scripts/report_geometry_gaps.py", "reports/geometry_gaps.md"),
+    ("scripts/report_group_b.py", "reports/group-b.md"),
     ("scripts/report_headroom.py", "reports/headroom.md"),
     ("scripts/report_istanbul.py", "reports/istanbul.md"),
     ("scripts/report_monthly.py", "reports/monthly.md"),

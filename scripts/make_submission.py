@@ -62,6 +62,22 @@ the gate was measured on, or nothing is written. The manifest records the
 decision, the gate per airport, the model's sha256, its inputs' sha256 and the
 rows the fusion took.
 
+**Group B's new base.** Where ``taxiout.models.GROUP_B_APPLIED`` is True the
+ranking rows take group B's combination (§4 of
+``reports/preregistered-2026-10-06-airports.md``, read in ``reports/group-b.md``)
+as their base: the members ``GROUP_B_BASE``'s menu items need beyond the
+configuration's (C11's CatBoost member) are fitted beside it at the same seeds,
+as ``candidates_board.group_b_members`` defines them, and each airport's rows
+take its item, blended by ``taxiout.group_b``. The booster file stays the
+configuration's prediction, and must still be v9's bytes. The fusion is then
+fitted with the new base's out-of-fold predictions for 2025 (the selector's
+twelve held-out months, ``taxiout.group_b.NEW_BASE_RECORDS``) as its base and
+applied over the new base on the ranking rows, under the gate G1n's readings on
+that base give (``reports/fusion-new-base.md``). The manifest records the
+decision, the choice per airport, each part's prediction sha256 and the new
+base's. The blend weight is a selection among four weights, and the selector's
+forward legs let later months inform its choice; both reports say so.
+
 Beside the file it writes ``<team>_v<n>.booster.parquet``: the model's
 prediction for every ranking row before any substitution, in the template's
 order, as written (``TAXITIME_SEC_mvt``) and unrounded (``prediction``).
@@ -159,6 +175,8 @@ from taxiout.models import (  # noqa: E402
     BAGGING_SEEDS,
     FUSION_BASE_BOOSTER_SHA256,
     FUSION_G1N_APPLIED,
+    GROUP_B_APPLIED,
+    GROUP_B_BASE,
     RECORD_QUALITY_FROM_C6B,
     SUBMISSION_CONFIGURATION,
     TOP_RUNG,
@@ -377,7 +395,7 @@ class Configuration:
     them. At one seed every part is the harness's fit at the ladder's seed.
     """
 
-    def __init__(self, combo, seeds: int) -> None:
+    def __init__(self, combo, seeds: int, extra=()) -> None:
         import candidates_board as board
 
         self.board = board
@@ -389,42 +407,49 @@ class Configuration:
         self.booster = None
         self.blend: list[list[Booster]] = []
         self.catboost_params: dict | None = None
+        # Members fitted beside the configuration for group B's new base, at
+        # the same seeds; their predictions are parts and never enter the mean.
+        self.extra = tuple(extra)
+        self.extra_fits: list[list[Booster]] = []
 
     def fit(self, X: pd.DataFrame, y: pd.Series, rows: pd.Series) -> "Configuration":
-        board = self.board
         self.booster = SeedAverage(self.columns, self.params, seeds=self.seeds).fit(
             X.loc[rows], y[rows]
         )
-        self.blend = []
-        for member in self.combo.members:
-            fits = []
-            for s in range(self.seeds):
-                model = Booster(
-                    board.member_columns(member), board.member_params(member, s)
-                )
-                if member.backend == "catboost":
-                    model.backend = "catboost"
-                    with board.pinned_catboost(member.gpu):
-                        model.fit(X.loc[rows], y[rows])
-                    want = board.board_rule().catboost
-                    trained = model.model.get_all_params()
-                    got = {k: trained.get(k) for k in want}
-                    got["thread_count"] = model.model.get_params().get("thread_count")
-                    if any(
-                        not board.same_parameter(got.get(k), v) for k, v in want.items()
-                    ):
-                        raise SystemExit(f"the CatBoost fit ran with {got}, not {want}")
-                    self.catboost_params = got
-                else:
-                    model.fit(X.loc[rows], y[rows])
-                fits.append(model)
-            self.blend.append(fits)
+        self.blend = [
+            self.fit_member(member, X, y, rows) for member in self.combo.members
+        ]
+        self.extra_fits = [self.fit_member(member, X, y, rows) for member in self.extra]
         return self
 
+    def fit_member(self, member, X, y, rows) -> list[Booster]:
+        """One member at ``seeds`` seeds, as the harness fits it."""
+        board = self.board
+        fits = []
+        for s in range(self.seeds):
+            model = Booster(board.member_columns(member), board.member_params(member, s))
+            if member.backend == "catboost":
+                model.backend = "catboost"
+                with board.pinned_catboost(member.gpu):
+                    model.fit(X.loc[rows], y[rows])
+                want = board.board_rule().catboost
+                trained = model.model.get_all_params()
+                got = {k: trained.get(k) for k in want}
+                got["thread_count"] = model.model.get_params().get("thread_count")
+                if any(not board.same_parameter(got.get(k), v) for k, v in want.items()):
+                    raise SystemExit(f"the CatBoost fit ran with {got}, not {want}")
+                self.catboost_params = got
+            else:
+                model.fit(X.loc[rows], y[rows])
+            fits.append(model)
+        return fits
+
     def parts(self, Xr: pd.DataFrame) -> dict[str, np.ndarray]:
-        """The booster's and each member's seed-averaged predictions."""
+        """The booster's and each member's seed-averaged predictions, the extra members' too."""
         out = {self.member.key: np.asarray(self.booster.predict(Xr), dtype=float)}
-        for member, fits in zip(self.combo.members, self.blend):
+        members = list(zip(self.combo.members, self.blend))
+        members += list(zip(self.extra, self.extra_fits))
+        for member, fits in members:
             total = None
             for model in fits:
                 p = model.predict(Xr)
@@ -433,9 +458,36 @@ class Configuration:
         return out
 
     def predict(self, Xr: pd.DataFrame) -> pd.Series:
+        """The configuration: its booster and its members at equal weights, no extra member."""
         parts = self.parts(Xr)
-        pred = np.mean(np.vstack(list(parts.values())), axis=0)
+        keys = [self.member.key] + [m.key for m in self.combo.members]
+        pred = np.mean(np.vstack([parts[k] for k in keys]), axis=0)
         return pd.Series(pred, index=Xr.index, dtype=float)
+
+
+def group_b_members(combo) -> tuple:
+    """The members ``GROUP_B_BASE``'s items need beyond the configuration's, or none.
+
+    Only members can be fitted beside the configuration; an item whose booster
+    is not the configuration's is refused rather than fitted some other way.
+    """
+    if not GROUP_B_APPLIED:
+        return ()
+    import candidates_board as board
+    from taxiout import group_b
+
+    have = {combo.member.key} | {m.key for m in combo.members}
+    defined = board.group_b_members()
+    need = []
+    for item in dict.fromkeys(GROUP_B_BASE.values()):
+        booster, member, _w = group_b.item_blend(item)
+        if booster != combo.member.key:
+            raise SystemExit(f"{item}: its booster {booster} is not the configuration's")
+        if member not in have and member not in need:
+            if member not in defined:
+                raise SystemExit(f"{item}: no member {member} is defined")
+            need.append(member)
+    return tuple(defined[k] for k in need)
 
 
 def with_blocks(
@@ -608,8 +660,11 @@ def fit_and_predict(
         )
     if combo is not None:
         # The adopted configuration, at the seeds the rule below gives the rung.
-        model = Configuration(combo, seeds).fit(X, y, fit_rows)
+        extra = group_b_members(combo)
+        model = Configuration(combo, seeds, extra).fit(X, y, fit_rows)
         how = f"as the adopted configuration under {seeds} seed(s)"
+        if extra:
+            how += ", with " + ", ".join(m.key for m in extra) + " beside it"
     # Seed averaging, if the rule in ``reports/baseline.md``'s *Seed averaging*
     # adopted it. It is an estimator choice and not a rung, so the ladder stays
     # single-seed and this is the one place it would apply -- and whether it
@@ -827,6 +882,36 @@ def write_booster_file(path: Path, rank, physical, template, submission) -> Path
     return path
 
 
+def group_b_base(rank, parts: dict, physical: pd.Series) -> dict:
+    """Group B's new base for the ranking rows, and what the manifest records of it.
+
+    Each row takes its airport's menu item in ``GROUP_B_BASE``, blended from
+    the configuration's parts and the members fitted beside it; the booster
+    file's prediction, the configuration's own blend, is checked to be the
+    parts' mean so that both rest on the same fits.
+    """
+    from taxiout import group_b
+
+    icao = rank["ADEP_mvt"].astype(str).to_numpy()
+    pred = group_b.base_per_airport(icao, parts, GROUP_B_BASE)
+    items = pd.Series([GROUP_B_BASE[a] for a in icao])
+    return {
+        "base": pd.Series(pred, index=physical.index, dtype=float),
+        "record": {
+            "decision": "GROUP_B_APPLIED",
+            "base_per_airport": dict(sorted(GROUP_B_BASE.items())),
+            "parts_prediction_sha256": {
+                k: group_b.pred_sha256(v) for k, v in sorted(parts.items())
+            },
+            "configuration_sha256": group_b.pred_sha256(physical.to_numpy(dtype=float)),
+            "new_base_sha256": group_b.pred_sha256(pred),
+            "rows_by_item": {
+                k: int(n) for k, n in items.value_counts().sort_index().items()
+            },
+        },
+    }
+
+
 def with_fusion(
     values: np.ndarray, prediction: np.ndarray, take: np.ndarray
 ) -> np.ndarray:
@@ -842,14 +927,18 @@ def with_fusion(
     return out
 
 
-def fusion_stage(rank, physical, rules_row: np.ndarray, model_path: Path) -> dict:
+def fusion_stage(
+    rank, physical, rules_row: np.ndarray, model_path: Path, new_base: bool = False
+) -> dict:
     """G1n on the ranking rows: the gate, the fusion's prediction, the rows it takes.
 
-    ``physical`` is the booster's prediction for ``rank``'s rows, the fusion's
-    base; ``rules_row`` marks the rows either rule covers, which must be the
-    feature table's rules' rows. The final model is written to ``model_path``.
+    ``physical`` is the base's prediction for ``rank``'s rows: the booster's,
+    or group B's new base with ``new_base``, whose out-of-fold 2025
+    predictions are then the fitting base in place of the configuration's.
+    ``rules_row`` marks the rows either rule covers, which must be the feature
+    table's rules' rows. The final model is written to ``model_path``.
     """
-    from taxiout import fusion
+    from taxiout import fusion, group_b
     from taxiout.tails import plan_shift_threshold_s
 
     fit_path, rank_path = FUSION / "fit_2025.parquet", FUSION / "rank_2026.parquet"
@@ -857,13 +946,15 @@ def fusion_stage(rank, physical, rules_row: np.ndarray, model_path: Path) -> dic
         if not p.exists():
             raise SystemExit(f"no {p.relative_to(REPO)}; make fusion")
     inputs = {str(p.relative_to(REPO)): sha256(p) for p in (fit_path, rank_path)}
-    for name in fusion.BASE_RECORDS:
+    records = group_b.NEW_BASE_RECORDS if new_base else fusion.BASE_RECORDS
+    for name in records:
         p = BOARD / f"{name}.parquet"
         inputs[str(p.relative_to(REPO))] = sha256(p)
     print("fitting the fusion ...")
     t0 = time.time()
+    base_2025 = group_b.read_new_base(BOARD) if new_base else fusion.read_base(BOARD)
     frame = fusion.fit_frame(
-        pd.read_parquet(fit_path), fusion.read_base(BOARD), plan_shift_threshold_s()
+        pd.read_parquet(fit_path), base_2025, plan_shift_threshold_s()
     )
     fits: dict = {}
     oof = fusion.leave_one_month_out(frame, log=fits)
@@ -909,6 +1000,8 @@ def fusion_stage(rank, physical, rules_row: np.ndarray, model_path: Path) -> dic
             "out_of_fold_pred_sha256": {m: f["pred_sha256"] for m, f in fits.items()},
             "inputs_sha256": inputs,
             "base_booster_sha256": FUSION_BASE_BOOSTER_SHA256,
+            "base": "group B's new base" if new_base else "the booster's prediction",
+            "base_2025_records": sorted(records),
             "rows_taken": int(applied.sum()),
             "rows_taken_by_airport_month": {
                 f"{a} {m}": int(n) for (a, m), n in by.items() if n
@@ -1060,7 +1153,27 @@ def main() -> int:
     # The term first, then the plan-shifted rule on the rows the term leaves:
     # the rows each rule takes when substituted, and would take when not.
     shifted = plan_shift.notna() & tail.isna()
-    pred = submitted(physical, record_quality, plan_shift, TAIL_RULES_SUBSTITUTED)
+    # Group B's new base, per airport, from the configuration's parts and the
+    # members fitted beside it; the booster file below stays ``physical``.
+    base = physical
+    grouped = None
+    if GROUP_B_APPLIED:
+        if got["parts"] is None or not FUSION_G1N_APPLIED:
+            print(
+                "group B's new base is defined on the configuration's parts and"
+                " beneath the fusion; refusing",
+                file=sys.stderr,
+            )
+            return 1
+        grouped = group_b_base(rank, got["parts"], physical)
+        base = grouped["base"]
+        print(
+            "  group B's new base: "
+            + ", ".join(
+                f"{k} {n:,} rows" for k, n in grouped["record"]["rows_by_item"].items()
+            )
+        )
+    pred = submitted(base, record_quality, plan_shift, TAIL_RULES_SUBSTITUTED)
     # The submission's target is a non-negative int32; a boosted model can
     # extrapolate below zero on a row unlike anything it was fitted on, and a
     # negative taxi-out is not a prediction anyone should submit.
@@ -1102,7 +1215,9 @@ def main() -> int:
             )
             return 1
         rules_row = (record_quality.notna() | shifted).to_numpy(dtype=bool)
-        fused = fusion_stage(rank, physical, rules_row, fusion_path)
+        fused = fusion_stage(
+            rank, base, rules_row, fusion_path, new_base=grouped is not None
+        )
         values = with_fusion(values, fused["prediction"].to_numpy(), fused["applied"])
         print(f"  the fusion takes {int(fused['applied'].sum()):,} rows")
     out = pd.DataFrame({ID: rank[ID].to_numpy(), TARGET: values})
@@ -1182,6 +1297,8 @@ def main() -> int:
         "booster_file_sha256": sha256(booster_file),
         "fusion_g1n_applied": FUSION_G1N_APPLIED,
         "fusion": None if fused is None else fused["record"],
+        "group_b_applied": GROUP_B_APPLIED,
+        "group_b": None if grouped is None else grouped["record"],
         "written_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "scorer_used_pairs": None,
         "scorer_score": None,

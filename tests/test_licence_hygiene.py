@@ -328,3 +328,61 @@ def test_other_identifiers_still_count_in_the_exempt_file(tmp_path, monkeypatch,
     )
     assert hygiene.main() == 1
     assert exempt in capsys.readouterr().out
+
+
+def test_the_airports_copy_exempts_its_five_candidate_names_only(
+    tmp_path, monkeypatch, capsys
+):
+    """The airports amendment's copy names C10 to C14 inside its rules; those
+    five are exempt there, nowhere else, and nothing else is."""
+    exempt = "reports/preregistered-2026-10-06-airports.md"
+    assert hygiene.IDENTIFIER_EXEMPTIONS[exempt][0] == frozenset(
+        {"C10", "C11", "C12", "C13", "C14"}
+    )
+    _quiet(monkeypatch)
+    monkeypatch.setattr(
+        hygiene,
+        "osm_stand_identifiers",
+        lambda: {"C10", "C11", "C12", "C13", "C14", "B7X", "A9Z", "D4Q"},
+    )
+    names = "Candidates C10, C11, C12, C13 and C14."
+    credit = "\n\nData (c) OpenStreetMap contributors, ODbL 1.0.\n"
+    (tmp_path / exempt).parent.mkdir(parents=True, exist_ok=True)
+    (tmp_path / exempt).write_text(names + credit)
+    monkeypatch.setattr(hygiene, "REPO", tmp_path)
+    assert hygiene.main() == 0
+    capsys.readouterr()
+    (tmp_path / exempt).write_text(names + " Stands B7X, A9Z and D4Q." + credit)
+    assert hygiene.main() == 1
+    assert exempt in capsys.readouterr().out
+    (tmp_path / exempt).write_text(credit)
+    (tmp_path / "reports/other.md").write_text(names + credit)
+    assert hygiene.main() == 1
+    assert "reports/other.md" in capsys.readouterr().out
+
+
+def test_the_group_b_report_exempts_the_same_five_names_only(
+    tmp_path, monkeypatch, capsys
+):
+    """``reports/group-b.md`` prints the verdict lines naming C10 to C14; those
+    five are exempt there, and any other identifier still counts."""
+    exempt = "reports/group-b.md"
+    assert hygiene.IDENTIFIER_EXEMPTIONS[exempt][0] == frozenset(
+        {"C10", "C11", "C12", "C13", "C14"}
+    )
+    _quiet(monkeypatch)
+    monkeypatch.setattr(
+        hygiene,
+        "osm_stand_identifiers",
+        lambda: {"C10", "C11", "C12", "C13", "C14", "B7X", "A9Z", "D4Q"},
+    )
+    names = "C10: clears. C11: clears. C12, C13 and C14."
+    credit = "\n\nData (c) OpenStreetMap contributors, ODbL 1.0.\n"
+    (tmp_path / exempt).parent.mkdir(parents=True, exist_ok=True)
+    (tmp_path / exempt).write_text(names + credit)
+    monkeypatch.setattr(hygiene, "REPO", tmp_path)
+    assert hygiene.main() == 0
+    capsys.readouterr()
+    (tmp_path / exempt).write_text(names + " Stands B7X, A9Z and D4Q." + credit)
+    assert hygiene.main() == 1
+    assert exempt in capsys.readouterr().out

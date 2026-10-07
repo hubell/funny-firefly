@@ -155,7 +155,9 @@ def test_the_manifest_records_the_flag_and_the_rows_each_rule_would_take():
 
 def test_the_script_substitutes_the_record_quality_rows_it_was_told_to():
     """The term's rows take C6b where ``RECORD_QUALITY_FROM_C6B`` says so, and
-    that is the series the one ``submitted`` call is given."""
+    that is the series the one ``submitted`` call is given. Its base is the
+    configuration's prediction, ``physical``, unless group B's new base takes
+    its place (``taxiout.models.GROUP_B_APPLIED``)."""
     tree = ast.parse(SCRIPT.read_text(encoding="utf-8"))
     chosen = [
         node
@@ -175,11 +177,21 @@ def test_the_script_substitutes_the_record_quality_rows_it_was_told_to():
         and node.func.id == "submitted"
     ]
     assert [ast.unparse(a) for a in calls[0].args] == [
-        "physical",
+        "base",
         "record_quality",
         "plan_shift",
         "TAIL_RULES_SUBSTITUTED",
     ]
+    (main,) = [
+        n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "main"
+    ]
+    bases = [
+        ast.unparse(node.value)
+        for node in ast.walk(main)
+        if isinstance(node, ast.Assign)
+        and any(getattr(t, "id", None) == "base" for t in node.targets)
+    ]
+    assert bases == ["physical", "grouped['base']"]
 
 
 def test_the_register_holds_both_decisions_because_the_scanner_reads_bools():
