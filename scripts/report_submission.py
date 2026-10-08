@@ -35,7 +35,9 @@ name and is frozen under the date alone; nothing here rewrites it. Where the
 manifest records whether the tail rules were substituted, the record says so
 beside the term's count; a manifest written before that field existed renders
 as it always did. Where it records the fusion (G1n), the record says which
-airports its gate keeps, how many rows it took and the model's sha256.
+airports its gate keeps, how many rows it took and the model's sha256. Where it
+records group B's new base, the record says so, gives each airport's menu item
+and the new base's sha256, and names the fusion's base.
 
 Every number is computed; nothing is hand-typed. The report carries
 aggregates only, and the generator refuses to write a movement identifier or a
@@ -352,6 +354,27 @@ def section_file(
                 ["fusion model sha256", f"`{m['fusion']['model_sha256']}`"],
             ]
             if m.get("fusion")
+            else []
+        ),
+        *(
+            [
+                ["group B's new base applied", "yes" if m["group_b_applied"] else "no"],
+                [
+                    "the new base per airport",
+                    "; ".join(
+                        f"{it} at "
+                        + ", ".join(
+                            a
+                            for a, x in m["group_b"]["base_per_airport"].items()
+                            if x == it
+                        )
+                        for it in sorted(set(m["group_b"]["base_per_airport"].values()))
+                    ),
+                ],
+                ["new base sha256", f"`{m['group_b']['new_base_sha256']}`"],
+                ["the fusion's base", m["fusion"]["base"]],
+            ]
+            if m.get("group_b")
             else []
         ),
         *(
