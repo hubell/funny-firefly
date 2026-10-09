@@ -1,7 +1,7 @@
-# Modelling notes
+# Modeling notes
 
 Running record of decisions, caveats and open questions. Written as work
-proceeds so the reasoning behind the feature set is recoverable later — for the
+proceeds so the reasoning behind the feature set is recoverable later, for the
 write-up, and for anyone reproducing the result.
 
 ## Geometry extraction
@@ -17,11 +17,11 @@ a runway as a routing target, and before deriving any per-runway statistic.
 
 **Stand identifiers live in more than one tag.** `ref` dominates, but Frankfurt
 has 2 stands and CDG 6 identified only by `name`. The resolver tries
-`ref`, `aeroway:ref`, `local_ref`, `name` in that order — see
+`ref`, `aeroway:ref`, `local_ref`, `name` in that order: see
 `taxiout.coverage.STAND_ID_TAGS`.
 
 **Antalya draws stands as polygons; nobody else does.** 168 of LTAI's 576
-parking positions are closed ways — the stand footprint rather than the nose-in
+parking positions are closed ways, the stand footprint rather than the nose-in
 centreline. All ten other airports use centrelines exclusively. Treated as
 polygons this is harmless (centroid, no lead-in); treated as lines it produces
 270 m pushbacks from a perimeter and 40 stand identifiers whose duplicate
@@ -31,7 +31,7 @@ identifiers from 40 to 1.
 ## Graph construction
 
 **Written in-repo rather than taken from `traffic`.** `traffic` (Olive, MIT) has
-an `AirportGraph` doing the same class of OSM topology repair, and its licence
+an `AirportGraph` doing the same class of OSM topology repair, and its license
 would permit use. Three reasons not to: the dependency is large relative to what
 is needed; the route descriptors here (turn angle, backtrack, crossing counts)
 are not in its API and would be bolted on anyway; and the geometric decisions
@@ -40,28 +40,28 @@ repository is worth more than the code saved. It remains the natural
 cross-check, and the prior art is cited rather than quietly reimplemented.
 
 **Three OSM defects have to be repaired before anything routes.** Nodes that are
-coincident but not shared (up to 166 per airport — an exact coordinate match is
+coincident but not shared (up to 166 per airport: an exact coordinate match is
 ordinary way-sharing and is not counted); nodes lying on an edge they are not
 connected to (7–1912 edge splits); and ways that cross on the map with no shared
 vertex at all (up to 89). The third fires rarely, because mappers usually do
-place a node at a runway crossing — it is kept because its absence is silent,
+place a node at a runway crossing: it is kept because its absence is silent,
 and would make a runway reachable only where somebody was thorough.
 
 **Reaching a fixed point took two attempts, and the failure was instructive.**
 Without a minimum-length guard the repair split off half-edges of a few
 millimetres in densely mapped areas; their midpoints then sat on their
-neighbours, which split those. There was no fixed point — Zurich settled into a
+neighbors, which split those. There was no fixed point: Zurich settled into a
 cycle of fifteen splits per round indefinitely, so the output was a function of
 how many rounds were permitted rather than of the airport, and the claim that it
 converged was simply false. Split positions are now bounded away from both ends
-in metres, and no (node, edge) combination is considered twice. All eleven
+in meters, and no (node, edge) combination is considered twice. All eleven
 airports now converge, in two to twenty-five rounds, and the build records which
 and whether.
 
 **Splitting reveals pavement drawn twice.** Once two versions of a segment share
-endpoints they are one edge, so the total shrinks — most at the densely mapped
+endpoints they are one edge, so the total shrinks: most at the densely mapped
 airports.
-This looked like a bug for long enough to be worth recording that it is not —
+This looked like a bug for long enough to be worth recording that it is not:
 component counts are unchanged, and the amount is now reported as
 `pavement_deduped_km` rather than being left to look like lost data.
 
@@ -69,7 +69,7 @@ component counts are unchanged, and the amount is now reported as
 wrong.** Vertex density is a property of the mapper, not the pavement: LSZH
 carries a vertex every 9 m, LTFM every 39 m, so cumulative heading change over
 raw vertices counts tracing noise and is not comparable across airports.
-Fixed-step resampling removed that but introduced a worse artefact — it discards
+Fixed-step resampling removed that but introduced a worse artifact: it discards
 the original vertices, so any feature narrower than the step is cut by a chord
 and an S-bend inside one step cancels itself. The statistic then depended on
 which end of the path it was measured from, by up to 150 degrees on real
@@ -78,7 +78,7 @@ routes, which is not a property a total turning angle can have.
 Douglas–Peucker simplification has neither problem: it keeps every vertex
 deviating from its own chord by more than the tolerance, so jitter disappears,
 real geometry survives at any density, and the result is exactly symmetric under
-reversal. The tolerance (3 m) was picked from a sweep — every airport falls
+reversal. The tolerance (3 m) was picked from a sweep: every airport falls
 steeply while noise is still being removed, then flattens; six of seven are flat
 by 2.5–3 m. Zurich keeps declining past 5 m and so remains partly
 scale-dependent, which is recorded rather than smoothed over.
@@ -86,7 +86,7 @@ scale-dependent, which is recorded rather than smoothed over.
 **The runway penalty was measured, not tuned.** Runway pavement is traversable
 at 4x length. Median taxi distance barely moves across a twentyfold range of
 that parameter, while the amount of *other* runways' pavement the routes use
-collapses — which is the behaviour the penalty exists to suppress. Turn angle
+collapses, which is the behavior the penalty exists to suppress. Turn angle
 does move across the full range, by around a fifth, because at a penalty of 1
 routes run along runways and runways are straight; above 4 it is flat. The full
 sweep, regenerated rather than quoted, is in
@@ -107,24 +107,24 @@ Settled on 2 September 2026, the day the data landed, by
 [`../reports/data_review.md`](../reports/data_review.md); the figures below
 are quoted from it and it is the one that is regenerated.
 
-**The OSM stand refs do match `STAND_mvt`, after a staged normalisation.**
+**The OSM stand refs do match `STAND_mvt`, after a staged normalization.**
 Exact matching gives 57–99% by airport. Folding case and whitespace, then
 stripping leading zeros in digit runs, then one trailing letter after a
-digit — each stage applied to both sides and tried only for rows the previous
-stage left unmatched — gives 87% (Munich) to 99.9% (Istanbul), 96% of
+digit (each stage applied to both sides and tried only for rows the previous
+stage left unmatched) gives 87% (Munich) to 99.9% (Istanbul), 96% of
 departures overall, in both the training year and the ranking set. Each
 stage was explained by inspecting what it fixed, never by what it did to a
 validation error: the whitespace is inside OSM's refs at Frankfurt, Schiphol's
 movement data zero-pads where OSM does not, and Munich and Istanbul map split
 stands as lettered halves where the movement data names the whole. The
-remainder is mostly stands OSM does not have — whole numeric blocks at Munich
-and Barcelona — and those rows fall back to airport-level features.
+remainder is mostly stands OSM does not have (whole numeric blocks at Munich
+and Barcelona) and those rows fall back to airport-level features.
 Implementation and the ambiguity bookkeeping it adds (a coarser key can fold
 several OSM identifiers onto one; the collapsed cell records how many and how
 far apart) are in `taxiout.join`.
 
 **Antalya is not in the data.** LTAI has no rows in training or ranking,
-though the organisers list it and the row total matches theirs. The 45%
+though the organizers list it and the row total matches theirs. The 45%
 coverage question is moot; the geometry stays in the pipeline unused.
 
 **Runway assignment is given.** `RUNWAY_mvt` and `STAND_mvt` are present for
@@ -134,9 +134,9 @@ marginalised.
 **The ranking set is a census where it is present at all.** January 2026
 covers all ten airports at the same daily volumes as January 2025; July 2026
 covers Frankfurt, Heathrow and Schiphol only. Congestion counts need no
-coverage normalisation, and those three airports are 53% of the test rows.
+coverage normalization, and those three airports are 53% of the test rows.
 *Revised 29 September.* The files read on 2 September were replaced by the
-organisers on 4 September, and the entry found the replacement on
+organizers on 4 September, and the entry found the replacement on
 28 September: July 2026 covers all ten airports in the files the scorer
 uses, 192,122 departures beside January's 152,719, and the template lists
 344,841 rows. The census property holds as before, and there is no
@@ -153,7 +153,7 @@ the validation design because it was fixed to read them on their own.
 distances. Intersection departures are routine and shorten the taxi materially,
 and nothing in the OSM data says which runways are used that way.
 `backtrack_m` isolates the part an intersection departure would not fly, so the
-question can be settled empirically once movement data exists — if taxi times
+question can be settled empirically once movement data exists, if taxi times
 for a runway sit systematically below the full-length prediction, that is the
 signature.
 
@@ -170,17 +170,17 @@ the feature exists to carry.
 
 **A snapped stand loses turns, not just distance.** Where OSM has no apron
 lead-in, the stand is attached by a straight line and `snap_m` records the gap.
-The distance error is small — under 2.2% of `taxi_m` at every airport — and that
+The distance error is small (under 2.2% of `taxi_m` at every airport) and that
 framing understates the problem. A straight line contributes zero `turn_deg`,
-zero `sharp_turns` and zero `junctions`, so the apron manoeuvre disappears from
+zero `sharp_turns` and zero `junctions`, so the apron maneuver disappears from
 exactly the descriptors the literature says are nearly as predictive as
 distance. At LFPG that is 265 of 768 stands, clustered by apron rather than
 scattered.
 
 That is a mechanism, not a measurement, and the obvious check does not support
-it: comparing turn angle per kilometre for snapped against unsnapped cells, six
+it: comparing turn angle per kilometer for snapped against unsnapped cells, six
 of ten airports move the *wrong* way, LFPG among them. The counterfactual is
-genuinely unobservable — the apron manoeuvre that is missing was never mapped —
+genuinely unobservable (the apron maneuver that is missing was never mapped)
 so the honest position is that the bias is expected on physical grounds and the
 available proxy cannot detect it. `snap_max_m` is carried into the matrix so
 those cells can be identified and the interaction tested against the target,
@@ -202,7 +202,7 @@ rather than caching it.
 **Should aprons be re-added to the Overpass query?** They were excluded as
 slow and useless for routing. The routing measurements are the first evidence
 against that: at EGLL every node-form parking position sits well over 100 m from the
-nearest mapped taxiway, and at LTAI the gap has a tail beyond 400 m — in both cases
+nearest mapped taxiway, and at LTAI the gap has a tail beyond 400 m, in both cases
 because the apron lead-in is not mapped as a taxilane. Apron polygons might
 bridge those gaps, but routing across an area needs a navmesh, which is a large
 step up in complexity for a timeboxed probe. Recorded, measured, deferred; the
@@ -217,12 +217,12 @@ what each of them needs.
 **Shared-corridor load.** The graph knows which edges every (stand, runway)
 route uses. Counting how many *other* departures in a trailing window are on
 routes that share edges with this one gives a congestion measure that is
-geometric rather than aggregate — two aircraft leaving opposite ends of the
+geometric rather than aggregate: two aircraft leaving opposite ends of the
 field at the same moment do not interact, and a count of concurrent movements
 cannot tell the difference. It was to be built from off-block times and runway
 assignments; the off-block times turned out to be blanked, so it is built from
-take-off times and runway assignments instead — the other departures on
-overlapping routes in a window before the subject's take-off — which the
+take-off times and runway assignments instead (the other departures on
+overlapping routes in a window before the subject's take-off) which the
 ranking set does expose (see *Leakage watch*). This is the strongest idea
 latent in the work so far and the one most likely to be genuinely new.
 
@@ -255,14 +255,14 @@ the delay a regulation causes before departure: the flight side carries the
 initial off-block estimate (`IOBT_flt`), the filed one (`EOBT_1_flt`) and the
 last one the Network Manager held (`LOBT_flt`), all present for test rows,
 and `LOBT − IOBT` is how far the planned off-block moved before the aircraft
-left — from ATFM, from the airline, from the airport, without saying which.
+left, from ATFM, from the airline, from the airport, without saying which.
 It is used as a regime indicator, and the write-up says it is a proxy for
 pre-departure delay of any cause, not for ATFM specifically. Congestion itself
 is approached through observable movements.
 
 ## The model, stated as a decomposition
 
-Fixed on review, 2 September 2026. The organisers describe the use of a
+Fixed on review, 2 September 2026. The organizers describe the use of a
 taxi-out estimate as post-operations analysis: identifying constrained
 intervals and measuring "excess fuel burnt/CO2 production compared to
 unconstrained status"
@@ -274,7 +274,7 @@ That is a decomposition, and the model is stated as one:
 **Unimpeded.** The time an aircraft would take from this stand to this runway
 with nothing in its way. The PRU's additional-taxi-out-time indicator defines
 it empirically, as the 10th percentile of observed taxi-out per (stand,
-runway) pair — which exists only for pairs that have been observed often
+runway) pair, which exists only for pairs that have been observed often
 enough. The geometry supplies the same quantity as a function of route
 distance and shape, and so extends the reference to pairs seen rarely or
 never. Distance becomes time through a speed fitted on training data; the
@@ -283,27 +283,27 @@ per Ravizza et al.
 
 **Excess.** Everything above unimpeded: runway queueing, surface congestion,
 de-icing and low-visibility procedures, pre-departure holds. Built from what
-the ranking set exposes about surrounding traffic — take-offs, arrivals'
-landings, on-blocks and taxi-in times, schedules, runway configuration —
+the ranking set exposes about surrounding traffic (take-offs, arrivals'
+landings, on-blocks and taxi-in times, schedules, runway configuration)
 and, as regime indicators, weather flags per airport-hour and the flight
 plan's own delay signal (see *Deliberate non-goals*).
 
 **Record-quality term.** A separate component for rows the data flags as
-record-matching artefacts, whose recorded taxi-out no aircraft produced. It
+record-matching artifacts, whose recorded taxi-out no aircraft produced. It
 exists because the stated scoring rule counts those rows; it is kept apart
 so it cannot be mistaken for either of the other two (*Tail handling*).
 
 The ablation ladder (*Validation*) is the decomposition read bottom-up: each
 rung adds one term, and the held-out-pair split measures the one claim that
-distinguishes this entry — that the unimpeded term carries over to pairs the
+distinguishes this entry, that the unimpeded term carries over to pairs the
 model never saw.
 
 ## Leakage watch
 
 Rewritten on 2 September 2026 once the ranking set had been read, because the
 version written before it assumed the wrong anchor. What the ranking set
-exposes for a departure — measured in
-[`../reports/data_review.md`](../reports/data_review.md) — is its take-off
+exposes for a departure (measured in
+[`../reports/data_review.md`](../reports/data_review.md)) is its take-off
 time (`MVT_TIME_UTC_mvt`, to the second), its scheduled time, the flight
 plan's estimated off-block times, and its stand and runway. `BLOCK_TIME_UTC_mvt`
 is blanked along with the target, for every departure in the ranking months.
@@ -311,13 +311,13 @@ is blanked along with the target, for every departure in the ranking months.
 That settles what kind of problem this is. Operationally, taxi-out is predicted
 at pushback, when the actual off-block time is known and the take-off time is
 not. The challenge poses the reverse: the take-off time is given and the
-off-block time is what is missing. It is a post-hoc estimation task — and
-that is the use the organisers state, "post-operations analysis"
+off-block time is what is missing. It is a post-hoc estimation task, and
+that is the use the organizers state, "post-operations analysis"
 ([rationale](https://ansperformance.eu/study/data-challenge/dc2026/rationale.html)),
 not a departure-time forecast. The rules below are written for it; the
 write-up states both framings and builds to the challenge's. The alternative
-— anchoring only on schedules and filed estimates and reading no actual
-take-off time at all — is principled for a pushback-time forecaster and was
+ (anchoring only on schedules and filed estimates and reading no actual
+take-off time at all) is principled for a pushback-time forecaster and was
 considered and set aside: it answers a question the challenge did not ask,
 and forgoes the strongest signal the data exposes.
 
@@ -326,7 +326,7 @@ set exposes for the rows it reads from, and no field that it hides or that is
 a noisy copy of one it hides. Concretely:
 
 - *Hidden:* `BLOCK_TIME_UTC_mvt` and `TAXITIME_SEC_mvt` of any **departure**
-  in the same month — the subject's or a neighbour's. This is the condition
+  in the same month, the subject's or a neighbor's. This is the condition
   that bites. A trailing window of other departures' pushbacks, the feature
   the first version of this plan called Gate 2, is unavailable at inference
   for exactly the reason the queue-size feature was: the field it counts is
@@ -338,7 +338,7 @@ a noisy copy of one it hides. Concretely:
   from the blanked field with an interquartile range of five minutes; as a
   single predictor it is worth no more than the filed EOBT lag. Not an oracle,
   but a noisy copy of a hidden field, and an entry judged on originality has
-  nothing to gain from it. The organisers say they monitor for attempts to
+  nothing to gain from it. The organizers say they monitor for attempts to
   exploit the ranking process; this is one of the two places it could be
   alleged, and it is the one settled by not reading the field at all.
 
@@ -346,7 +346,7 @@ a noisy copy of one it hides. Concretely:
   because the block is used. It reads arrivals' on-block times, which the
   ranking set exposes in full, to bound a field the ranking set hides for
   departures. Every column it reads is exposed and the poison tests hold it to
-  that, so it is inside the rule as written — but the rule as written is a
+  that, so it is inside the rule as written, but the rule as written is a
   post-hoc one, and under an operational reading the block is inadmissible for
   the same reason a trailing window of other departures' pushbacks is: the
   arrival it reads on-blocked after the subject's own off-block. That is
@@ -365,8 +365,8 @@ The constants are in `taxiout.challenge` (`HIDDEN_FOR_TEST_DEPARTURES`,
 can be tested against them rather than against a paragraph.
 
 **What congestion is built from, then.** Take-offs from the subject's runway
-and from all runways in trailing windows before its own take-off — the
-runway's realised throughput, which under post-hoc rules is legitimate and
+and from all runways in trailing windows before its own take-off, the
+runway's realized throughput, which under post-hoc rules is legitimate and
 under operational rules would not be. Arrivals: landings and on-blocks in the
 same windows, and the taxi-in times of arrivals that reached their stand in
 the window, which is a direct measurement of surface congestion available on
@@ -378,9 +378,9 @@ for an equal timestamp fixed explicitly.
 
 **What is still forbidden even under post-hoc rules.** Reading the target of
 any departure; reading `AOBT_3_flt`; and recovering the blanked off-block time
-from outside the challenge data — ADS-B surface tracks for the ranking months
+from outside the challenge data: ADS-B surface tracks for the ranking months
 would do it, and using them would be reconstructing a hidden variable through
-a side channel, whatever their licence. External data is for calibrating the
+a side channel, whatever their license. External data is for calibrating the
 physical layer on 2025 and nothing else.
 
 **The literature's benchmark figures do not transfer.** Idris's takeoff queue
@@ -393,11 +393,11 @@ it reads nothing in `FORBIDDEN_FEATURE_INPUTS`.
 
 **The registry names the phase a source is read from.** *Added 3 September,
 Gate 2.* The arrivals features read arrivals' on-block and taxi-in times,
-which are the very columns `FORBIDDEN_FEATURE_INPUTS` names — for departures.
+which are the very columns `FORBIDDEN_FEATURE_INPUTS` names, for departures.
 The rule above already distinguishes the two ("for the rows it reads from"),
 so the registry was made able to state it: a source is a bare column name for
 the subject's own row, `DEP.<column>` for another departure's, `ARR.<column>`
-for an arrival's. The test then holds each to its own list — nothing bare or
+for an arrival's. The test then holds each to its own list, nothing bare or
 `DEP.`-prefixed in `FORBIDDEN_FEATURE_INPUTS`, everything `ARR.`-prefixed in
 `taxiout.challenge.AVAILABLE_FOR_ARRIVALS`, which is the set of arrival fields
 the data review measured at 0.0% null in the ranking set, and `AOBT_3_flt`
@@ -417,7 +417,7 @@ It has a prefix of its own, `TRAIN.`, and one permitted column, the target.
 Writing it as `DEP.TAXITIME_SEC_mvt` would have been the easy thing and
 would have been false. `TAXITIME_SEC_mvt` is blanked for every departure in
 the ranking set, so a feature declaring it under `DEP.` would be declaring
-something unavailable at inference — and would have failed the test, correctly.
+something unavailable at inference, and would have failed the test, correctly.
 What the encoding reads is available by construction: the ranking set is 2026
 and the fitting sample is 2025, so the encoding is computed once over the
 whole training year and read across a boundary no ranking row is on either
@@ -431,42 +431,42 @@ hiding under a phase.
 
 **Stand occupancy bounds the hidden field from inside the challenge data, and
 that is said here rather than left to be noticed.** *Added 8 September, Gate
-2c.* The block is the stand's recent history — the gap to the last arrival at
+2c.* The block is the stand's recent history, the gap to the last arrival at
 the subject's stand, that arrival's lateness and taxi-in, and whether it was
 the subject's own type and operator. Inside it there is a bound: a stand holds
 one aircraft, so an arrival that on-blocks at the subject's stand before the
 subject takes off means the subject had already left the stand, and its
 taxi-out is at least the gap between that on-block and its take-off. The
 twenty-to-forty-five-minute band is where that bound is the mechanism, and it
-is a minority of what the block buys — 22% of the reduction in squared error in
+is a minority of what the block buys: 22% of the reduction in squared error in
 December against 48% from gaps past an hour where the previous arrival was the
 subject's own aircraft, which bounds nothing at all.
-Every field the block reads is exposed — the ranking set gives an arrival's
+Every field the block reads is exposed (the ranking set gives an arrival's
 stand and on-block time in full, and it is `AVAILABLE_FOR_ARRIVALS` that says
-so — and the rule above therefore admits it: a feature may read what the
+so) and the rule above therefore admits it: a feature may read what the
 ranking set exposes *for the rows it reads from*.
 
 Two things about it are worth stating plainly rather than leaving to a reader
 to work out. The arrival it reads on-blocked *after* the subject's own
 off-block, so the block is admissible under the challenge's post-hoc framing
-and not under an operational one — exactly the standing of every
+and not under an operational one, exactly the standing of every
 take-off-anchored window the model already carries, and no worse, but also no
 better. And what it constructs, in the band where the bound is the mechanism,
 is a lower bound on `TAXITIME_SEC_mvt`, which is
 the field the ranking set hides: not a copy of it, not a reconstruction of it
-from outside the data, but a bound on it built from rows the organisers chose
+from outside the data, but a bound on it built from rows the organizers chose
 to expose. Elsewhere it is not a bound on that field but a description of the
 stand's day, which is a weaker claim and a safer one. Nothing in the rules forbids that, and `AOBT_3_flt` is excluded by
 decision for being a *noisy copy* rather than for being informative; a physical
 constraint between two exposed rows is a different object. The block is
-therefore kept, and the bound is reported for what it is — including where it
+therefore kept, and the bound is reported for what it is, including where it
 is false, which [`../reports/occupancy.md`](../reports/occupancy.md) measures,
 and including the negative result that applying it as a hard floor loses.
 
 The plan lags are the one block that reads, through other departures, a
 quantity that contains their taxi-out: take-off minus a planning value fixed
-before departure — the flight plan's first and last off-block estimates and
-the schedule — is the taxi plus the pushback delay against the plan, and the
+before departure (the flight plan's first and last off-block estimates and
+the schedule) is the taxi plus the pushback delay against the plan, and the
 runway's mean of it over the other departures within fifteen minutes is the
 lag the runway is running at. Every source of it is an exposed field of the
 ranking set, so the rule holds; but it is worth knowing that a rung read net
@@ -482,13 +482,13 @@ regenerated.
 
 The target has a heavy tail: under 0.1% of training departures carry half
 the airport-mean squared error. The data review read it as record-matching
-artifacts — a block time from an earlier day matched to a later take-off —
+artifacts (a block time from an earlier day matched to a later take-off)
 and flagged it by two fields the ranking set exposes, no flight-side record
 and a take-off hours after schedule. Building the term found a different
 mechanism behind most of it. The departures recorded above two hours are
 82% Fiumicino, and for nine in ten of those the recorded off-block time sits
-within a minute of the *scheduled* departure time — over eight in ten within
-five seconds — while the take-off is hours later. The block time was
+within a minute of the *scheduled* departure time (over eight in ten within
+five seconds) while the take-off is hours later. The block time was
 defaulted to the schedule, so the recorded taxi-out is take-off minus
 schedule: the lag, which every ranking departure exposes. The day-shift is
 real but small, a dozen rows a year, a day plus an ordinary taxi, in the same
@@ -504,8 +504,8 @@ The decision is to model them explicitly, as the third term of the
 decomposition, and to say what the term is. `taxiout.tails` measures, per
 (airport, flight-record presence, lag band) cell on training rows, how often
 the block time was defaulted and what the remaining rows average, and
-predicts for a row in a covered cell `share × lag + (1 − share) × rest_mean`
-— the conditional mean, computed knowing the mechanism. A cell is covered
+predicts for a row in a covered cell `share × lag + (1 − share) × rest_mean`,
+the conditional mean, computed knowing the mechanism. A cell is covered
 when it has at least five rows and a defaulted share of at least five
 percent; at the full-year fit that is three cells, all at Fiumicino, and 383
 of the 344,841 ranking rows in the files of 4 September, 107 in January and
@@ -515,7 +515,7 @@ to the physical model, which is fitted with the covered rows excluded and
 validated on every row, with RMSE reported with and without the term.
 
 Two forms were measured on the forward splits and set aside. A plain cell
-mean with thin cells pooled over airports — the first proposal — carries one
+mean with thin cells pooled over airports (the first proposal) carries one
 airport's artifact rate to airports that have none and is the worst form
 tried on every split. The plain cell mean without pooling loses 12 s on
 December and 33 s on July to the mixture, because the mixture predicts each
@@ -548,7 +548,7 @@ and uses far fewer effective parameters.
 That value is invisible to any cross-validation that puts the same (stand,
 runway) pair on both sides of the split. With roughly a million departures a
 year against a few thousand used cells, there are hundreds of training rows per
-cell — ample to fit a per-cell mean and read `taxi_m` as a continuous stand
+cell: ample to fit a per-cell mean and read `taxi_m` as a continuous stand
 identifier. A random K-fold would show the geometry "working" while testing
 nothing, and the README's central claim would go unexamined.
 
@@ -561,7 +561,7 @@ The validation therefore needs to be, at minimum:
   first month). Train January–June, validate July, reported for Frankfurt,
   Heathrow and Schiphol separately, because those three are the whole of the
   July test set and 53% of the test rows. Never random K-fold on rows:
-  congestion is autocorrelated over hours, so neighbouring departures share
+  congestion is autocorrelated over hours, so neighboring departures share
   queue state. Block by airport-day at least.
 - **A held-out-pair diagnostic.** `GroupKFold` on (stand_id, designator) within
   airport, holding out whole pairs. This is the only split that measures what
@@ -570,7 +570,7 @@ The validation therefore needs to be, at minimum:
 - **Error stratified by pair frequency.** Bucket test rows by how often their
   pair appeared in training: 0, 1–10, 11–100, >100. Geometry should buy most in
   the first two buckets. If it does not, the physical layer is decoration, and
-  the write-up should say so — that is still an honest and publishable result.
+  the write-up should say so: that is still an honest and publishable result.
 - **Per-airport RMSE reported alongside the pooled figure.** The test set is
   weighted towards the three July airports; a pooled-optimal model could be a
   Frankfurt–Heathrow–Schiphol-optimal model.
@@ -580,7 +580,7 @@ The validation therefore needs to be, at minimum:
 
 *Note of 29 September.* The three-airport reading above was fixed when the
 ranking files of 2 September held July 2026 at Frankfurt, Heathrow and
-Schiphol alone. The files the organisers re-issued on 4 September hold all
+Schiphol alone. The files the organizers re-issued on 4 September hold all
 ten airports in July, so the ten-airport July figure is the one that stands
 in for the test month; the three-airport columns are kept as they were
 fixed, and the paper says which July figure it quotes and why (§8 and

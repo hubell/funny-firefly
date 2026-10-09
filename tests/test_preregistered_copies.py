@@ -514,6 +514,42 @@ COPIES_OF_7_OCTOBER = {
         ),
         0,
     ),
+    # the group C note of 7 October, made the same way on 8 October; its first
+    # place names a range of work blocks in the plural
+    "reports/preregistered-2026-10-07-group-c.md": (
+        "preregistration_2026-10-07_group_c.md",
+        "cb0ced3de2e6fb1a0a75bb8d9a4a41af29390ecee52356df25bbbf456d1be060",
+        (
+            (
+                r"\(Blocks\s+\d+ to \d+\)",
+                "(the work from the overnight run of 6 October to the landing of v11)",
+            ),
+            (
+                _WORK_BLOCK + r"'s `heldout-2025-MM__c14__seed0`",
+                "the overnight run's `heldout-2025-MM__c14__seed0`",
+            ),
+            (_REPORT_FILE, "(" + _REPORT + ")"),
+            (
+                r"\(" + _WORK_BLOCK + r"\): " + _WORK_BLOCK + r"'s stacker",
+                "(the fusion's refit on group B's base): the stacker of " + _FUSION,
+            ),
+            (r"\(" + _WORK_BLOCK + r"'s records\)", "(the overnight run's records)"),
+            # the three inside C16's definition and its rule
+            (
+                _WORK_BLOCK + r"'s stacker with 3,000 trees",
+                "The stacker of " + _FUSION + " with 3,000 trees",
+            ),
+            (
+                r"on\n" + _WORK_BLOCK + r"'s table",
+                "on\nthe table of the fusion's refit on group B's base",
+            ),
+            (
+                r"as " + _WORK_BLOCK + r" fitted it",
+                "as the fusion's refit on group B's base fitted it",
+            ),
+        ),
+        3,
+    ),
 }
 
 

@@ -169,7 +169,7 @@ reported with their figure count rather than skipped.
 | section | why |
 | --- | --- |
 
-**29** historical figures stand, each with
+**34** historical figures stand, each with
 its reason.
 
 | section | figure | why |
@@ -203,6 +203,11 @@ its reason.
 | §7.1.1 | +0.37 | Experiment 2 or 3 of 20 September, run under the parameters then in force and not repeated under the parameters that ship, so the figure is that day's and matches only the dated record the experiments wrote. The subsection's heading, its first paragraph and the sentence quoting the figure all say so |
 | §7.1.1 | 0.19 | Experiment 2 or 3 of 20 September, run under the parameters then in force and not repeated under the parameters that ship, so the figure is that day's and matches only the dated record the experiments wrote. The subsection's heading, its first paragraph and the sentence quoting the figure all say so |
 | §8.6 | 313.169 | the organizers' score for the one upload, read back once on 4 October 2026 under the upload rule of 19 September and recorded in `reports/submission-2026-10-04.md`, a dated record. No live report holds it: it is the scorer's figure over the ranking set's withheld labels, which nothing in the repository reads. The abstract points here and carries no number |
+| §8.7 | 313.169 | the organizers' score for v7, read back once on 4 October 2026 under the upload rule and recorded in `reports/submission-2026-10-04.md`, a dated record. No live report holds it: it is the scorer's figure over the ranking set's withheld labels, which nothing in the repository reads |
+| §8.7 | 533.1066 | the organizers' score for v8, read back once on 4 October 2026 under the upload rule and recorded in `reports/submission-2026-10-04-v8.md`, a dated record. No live report holds it: it is the scorer's figure over the ranking set's withheld labels, which nothing in the repository reads |
+| §8.7 | 282.399 | the organizers' score for v9, read back once on 6 October 2026 under the upload rule and recorded in `reports/submission-2026-10-06-v9.md`, a dated record. No live report holds it: it is the scorer's figure over the ranking set's withheld labels, which nothing in the repository reads |
+| §8.7 | 272.0897 | the organizers' score for v10, read back once on 7 October 2026 under the upload rule and recorded in `reports/submission-2026-10-07-v10.md`, a dated record. No live report holds it: it is the scorer's figure over the ranking set's withheld labels, which nothing in the repository reads |
+| §8.7 | 269.1368 | the organizers' score for v11, read back once on 8 October 2026 under the upload rule and recorded in `reports/submission-2026-10-08-v11.md`, a dated record. No live report holds it: it is the scorer's figure over the ranking set's withheld labels, which nothing in the repository reads |
 
 **22** figures are computed from report
 figures rather than quoted, each with the arithmetic the check verifies,
@@ -243,7 +248,7 @@ than this record claiming it.
 
 ## Frozen documents
 
-**29** dated records, each with a sha256. These need
+**30** dated records, each with a sha256. These need
 the opposite gate from every other file here: the risk is not that they go
 stale, it is that somebody edits them. A currency check over one would
 demand destroying the record.
@@ -279,6 +284,7 @@ demand destroying the record.
 | `reports/preregistered-2026-10-06-last-week.md` | the pre-registration of the last week: group A for v10, read and closed, and group B for v11, which governs later candidates. What is frozen is this published copy, at the digest beside it. What fixed the order is the working note it was copied from, sha256 eb35ecd3eb802b077307d5dba6ab07ca0cc5277b6fc7d5522d1b65a86bc9f1d5, written on 6 October 2026 before any figure it governs existed. The copy differs from it in the eight places its closing section lists, four of them inside a rule by the owner's decision of 7 October 2026, which `tests/test_preregistered_copies.py` checks against the note where the note is on hand |
 | `reports/preregistered-2026-10-06-g1n.md` | the amendment that defines G1n, the fusion gated by coverage and by airport out of fold, and C9b, and fixes v10's configuration: the source of `taxiout.models.FUSION_G1N_APPLIED`. Both candidates were chosen after 22d's figures were seen, and the copy says so in its opening paragraph. What is frozen is this published copy, at the digest beside it. What fixed the order is the working note it was copied from, sha256 4e6958eb394e72d663234ce364ee93982447834909436f593c2416e7080805f4, written on 6 October 2026 before any figure it governs existed. The copy differs from it in the six places its closing section lists, three of them inside a rule by the owner's decision of 7 October 2026, which `tests/test_preregistered_copies.py` checks against the note where the note is on hand |
 | `reports/preregistered-2026-10-06-airports.md` | the amendment of the last week's group B, airport by airport: every held-out month fitted for the new member and the longer booster, one booster per airport, the airport-by-airport selector and the combination rewritten around it; the source of `taxiout.models.GROUP_B_APPLIED`. What is frozen is this published copy, at the digest beside it. What fixed the order is the working note it was copied from, sha256 9ef5691f36365e2691204380b5f4e984d7049a0e2a8922f80943ed5309724a4a, written on 6 October 2026 before any figure it governs existed. The copy differs from it in the three places its closing section lists, none inside a rule, which `tests/test_preregistered_copies.py` checks against the note where the note is on hand |
+| `reports/preregistered-2026-10-07-group-c.md` | the pre-registration of group C: the booster's share in the blend with the refitted member, and a larger fusion stacker, with the rule that decides whether a v12 is built; neither cleared, so group C built no v12. What is frozen is this published copy, at the digest beside it. What fixed the order is the working note it was copied from, sha256 cb0ced3de2e6fb1a0a75bb8d9a4a41af29390ecee52356df25bbbf456d1be060, written on 7 October 2026 before any figure it governs existed. The copy differs from it in the eight places its closing section lists, three of them inside a rule by the owner's decision of 7 October 2026, which `tests/test_preregistered_copies.py` checks against the note where the note is on hand |
 
 ## What a rebuild of an external input is pinned to
 

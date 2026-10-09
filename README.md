@@ -9,7 +9,7 @@ January and July 2026 movements.
 
 **Licence: GNU GPL v3.0 only.** Copyright (C) 2026 Hunter Bell. Every file in
 this repository is GPLv3, from the first commit, as prize eligibility requires;
-there is no second licence anywhere in it. The distance matrices the pipeline
+there is no second license anywhere in it. The distance matrices the pipeline
 *generates* are a Derivative Database of OpenStreetMap and carry ODbL, which is
 why they are gitignored rather than committed; see
 [Data sources](#data-sources).
@@ -17,7 +17,7 @@ why they are gitignored rather than committed; see
 ## Approach
 
 The challenge supplies `STAND_mvt` and `RUNWAY_mvt` as opaque identifiers. The
-obvious move is to one-hot them and let a gradient-boosted tree memorise the
+obvious move is to one-hot them and let a gradient-boosted tree memorize the
 mean taxi time per pair. That works, but it throws away the fact that taxi-out
 is a *physical* process: an aircraft traverses actual distance across an actual
 taxiway network, then queues for an actual runway.
@@ -29,20 +29,20 @@ together. Whether they do is the hypothesis the held-out-pair validation in
 [`docs/modelling_notes.md`](docs/modelling_notes.md) exists to test, and it is
 reported as measured, not assumed.
 
-The model is stated as a decomposition, because that is how the organisers
+The model is stated as a decomposition, because that is how the organizers
 frame the use of a taxi-out estimate, post-operations analysis of "excess
 fuel burnt … compared to unconstrained status"
 ([rationale](https://ansperformance.eu/study/data-challenge/dc2026/rationale.html)):
 
     taxi-out = unimpeded(geometry) + excess(congestion, regime) + record-quality term
 
-The unimpeded term is what the geometry supplies, and it generalises the PRU's
+The unimpeded term is what the geometry supplies, and it generalizes the PRU's
 own reference, the 10th percentile per (stand, runway) pair, to pairs never
 observed. The excess term is built from what the ranking set exposes about
 surrounding traffic and conditions. The record-quality term exists because the
-data carries day-long record-matching artefacts that the stated scoring rule
+data carries day-long record-matching artifacts that the stated scoring rule
 counts like any other row; it is kept apart so it cannot be mistaken for
-modelling. Each term is a rung of the ablation ladder.
+modeling. Each term is a rung of the ablation ladder.
 
 The 2025 selection committee's published reviews commended the winning entry
 for a methodology "strongly informed by domain knowledge rather than relying
@@ -60,7 +60,7 @@ running) explains materially more of the variation in taxi speed than distance
 alone, and that turn angle by itself is nearly as predictive as distance. Each
 route is therefore described by a small vector of physical quantities rather
 than a single number, and which of them earn their place is a question for the
-modelling stage, measured against the target.
+modeling stage, measured against the target.
 
 ## Status
 
@@ -111,6 +111,21 @@ modelling stage, measured against the target.
       a distance, the public-holiday calendar, and the plan's own differences:
       four blocks read against the submission rung in
       [`reports/baseline.md`](reports/baseline.md)
+- [x] After the first score, nine candidates read under a rule fixed before
+      their figures, three adopted (features on the network manager's recorded
+      off-block time, the flight's own history, a CatBoost member), and the
+      record-quality term's rows predicted per row:
+      [`reports/candidates-2026-10-05.md`](reports/candidates-2026-10-05.md),
+      [`reports/c6.md`](reports/c6.md)
+- [x] Ground events from open ADS-B (adsb.lol) and OPDI, matched to the
+      departures and fused on top of the booster where a source covers the
+      row and the out-of-fold airport gate keeps it:
+      [`reports/fusion.md`](reports/fusion.md),
+      [`reports/fusion-new-base.md`](reports/fusion-new-base.md)
+- [x] Six candidates read airport by airport, and the selector that chose
+      among them: [`reports/group-b.md`](reports/group-b.md)
+- [x] Five scored files, v7 to v11, each uploaded once and recorded in
+      `reports/submission-2026-10-0*.md`, and read in the paper's results
 - [x] Write-up: [`docs/paper.md`](docs/paper.md)
 
 ## What the data turned out to contain
@@ -120,7 +135,7 @@ was written; [`reports/data_review.md`](reports/data_review.md) is generated
 from it and carries every figure. Four findings shape everything after:
 
 - **Ten airports, not eleven.** Antalya (LTAI) has no rows in training or
-  ranking, though the organisers list it and the total row count matches
+  ranking, though the organizers list it and the total row count matches
   theirs. The geometry for it stays in the pipeline and is unused.
 - **The ranking set blanks the off-block time, not just the target.** A test
   departure carries its take-off time, its schedule and the flight plan's
@@ -129,7 +144,9 @@ from it and carries every figure. Four findings shape everything after:
   other departures' pushbacks either. Congestion has to be built from
   take-offs, schedules and arrivals, which the ranking set does expose.
   `AOBT_3_flt` survives but is a minute-resolution estimate that misses the
-  blanked field by minutes; it is excluded by decision.
+  blanked field by minutes; it was excluded by decision until 6 October 2026,
+  when features built on it entered the model under a pre-registration
+  (`reports/candidates-2026-10-05.md`).
 - **The target has a heavy tail, and the scoring rule counts every row.**
   Under 0.1% of training departures carry half the squared error of the
   airport-mean predictor, and the mechanism behind most of it turned out to
@@ -144,7 +161,7 @@ from it and carries every figure. Four findings shape everything after:
   300 s model to 445 s. [`reports/tails.md`](reports/tails.md) has the
   mechanism, the cells it covers, and what the term is worth.
 - **The identifiers join.** Runways at ~100%; stands at 87% (Munich) to 99.9%
-  (Istanbul) of departures after a staged normalisation chosen by join rate
+  (Istanbul) of departures after a staged normalization chosen by join rate
   and inspection, never by validation error.
 
 ## Stand identifier coverage
@@ -334,7 +351,10 @@ repository at the commit the paper is committed in, tagged
 `entry-2026-10-04`, tracks three files under `data/` and nothing else there.
 Three tags mark the history: `freeze-2026-10-04` the model's freeze,
 `model-v7-2026-10-02` the rule of the plan-shifted departures, and
-`entry-2026-10-04` the file that was scored. A reader brings the challenge data, from the
+`entry-2026-10-04` the file that was scored first. The four files after it are
+tagged `model-v8-2026-10-04`, `model-v9-2026-10-06`, `model-v10-2026-10-07` and
+`model-v11-2026-10-07`, and `scripts/make_submission.py` at the last of them
+builds v11, the entry's file. A reader brings the challenge data, from the
 organizers, into `data/challenge/`; the eleven Overpass answers, fetched at
 their pins as above or copied from the deposit into `data/raw/`; and, from
 the deposit, the METAR cache into `data/raw/metar/` and the two OurAirports
@@ -373,7 +393,7 @@ against this repository at the tag, and `SHA256SUMS` covers every file in it.
 ## Data sources
 
 - **Challenge datasets**: EUROCONTROL PRC / OpenSky Network, under the terms of
-  the challenge. Not redistributable under any licence, so they live in
+  the challenge. Not redistributable under any license, so they live in
   `data/challenge/` and are gitignored in full; see
   [`data/challenge/README.md`](data/challenge/README.md).
 - **OpenStreetMap**: © OpenStreetMap contributors, available under the
@@ -438,7 +458,7 @@ wind, ceiling, temperature and thunderstorm fields, bought nothing.
 
 OpenSky's published scientific datasets, ten of them as listed on 20 September
 2026, were reviewed against the same three tests every external source meets
-here, in order: an open licence; 2025 ground-phase coverage at the ten
+here, in order: an open license; 2025 ground-phase coverage at the ten
 airports; and a mechanism the exposed fields lack, which
 [`reports/residual.md`](reports/residual.md) narrows to separating a gate
 delay from a hold. None passes all three. The weekly Monday state-vector
@@ -449,12 +469,12 @@ holds 2022 taxi-out times with no stand or runway; the rest carry no ground
 operations. The row-by-row reading is in
 [`docs/prior_art.md`](docs/prior_art.md).
 
-ODbL sorts derived artefacts into two kinds, and the difference decides what
+ODbL sorts derived artifacts into two kinds, and the difference decides what
 ships. A **Derivative Database** carries share-alike; a **Produced Work**, a
 report, an image or an analysis in another medium, needs attribution only.
 
 The matrices the build writes are a Derivative Database, so they carry ODbL.
-That obligation is not this project's to waive, and a second licence inside a
+That obligation is not this project's to waive, and a second license inside a
 GPLv3 repository is exactly what this entry does not want, so they are
 gitignored and regenerated rather than committed. The reports are Produced
 Works, so they are committed under GPLv3 with OSM attribution, and they carry
@@ -463,10 +483,10 @@ the predictions submitted, is encumbered either way.
 
 Reasoning in full:
 [`data/processed/taxi_distance/ODbL-NOTICE.md`](data/processed/taxi_distance/ODbL-NOTICE.md).
-`make licence-check` enforces it: no OSM-derived artefact or challenge data
+`make licence-check` enforces it: no OSM-derived artifact or challenge data
 tracked, no list of literal stand identifiers from either source in any
-tracked Markdown file, the contributors' credit and the licence named on
-every report and on the paper, and the GPLv3 licence line in every source
+tracked Markdown file, the contributors' credit and the license named on
+every report and on the paper, and the GPLv3 license line in every source
 file. It runs in CI and should run before every commit.
 
 ## Prior art
@@ -484,7 +504,7 @@ recovered quantities as regression features for taxi-out prediction in this
 competition. No entry in the 2024 or 2025 editions appears to have used OSM at
 all.
 
-Full literature summary, the licence position of every external source
+Full literature summary, the license position of every external source
 considered, including the ones ruled out, and the error magnitudes published
 work actually achieves: [`docs/prior_art.md`](docs/prior_art.md).
 

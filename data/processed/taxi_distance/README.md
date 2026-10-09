@@ -7,11 +7,11 @@ python scripts/fetch_osm.py          # cache OSM geometry (resumable)
 python scripts/build_taxi_graph.py   # rebuild these files
 ```
 
-## Licence
+## License
 
 **These files are not committed, and that is a licensing decision rather than a
 size one.** They are a Derivative Database of OpenStreetMap, so they carry ODbL
-share-alike — which is not this project's to waive — and this repository ships
+share-alike (which is not this project's to waive) and this repository ships
 GPLv3 in totality. Full reasoning in
 [`ODbL-NOTICE.md`](ODbL-NOTICE.md).
 
@@ -22,8 +22,8 @@ check without running anything.
 
 ## Files
 
-`<ICAO>.csv` — the joinable matrix, one row per (stand identifier, runway
-designator). Distances in metres, angles in degrees.
+`<ICAO>.csv`, the joinable matrix, one row per (stand identifier, runway
+designator). Distances in meters, angles in degrees.
 
 | column | meaning |
 | ------ | ------- |
@@ -32,7 +32,7 @@ designator). Distances in metres, angles in degrees.
 | `designator` | runway designator, e.g. `27L`, to be joined against `RUNWAY_mvt` |
 | `runway_ref` | the OSM runway this designator belongs to, e.g. `09R/27L` |
 | `n_features` | OSM parking positions sharing this identifier |
-| `spread_m` | range of `taxi_m` across those features — ambiguity indicator |
+| `spread_m` | range of `taxi_m` across those features: ambiguity indicator |
 | `snap_max_m` | largest snap among them; survives aggregation, unlike `snap_m` |
 | `taxi_m` | total stand to threshold distance: `lead_in + snap + route + entry_offset` |
 | `lead_in_m` | stop position to where the stand meets the network (the pushback) |
@@ -49,17 +49,17 @@ designator). Distances in metres, angles in degrees.
 | `gc_m` | straight-line stand to threshold distance |
 | `detour_ratio` | `taxi_m / gc_m` |
 
-`<ICAO>_features.csv` — one row per (OSM parking position, designator), before
+`<ICAO>_features.csv`: one row per (OSM parking position, designator), before
 identifiers are aggregated. Keeps the unidentified stands that the matrix drops
 and carries `osm_id` / `osm_type` so a suspect matrix cell can be traced back to
 the feature that produced it. **Not committed**: it is a debugging
-artefact roughly twice the size of the matrices, regenerated alongside them,
+artifact roughly twice the size of the matrices, regenerated alongside them,
 holding nothing they do not.
 
 ## Before using these
 
 Read [`reports/taxi_routing.md`](../../../reports/taxi_routing.md) first. It
 records what resolved, what did not, and six things these numbers do not
-establish — chief among them that `stand_id` actually joins to `STAND_mvt`,
+establish: chief among them that `stand_id` actually joins to `STAND_mvt`,
 which is unverified until the challenge data lands, and that a cell with a large
 `spread_m` describes the stand its identifier names at all.

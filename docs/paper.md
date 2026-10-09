@@ -15,7 +15,11 @@ booster is untouched by it. The one figure that arrives later, the organizers'
 score, is marked where it goes. And on 3 October three candidates left on the
 table before the freeze were measured on top of the frozen model under a rule
 fixed before their figures existed; the rule adopted none, and the submitted
-file is unchanged by them (Annex J).*
+file is unchanged by them (Annex J). After the organizers' first figure, read on
+4 October, the entry ran one more week under pre-registrations written before
+the figures they govern, and the file that is scored is now v11: §8.7 gives the
+four files after v7, what each added on top of the frozen model and what the
+organizers read back for each.*
 
 Team `funny-firefly`. PRC Data Challenge 2026.
 
@@ -23,7 +27,10 @@ Team `funny-firefly`. PRC Data Challenge 2026.
 
 ## Abstract
 
-Taxi-out at ten European airports, predicted from a physical decomposition:
+This entry tests one hypothesis: that the taxiway geometry recovered from
+OpenStreetMap carries to stand–runway pairs a model has never seen, where a
+memorized pair mean has nothing to carry. Taxi-out at ten European airports is
+predicted from a physical decomposition:
 unimpeded time recovered from OpenStreetMap taxiway geometry, excess from the
 observable traffic and weather regime around a departure, and a record-quality
 term for rows whose recorded value no aircraft produced. The geometry is routed
@@ -53,8 +60,12 @@ with all ten. Read with every month of 2025 held out in turn, a design that is
 not forward in time, the same model pools to 243.7 s over the year on those
 rows, 275.9 s over every row with the term, and seven recorded taxi-outs of over
 four hours that no term covers separate the two readings from a third, 217.8 s,
-printed as a diagnostic. The organizers' figure for the submitted file, read
-back once on 4 October 2026, is given in §8.6.
+printed as a diagnostic. After the organizers' first figure the entry added,
+each under a pre-registration fixed before its figures, features built on the
+network manager's recorded off-block time, a CatBoost member, and ground events
+from open ADS-B and OPDI data fused on top of the booster at the airports where
+they help out of fold; §8.7 gives what each was worth on the training year and
+the organizers' figure for every file uploaded.
 
 ## 1. Introduction
 
@@ -71,25 +82,64 @@ alternative, anchoring only on schedules and filed estimates, is discussed in
 
 Source: `docs/modelling_notes.md`, *Leakage watch*; the rationale page.
 
-### 1.2 What this entry claims
+### 1.2 What I set out to test
 
-Three claims, each with the measurement that supports it and the split on which
-it was made:
+Every departure in the challenge data carries a stand and a runway, and the
+natural model for a problem of this shape learns what each stand–runway pair has
+cost before. That works on the pairs a model has seen. It cannot work on a pair
+it has not, and a test month always holds some: just over a tenth of the 2026
+test rows sit on pairs the training year saw a hundred times or fewer.
 
-1. Physical structure the challenge data omits (stand and runway geometry,
-   taxiway topology) can be recovered from OpenStreetMap and carries over to
-   stand–runway pairs never observed together: **+18.5 s [+16.7, +20.5]** more
-   on held-out pairs than on seen ones, and the contrast clears zero in every
-   one of the twelve months of the training year read separately (§8.5). The
-   same block is worth 2.27 s on the December forward split and nothing the seed
-   floor can see on July, and §9.1 argues that this gap between the numbers is
-   the finding rather than a disappointment (§7.2).
-2. The target's heavy tail is not what it appears to be, and the honest
-   treatment of it is a separate term stated for what it is (§4).
-3. The excess term is small once the flight plan's own delay signal is in the
-   model: 7.7 s in December and 5.8 in July against that signal's 79.3 and 57.4.
-   The queue layer that would model it further is bounded to about eight seconds
-   by a diagnostic that needs no model (§6.3, §6.4).
+My central hypothesis is that the physical structure the challenge data omits,
+the route an aircraft taxis from its stand to its runway, can be recovered from
+OpenStreetMap and carries over to stand–runway pairs a model has never seen,
+where a memorized pair mean has nothing to carry. How it would be judged was
+fixed on 2 September, before the first model was fitted: "What
+the geometry buys has to be argued from the held-out-pair split, not from this
+table" (`docs/plan.md`, the entry for Gate 1). The test is therefore a
+difference in differences: how much more the geometry block is worth on pairs
+held out of training than on pairs the model has seen.
+
+The hypothesis holds. The geometry block buys **+18.5 s [+16.7, +20.5]** more
+on held-out pairs than on seen ones, and the contrast clears zero in every one
+of the twelve months of the training year read separately (§8.5). On the
+December forward split the same block is worth 2.27 s, and on July nothing the
+seed floor can see. It is worth acknowledging that this gap is the finding
+rather than a disappointment: the test months reuse the training year's pairs,
+so a forward split cannot see what the geometry is for (§7.2, §9.1).
+
+The rest of the model was built around that claim, and each part entered
+through a test whose criterion was written down before its figures existed. Two results
+shape the paper as much as the geometry does. The target's heavy tail is not
+what it appears to be, and the honest treatment of it is a separate term stated
+for what it is (§4). The excess term is small once the flight plan's own delay
+signal is in the model: 7.7 s in December and 5.8 in July against that signal's
+79.3 and 57.4, and the queue layer that would model it further is bounded to
+about eight seconds by a diagnostic that needs no model (§6.3, §6.4).
+
+The tests under the central hypothesis, each with its dated anchor in the
+repository:
+
+| what was tested | anchor | outcome | where |
+| --- | --- | --- | --- |
+| congestion from the fields the ranking set exposes, and a queue model only if congestion proved binding | `docs/plan.md`, 2 September, Gates 2 and 3 | real and small; the queue layer bounded and not built | §6 |
+| a record-quality term, without which no RMSE means anything | `docs/plan.md`, 2 September, Gate 1 | supported on the training year and, through v8, on the test months | §4, §8.7 |
+| seed averaging, recency weighting, season columns | `reports/preregistered-2026-09-20.md` | seed averaging adopted; the other two not | §7.1.1, §7.1.2 |
+| three candidates left at the freeze | `reports/preregistered-2026-09-28.md`, `-10-03.md` | none adopted | Annex J |
+| a rule for the plan-shifted departures | `reports/preregistered-2026-10-02.md` | fixed and applied | §4, Annex I |
+| the two tail rules a liability on the 2026 rows | `reports/preregistered-2026-10-04.md`, §1 | refuted by v8's figure and withdrawn | §8.7 |
+| candidates after the first score, and the term's rows predicted per row | `reports/preregistered-2026-10-04.md`, §3 and §4; `-tails.md` | three adopted as one combination; the per-row predictor adopted | §8.7 |
+| ground events from open ADS-B and OPDI, fused on top of the booster | `reports/preregistered-2026-10-04.md`, §5, and its four amendments | adopted gated by coverage, then by airport, the second defined after the first's figures were seen | §8.7 |
+| candidates read airport by airport, and a selector among them | `reports/preregistered-2026-10-06-last-week.md`, `-airports.md` | the refitted member and the selector adopted; the per-airport models not | §8.7 |
+| a blend weight and a larger stacker | `reports/preregistered-2026-10-07-group-c.md` | neither adopted | §8.7 |
+
+Analyses with no criterion fixed in advance, the held-out year and the annexes
+built on it among them, are reported as analyses and never as tests. One test
+was decided on a score rather than on the training year. On 4 October, after
+v7's figure but on an analysis computed before it, the two tail rules were
+switched off for the 2026 rows; the organizers' figure for that file
+contradicted the judgment, and I withdrew it the same evening. §8.7 states it as the one
+exception to the rule this entry otherwise kept.
 
 ### 1.3 Prior art, and what is new here
 
@@ -144,7 +194,7 @@ on 20 September 2026 against the same test plus two more, 2025 ground coverage
 at the ten airports and a mechanism the exposed fields lack; none passes all
 three, and the README records each verdict.
 
-Source: `docs/prior_art.md`, *External data: licence positions*; README.
+Source: `docs/prior_art.md`, *External data: license positions*; README.
 
 ### 2.3 Reproducibility and the ODbL boundary
 
@@ -207,6 +257,12 @@ The file that is scored is produced by these steps, in this order, by
    ranking set it is one row.
 8. **Rounding and the clip at zero**, and the file written in the template's own
    order and integer type.
+
+Since v9 the booster of step 5 carries two more feature blocks and is blended
+with a CatBoost member, the term's rows of step 6 are predicted per row, and
+since v10 a stacker on ground events replaces the prediction on covered rows at
+the airports its gate keeps. §8.7 gives each change, and `taxiout.models`
+records each decision with its basis.
 
 Sources: `docs/modelling_notes.md`, *The model, stated as a decomposition*;
 `reports/tails.md`, *The cells* and *The prediction*; `src/taxiout/models.py`,
@@ -1246,7 +1302,9 @@ to choose a feature, a rung, a parameter or a rule, and nothing read back from
 the scorer but `usedPairs` and the score. So this section carries what the
 validation readings of §3.5 say about the model that is submitted, pooled, per
 month, per airport and per source of delay, with and without the two rules of
-§3.3, and leaves one line for the organizers' figure.*
+§3.3, and leaves one line for the organizers' figure. §8.1 to §8.6 read the
+model frozen on 27 September, the booster every later file is built on; §8.7
+reads what the files of 4 to 7 October added to it.*
 
 ### 8.1 The model that ships, and what it scores on the forward splits
 
@@ -1532,13 +1590,115 @@ to 346.8 on two of them. And one ranking row is predicted by the rule of §4 at
 52,550 s, with the two outcomes that section prices. The organizers' figure is
 one number over 344,841 rows, and the three readings above are what it is a
 mixture of: 313.169 s, read once on 4 October 2026 over the 344,841 rows the
-scorer used.
+scorer used. That figure is v7's; §8.7 gives the four files after it.
 
 Sources: `reports/congestion.md`, *What it bounds*; `reports/data_review.md`,
 *Airports and months* and *Inventory*; `reports/tails.md`, *What it touches in
 the ranking set* and *The plan-shifted departures*; `reports/monthly_seeds.md`,
 *Per month and over the year*; `reports/planshift.md`, *The one ranking
 departure*; `reports/submission-2026-10-04.md`, *The file*, a dated record.
+
+### 8.7 After the first score: the files of 4 to 7 October
+
+The organizers read back 313.169 s for v7 on 4 October. The entry then ran one
+more week, testing what the frozen model had left out under the same discipline
+as before: every change was fixed in a pre-registration before any of its
+figures existed, and each pre-registration is published in `reports/` as a
+dated record. Four more files were uploaded, each once and each when its rule
+had spoken, and nothing was read back for any of them but `usedPairs` and the
+score.
+
+| file | uploaded | what it changes from the file before | organizers' figure (s) |
+| --- | --- | --- | ---: |
+| v7 | 4 October | the model of §8.1, with both rules of §3.3 | 313.169 |
+| v8 | 4 October | both rules off: the booster predicts every row | 533.1066 |
+| v9 | 6 October | both rules restored; two feature blocks and a CatBoost member added; the term's rows predicted per row | 282.399 |
+| v10 | 7 October | ground events from open ADS-B and OPDI fused on top, gated by coverage and by airport | 272.0897 |
+| v11 | 8 October | a CatBoost member with v9's new columns; the fusion refitted on top of it | 269.1368 |
+
+**v8, and the one decision taken on a score.** The pre-registration of 4 October
+judged the two rules of §3.3 a liability on the 2026 rows, on an analysis
+computed before v7's figure existed, and v8 was built to that judgment: it
+differs from v7 only on the 384 rows the two rules take. Its figure contradicted the
+judgment, and I withdrew it the same evening in an amendment that states it as a
+choice made after a score and on it. Every later file
+substitutes both rules exactly as v7 does. No other decision in this entry reads
+a score.
+
+**v9.** Eight candidates fixed on 4 October, and a ninth on 6 October, were each
+read against the frozen rung on the legs of §7.1 and the twelve held-out months, and
+the ones that cleared alone were then read as one combination. Three cleared:
+C1, the network manager's recorded off-block time `AOBT_3_flt` and the queue of
+departures it lets the model count; C4, the flight number's own history in the
+training year; and C3b, a CatBoost member blended at equal weight. Together they
+are better than the frozen rung by 13.81 s on December, by 12.10 on July over
+all ten airports, and by 8.25 pooled over the twelve held-out months. A winter
+layer, a per-airport recalibration, a gamma-deviance member, thunderstorm flags
+from the METAR and row weights toward the target month did not clear.
+`AOBT_3_flt` had been excluded by decision since 2 September. It is published in
+the ranking set and not blanked, the features built on it are this entry's own,
+and admitting it was the owner's originality decision, taken on 6 October once
+C1 had cleared and before v9 was built. On the 383 rows the record-quality term
+covers, C6b replaces the term's single share per cell with a classifier of
+whether a row's block time sits at its schedule: pooled over the twelve months
+its mean squared error is 17,687,795 s² against the term's 23,585,522.
+
+**v10: the aircraft seen on the ground.** Two open sources of surface positions
+were matched to the departures: the adsb.lol globe history, under the Open
+Database License, and the flight events of EUROCONTROL's OPDI, used on the
+organizers' confirmation. From them come the times an aircraft is first seen on
+the ground, first moves and stops, and the same for the other departures around
+it. A stacker reads them on top of v9's out-of-fold prediction. Under its rule as
+first written the fusion was better pooled, by 3.89 s, but worse in January and
+July, the months where airports no receiver sees carry most of the error, so it
+was not adopted. Taken only on rows a source covers (G1), it is better by 7.49 s
+pooled and 9.67 on December, and holds in every month. At three airports, EGLL,
+LFPG and LIRF, it was still worse on the rows it covered. G1n keeps the fusion at
+an airport in a month only where it beat the base on that airport's covered rows
+in the other eleven months. **G1n was defined after G1's per-airport figures had
+been seen**, and its pre-registration says so. It is better than G1 by 2.40 s
+pooled and 4.75 on December, and better than the base by 9.89 pooled. The gate
+drops EGLL, LFPG and LIRF in every month and keeps the other seven; no ranking
+row at LTFM is covered, so v10 takes the fusion at six airports.
+
+**v11: one night airport by airport.** Six more candidates were read, five of
+them fitted on every split overnight. The one with a mechanism behind it carried the result: C3b's
+member had been fitted without the columns C1 and C4 added to the booster, and
+refitted with them (C11) it is better than v9's configuration by 3.03 s over the
+twelve held-out months. One booster per airport and a larger booster both failed
+July; the winter layer failed its own January leg; the booster's weight in the
+blend was chosen among four values, a selection the report discloses. A selector
+then chose, per airport and out of fold, among eight of these predictions.
+It is better than v9's configuration by 2.49 s pooled and 4.52 on December, and
+for the ranking rows it takes C11's blend at nine airports and the old members at
+LIRF. Its forward legs let months after a leg's month inform the choice, and the
+report says so. The fusion refitted on this base is better than it by 6.59 s
+pooled when gated by coverage, and G1n is better than that by 2.42; the gate is
+unchanged. The airport-by-airport approach did not beat a better shared model:
+the per-airport boosters lost July, and the selector chose the shared member
+everywhere but one airport.
+
+**Group C.** Two last candidates were fixed on 7 October before their figures:
+the booster's weight in C11's blend, and a larger stacker for the fusion.
+Neither cleared, so there is no v12 and v11 is the entry's file. Their readings
+were made in working files outside the repository; their pre-registration is
+published as a dated record with the others.
+
+**What the five figures say.** Each file was uploaded once, after its rule had
+spoken, and the board ranks a team by its best file, so none of these figures
+chose anything. Read in order, every file the rules adopted on the training year
+scored lower than the one before it, and the one file built on a judgment that
+set the training year's evidence on those rows aside scored far higher.
+
+Sources: `reports/submission-2026-10-04.md`, `reports/submission-2026-10-04-v8.md`,
+`reports/submission-2026-10-06-v9.md`, `reports/submission-2026-10-07-v10.md` and
+`reports/submission-2026-10-08-v11.md`, dated records;
+`reports/candidates-2026-10-05.md`, *Section 4's combination*; `reports/c6.md`,
+*Mean squared error, s²*; `reports/fusion.md`, *1. The fusion under §5's rule*,
+*2. G1, the fusion gated by coverage* and *3. G1n, the fusion gated by coverage
+and by airport, out of fold*; `reports/group-b.md`, *C11, the member with C1 and
+C4* and *The combination*; `reports/fusion-new-base.md`, *G1 against the new
+base* and *G1n against G1 (its rule)*.
 
 ## 9. Discussion
 
@@ -1855,6 +2015,40 @@ against `+ stand occupancy`*, *`+ destination and holidays` against `+ callsign
 prefix`* and *`+ plan differences` against `+ destination and holidays`*;
 `reports/monthly_seeds.md`, *Per airport and month: the five-seed average*.
 
+### 9.6 What held, and further work
+
+The central hypothesis held where it could be tested. The recovered geometry
+carries to stand–runway pairs the model has never seen (§8.5), and that is the
+part of the entry an identifier model cannot reproduce. It did not, and could
+not, move the test score by much: the test months reuse the training year's
+pairs, so the forward splits and the organizers' figures read the identifiers'
+strength rather than the geometry's (§9.1).
+
+The larger gains of the last week came from data the geometry does not need:
+the network manager's recorded off-block time, a second member refitted with
+it, and aircraft seen on the ground by open receivers (§8.7). The last of these
+is constrained by where the receivers listen. Over the training year's fitting
+days a source covered 0.480 of Heathrow's departures; over the ranking months it
+covered 0.923. On the rows it did cover in 2025 the fusion read 237.06 s against
+the base's 219.17, so the out-of-fold gate dropped Heathrow and v11 does not use
+the fusion there. As the coverage in the test months is nearly double that of
+the training year, the stacker was fitted on a regime the test months do not
+share, and its reading at Heathrow may reflect the sparse coverage of 2025 as
+much as the airport itself.
+
+Three directions follow from these limits. First, the fusion at Heathrow, Paris
+and Rome should be refitted on a year in which the receivers see those airports
+as densely as they see the test months, before it is read again. Secondly, the
+rows at Fiumicino whose recorded block time sits at the schedule remain a source
+of error the exposed fields do not identify well (§4); a source that records the
+actual pushback there would resolve them directly rather than by a share.
+Finally, the queueing layer this entry chose not to build was bounded at about
+eight seconds net of the plan lags (§6.4). Ground events observe directly what a
+queue model would have inferred, so that bound should be measured again with
+the fusion in place before a simulation is reconsidered.
+
+Sources: `reports/fusion.md`, *The rows* and *The gate the ranking rows take*.
+
 ## 10. Reproducing this
 
 A reader brings four things to the repository at the commit this paper is
@@ -1894,7 +2088,11 @@ added, under its pre-registration, with the booster, the residuals and every
 validation figure untouched. Last, the three candidates of Annex J were fitted
 and read, and the file was not rebuilt, because the rule adopted none. Three tags mark the
 history: `freeze-2026-10-04` the model's freeze, `model-v7-2026-10-02` the rule
-of the plan-shifted departures, and `entry-2026-10-04` the file that was scored.
+of the plan-shifted departures, and `entry-2026-10-04` the file that was scored
+first. The files of §8.7 are tagged `model-v8-2026-10-04`, `model-v9-2026-10-06`,
+`model-v10-2026-10-07` and `model-v11-2026-10-07`; `scripts/make_submission.py`
+at the last of them builds v11, and each file's record gives its digest, so a
+rebuild can be told from the scored file byte for byte.
 The organizers' announcement channels, the ranking page's news box, the
 challenge's main page and the OSN Discord channel `#prc-data-competition`, were
 read on 4 October 2026, before the upload; they carried no final-phase file and

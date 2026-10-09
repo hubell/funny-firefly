@@ -2857,6 +2857,22 @@ FROZEN_DOCUMENTS: tuple[Frozen, ...] = (
         " none inside a rule, which `tests/test_preregistered_copies.py`"
         " checks against the note where the note is on hand",
     ),
+    Frozen(
+        "reports/preregistered-2026-10-07-group-c.md",
+        "ce740bda2ca189e04a55e0017f0ef7c652f035efb622b826fcbc4624493fcf29",
+        "the pre-registration of group C: the booster's share in the blend"
+        " with the refitted member, and a larger fusion stacker, with the rule"
+        " that decides whether a v12 is built; neither cleared, so group C"
+        " built no v12. What is frozen is this published copy, at the"
+        " digest beside it. What fixed the order is the working note it was"
+        " copied from, sha256"
+        " cb0ced3de2e6fb1a0a75bb8d9a4a41af29390ecee52356df25bbbf456d1be060,"
+        " written on 7 October 2026 before any figure it governs existed. The"
+        " copy differs from it in the eight places its closing section lists,"
+        " three of them inside a rule by the owner's decision of 7 October"
+        " 2026, which `tests/test_preregistered_copies.py` checks against the"
+        " note where the note is on hand",
+    ),
 )
 
 
@@ -3608,6 +3624,46 @@ PAPER_HISTORICAL_FIGURES: tuple[PaperFigure, ...] = (
         " holds it: it is the scorer's figure over the ranking set's withheld"
         " labels, which nothing in the repository reads. The abstract points"
         " here and carries no number",
+    ),
+    PaperFigure(
+        "§8.7",
+        "313.169",
+        "the organizers' score for v7, read back once on 4 October 2026 under"
+        " the upload rule and recorded in `reports/submission-2026-10-04.md`, a dated record. No"
+        " live report holds it: it is the scorer's figure over the ranking"
+        " set's withheld labels, which nothing in the repository reads",
+    ),
+    PaperFigure(
+        "§8.7",
+        "533.1066",
+        "the organizers' score for v8, read back once on 4 October 2026 under"
+        " the upload rule and recorded in `reports/submission-2026-10-04-v8.md`, a dated record. No"
+        " live report holds it: it is the scorer's figure over the ranking"
+        " set's withheld labels, which nothing in the repository reads",
+    ),
+    PaperFigure(
+        "§8.7",
+        "282.399",
+        "the organizers' score for v9, read back once on 6 October 2026 under"
+        " the upload rule and recorded in `reports/submission-2026-10-06-v9.md`, a dated record. No"
+        " live report holds it: it is the scorer's figure over the ranking"
+        " set's withheld labels, which nothing in the repository reads",
+    ),
+    PaperFigure(
+        "§8.7",
+        "272.0897",
+        "the organizers' score for v10, read back once on 7 October 2026 under"
+        " the upload rule and recorded in `reports/submission-2026-10-07-v10.md`, a dated record. No"
+        " live report holds it: it is the scorer's figure over the ranking"
+        " set's withheld labels, which nothing in the repository reads",
+    ),
+    PaperFigure(
+        "§8.7",
+        "269.1368",
+        "the organizers' score for v11, read back once on 8 October 2026 under"
+        " the upload rule and recorded in `reports/submission-2026-10-08-v11.md`, a dated record. No"
+        " live report holds it: it is the scorer's figure over the ranking"
+        " set's withheld labels, which nothing in the repository reads",
     ),
 )
 

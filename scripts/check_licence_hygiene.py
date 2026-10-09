@@ -288,6 +288,13 @@ IDENTIFIER_EXEMPTIONS: dict[str, tuple[frozenset[str], str]] = {
         " verdict lines are the rule's words; its generator's guard exempts"
         " the same five and refuses every other identifier",
     ),
+    "reports/preregistered-2026-10-07-group-c.md": (
+        frozenset({"C10", "C11", "C14", "C15", "C16"}),
+        "the names of group C's two candidates and of the three group B"
+        " candidates its note names, which the copy keeps as the note words"
+        " them, inside its rules and out; that stands carry the same names at"
+        " some airports is a coincidence of form",
+    ),
 }
 
 
