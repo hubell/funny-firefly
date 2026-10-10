@@ -48,6 +48,7 @@ which rounds a 64-bit id. Nothing downstream joins on either.
 from __future__ import annotations
 
 import datetime as dt
+import functools
 from pathlib import Path
 
 import numpy as np
@@ -84,23 +85,15 @@ TIE_WINDOW_S = 3 * 3600  # the tie amendment's §1: within 3 hours
 GRID_ANCHOR = dt.date(2025, 1, 5)
 GRID_STEP_DAYS = 10
 
-# The months whose departures are matched: the training year and the two
-# ranking months. The lists read are those and the months either side of
-# January 2025 and July 2026, so that a flight or an inbound arrival crossing
-# a month boundary is found.
-MATCH_MONTHS: tuple[str, ...] = tuple(f"2025{m:02d}" for m in range(1, 13)) + (
-    "202601",
-    "202607",
-)
-LIST_MONTHS: tuple[str, ...] = (
-    ("202412",)
-    + MATCH_MONTHS[:12]
-    + (
-        "202601",
-        "202606",
-        "202607",
-    )
-)
+# The months whose departures are matched: the training year and the ranking
+# months, which §2 of the four-month pre-registration of 8 October 2026 reads
+# from the ranking file (``taxiout.challenge.ranking_months``) rather than
+# naming January and July 2026 (``match_months``). The lists read are those
+# and the month before each run of consecutive months (December 2024, and
+# June 2026 when the ranking months are January and July 2026), so that a
+# flight or an inbound arrival crossing into a run's first month is found
+# (``list_months``).
+TRAINING_MONTHS: tuple[str, ...] = tuple(f"2025{m:02d}" for m in range(1, 13))
 
 EVENT_COLS = [
     "O0_time",
@@ -143,8 +136,31 @@ def _month_bounds(ym: str) -> tuple[dt.date, dt.date]:
     return start, end
 
 
-def event_files(months=MATCH_MONTHS) -> list[str]:
-    """The ten-day event files whose span overlaps any of ``months``."""
+def match_months(ranking_months) -> tuple[str, ...]:
+    """The training year and the ranking months, as ``YYYYMM``, in calendar order.
+
+    ``ranking_months`` as ``taxiout.challenge.ranking_months`` reads them
+    (``YYYY-MM``); ``YYYYMM`` is taken too.
+    """
+    rank = {str(m).replace("-", "") for m in ranking_months}
+    return tuple(sorted(set(TRAINING_MONTHS) | rank))
+
+
+def list_months(match) -> tuple[str, ...]:
+    """The match months and the month before each run of consecutive ones, in order."""
+    months = sorted(set(match))
+    out = set(months)
+    prev = None
+    for ym in months:
+        p = pd.Period(f"{ym[:4]}-{ym[4:]}", "M")
+        if prev is None or p != prev + 1:
+            out.add((p - 1).strftime("%Y%m"))
+        prev = p
+    return tuple(sorted(out))
+
+
+def event_files(months) -> list[str]:
+    """The ten-day event files whose span overlaps any of ``months`` (``match_months``)."""
     spans = [_month_bounds(m) for m in months]
     lo = min(s for s, _ in spans)
     hi = max(e for _, e in spans)
@@ -161,7 +177,8 @@ def event_files(months=MATCH_MONTHS) -> list[str]:
     return out
 
 
-def list_files(months=LIST_MONTHS) -> list[str]:
+def list_files(months) -> list[str]:
+    """The monthly flight lists of ``months`` (``list_months``)."""
     return [f"flight_list_{m}.parquet" for m in months]
 
 
@@ -382,7 +399,7 @@ def reduce_file(src: Path, out: Path) -> dict:
 # step 2, the tie
 
 
-def list_rows(raw: Path, months=LIST_MONTHS):
+def list_rows(raw: Path, months):
     """Every fetched list's ids (all rows), and its rows at the ten."""
     import pyarrow.parquet as pq
 
@@ -453,9 +470,9 @@ def tie(e: pd.DataFrame, rows: pd.DataFrame) -> pd.DataFrame:
     return best.rename(columns={"id": "tied_id"})
 
 
-def tie_map(raw: Path, reduced_files: list[Path]) -> tuple[pd.DataFrame, dict]:
-    """The tie applied: event flights in no list, to their tied list ids."""
-    all_ids, rows = list_rows(raw)
+def tie_map(raw: Path, reduced_files: list[Path], months) -> tuple[pd.DataFrame, dict]:
+    """The tie applied: event flights in no list of ``months``, to their tied list ids."""
+    all_ids, rows = list_rows(raw, months)
     red = pd.concat([pd.read_parquet(f) for f in reduced_files])
     e = event_flights(red)
     e = e[~np.isin(e["flight_id"].to_numpy(), all_ids)]
@@ -580,6 +597,14 @@ def month_table(ym: str, raw: Path, reduced_files: list[Path], tie_map_frame) ->
 # step 4, the match
 
 
+@functools.lru_cache(maxsize=None)
+def _ranking_yyyymm(root: Path) -> tuple[str, ...]:
+    """The ranking file's months under ``root``, as ``YYYYMM``: the months with arrivals."""
+    from . import challenge
+
+    return tuple(m.replace("-", "") for m in challenge.ranking_months(root))
+
+
 def months_around(ym: str) -> list[str]:
     p = pd.Period(f"{ym[:4]}-{ym[4:]}", "M")
     return [q.strftime("%Y%m") for q in (p - 1, p, p + 1)]
@@ -690,7 +715,7 @@ def match_month(ym: str, root: Path, opdi: pd.DataFrame) -> tuple[pd.DataFrame, 
         [
             movements(root, mm, "ARR")
             for mm in months_around(ym)[:2]
-            if mm >= "202501" and (mm.startswith("2025") or mm in ("202601", "202607"))
+            if mm >= "202501" and (mm.startswith("2025") or mm in _ranking_yyyymm(root))
         ]
     )
     ak = keys(arr, "ADES_mvt")
@@ -752,12 +777,13 @@ def write_table(frame: pd.DataFrame, path: Path) -> None:
 
 
 __all__ = [
-    "LIST_MONTHS",
-    "MATCH_MONTHS",
     "TEN",
+    "TRAINING_MONTHS",
     "event_files",
     "list_files",
+    "list_months",
     "match_month",
+    "match_months",
     "month_table",
     "reduce_file",
     "tie",

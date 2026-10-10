@@ -403,6 +403,49 @@ def test_a_report_whose_declared_input_changed_fails_check_8(monkeypatch, tmp_pa
     assert any("has changed since the report was written" in line for line in lines)
 
 
+def test_a_replaced_input_kept_in_the_archive_verifies(monkeypatch, tmp_path):
+    """The final phase's case: the ranking file replaced, the old one kept beside it."""
+    (tmp_path / "reports").mkdir()
+    challenge = tmp_path / "data" / "challenge"
+    challenge.mkdir(parents=True)
+    ranking = challenge / "ranking.parquet"
+    ranking.write_bytes(b"the ranking file of 4 September")
+    footer = report_inputs_footer(tmp_path, [ranking])
+    (tmp_path / "reports" / "r.md").write_text("\n".join(footer), encoding="utf-8")
+    monkeypatch.setattr(cp, "REPO", tmp_path)
+    monkeypatch.setattr(cp, "REPORT_INPUTS_DECLARED", (("scripts/g.py", "reports/r.md"),))
+    # check 8 also lists the reports carrying no footer, which reads the
+    # tracked tree; this constructed one is not a repository.
+    monkeypatch.setattr(cp, "report_writers", lambda: {"reports/r.md": {"scripts/g.py"}})
+
+    # The final phase's file in its place, and nothing kept: stale.
+    ranking.write_bytes(b"the final phase's ranking file")
+    ok, lines = cp.check_report_inputs(strict=True)
+    assert not ok
+    assert any("has changed since the report was written" in line for line in lines)
+
+    # The old file kept, byte for byte, in the archive beside it: verified there.
+    (challenge / cp.ARCHIVE).mkdir()
+    (challenge / cp.ARCHIVE / "ranking.parquet").write_bytes(
+        b"the ranking file of 4 September"
+    )
+    ok, lines = cp.check_report_inputs(strict=True)
+    assert ok, lines
+    assert any(f"1 verified in {cp.ARCHIVE}/" in line for line in lines)
+
+    # A kept copy that is not what the report read does not verify it.
+    (challenge / cp.ARCHIVE / "ranking.parquet").write_bytes(b"some other file")
+    ok, lines = cp.check_report_inputs(strict=True)
+    assert not ok
+    assert any("STALE" in line for line in lines)
+
+    # The file at its path still as read: verified there, the archive not consulted.
+    ranking.write_bytes(b"the ranking file of 4 September")
+    ok, lines = cp.check_report_inputs(strict=True)
+    assert ok, lines
+    assert not any(cp.ARCHIVE in line for line in lines)
+
+
 def test_an_absent_input_reads_unverifiable_and_never_verified(monkeypatch, tmp_path):
     """The clean-checkout case: data/ is gitignored, so a digest cannot be had."""
     (tmp_path / "reports").mkdir()

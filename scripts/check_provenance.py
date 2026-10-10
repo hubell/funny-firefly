@@ -718,11 +718,27 @@ def check_prose(literals: tuple[Literal, ...]) -> tuple[bool, list[str]]:
     return (not hits), lines
 
 
+# Where a declared input that has moved on is kept as the report read it. The
+# organizers replaced the ranking file and the template of 4 September with the
+# final phase's on 8 October; the reports that declare the old files stay dated
+# records of them, and so do the two that declare inputs rebuilt from the new
+# ones (OPDI's matched tables of January and July 2026, the fusion's tables).
+# Each old file is kept, byte for byte, in a directory of this name beside it.
+ARCHIVE = "archive_2026-09-04"
+
+
+def archived(path: Path) -> Path:
+    """The copy of ``path`` kept in the archive directory beside it."""
+    return path.parent / ARCHIVE / path.name
+
+
 def check_report_inputs(strict: bool) -> tuple[bool, list[str]]:
     """Check 8: every declared report input still has the digest it was read at.
 
     Three outcomes, never collapsed into two. **verified**: present and
-    matching. **stale**: present and different, which fails. **unverifiable**:
+    matching, at its path or, where the file at its path has moved on, in the
+    ``ARCHIVE`` directory beside it, which the line counts apart. **stale**:
+    present and different, in both places, which fails. **unverifiable**:
     absent, the ordinary case on a clean checkout because the data this
     repository does not redistribute is not there, printed as unverifiable and
     never passed off as verified, and failed under ``--strict``.
@@ -754,8 +770,14 @@ def check_report_inputs(strict: bool) -> tuple[bool, list[str]]:
             continue
         verified = 0
         by_elements = 0
+        in_archive = 0
         for rel, was, of_elements in declared:
             now = elements_digest(REPO / rel) if of_elements else digest(REPO / rel)
+            if not of_elements and was not in ("absent", now):
+                kept = digest(archived(REPO / rel))
+                if kept == was:
+                    now = kept
+                    in_archive += 1
             if now == "absent":
                 unverifiable.append(f"{report}: {rel} is absent")
             elif was == "absent":
@@ -777,6 +799,7 @@ def check_report_inputs(strict: bool) -> tuple[bool, list[str]]:
                 if by_elements
                 else ""
             )
+            + (f"; {in_archive} verified in {ARCHIVE}/" if in_archive else "")
         )
     lines += [f"        STALE  {s}" for s in stale]
     lines += [f"        unverifiable: {u}" for u in unverifiable]

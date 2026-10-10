@@ -242,3 +242,25 @@ def test_weather_sources_are_the_subjects_row_and_archive_fields_only():
                 assert column in FIELDS, (name, src)
             else:
                 assert column in ("MVT_TIME_UTC_mvt", "ADEP_mvt"), (name, src)
+
+
+def test_the_fetch_asks_for_the_training_year_and_each_ranking_month():
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    import fetch_metar as fm
+
+    # January and July 2026 give the periods they were named with
+    assert fm.periods(("2026-07", "2026-01")) == (
+        ("2025-01-01", "2026-01-01"),
+        ("2026-01-01", "2026-02-01"),
+        ("2026-07-01", "2026-08-01"),
+    )
+    # one period per month, and December runs into the next year
+    assert fm.periods(("2026-01", "2026-02", "2026-06", "2026-07", "2026-12"))[2:] == (
+        ("2026-02-01", "2026-03-01"),
+        ("2026-06-01", "2026-07-01"),
+        ("2026-07-01", "2026-08-01"),
+        ("2026-12-01", "2027-01-01"),
+    )

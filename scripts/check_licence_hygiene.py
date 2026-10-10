@@ -295,6 +295,18 @@ IDENTIFIER_EXEMPTIONS: dict[str, tuple[frozenset[str], str]] = {
         " them, inside its rules and out; that stands carry the same names at"
         " some airports is a coincidence of form",
     ),
+    "reports/preregistered-2026-10-09-jj-check.md": (
+        frozenset({"C18"}),
+        "the name of a candidate its note names, which the copy keeps as the"
+        " note words it; that a stand carries the same name at some airport is"
+        " a coincidence of form",
+    ),
+    "reports/preregistered-2026-10-09-records.md": (
+        frozenset({"C18"}),
+        "the name of a candidate its note names, which the copy keeps as the"
+        " note words it; that a stand carries the same name at some airport is"
+        " a coincidence of form",
+    ),
 }
 
 

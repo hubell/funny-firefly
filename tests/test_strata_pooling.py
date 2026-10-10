@@ -126,6 +126,23 @@ def test_the_ranking_mix_matches_the_report_it_was_taken_from():
     assert counts == m.RANKING_MIX
 
 
+def test_the_ranking_departures_are_the_archived_file_of_4_september():
+    """``RANKING_MIX`` and its 344,841 rows count the ranking file of 4 September.
+
+    The final phase replaced that file on 8 October with one of four months,
+    and the reports these counts come from are dated records of the old one,
+    which is kept, byte for byte, in ``data/challenge/archive_2026-09-04/``
+    (``scripts/check_provenance.py``'s ``ARCHIVE``). So the count is read from
+    the archived file, not from whatever ranking file is current.
+    """
+    path = REPO / "data" / "challenge" / "archive_2026-09-04" / "ranking.parquet"
+    if not path.exists():
+        pytest.skip("the archived ranking file of 4 September is not on hand")
+    pq = pytest.importorskip("pyarrow.parquet")
+    phase = pq.read_table(path, columns=["PHASE_mvt"]).column("PHASE_mvt")
+    assert sum(1 for v in phase.to_pylist() if v == "DEP") == RANKING_DEPARTURES
+
+
 def test_the_ranking_mix_is_the_row_counts_its_source_report_prints():
     """It is an external constant, so it must at least be well formed.
 

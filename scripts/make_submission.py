@@ -78,9 +78,29 @@ decision, the choice per airport, each part's prediction sha256 and the new
 base's. The blend weight is a selection among four weights, and the selector's
 forward legs let later months inform its choice; both reports say so.
 
+**The fusion's days.** From v12 the fusion is C17's (§1 of
+``reports/preregistered-2026-10-08-all-days.md``, adopted): fitted on every
+day of 2025 with an adsb.lol table, 348 days. The fitting table ``make
+fusion-tables`` writes must hold exactly those days, by count and by the
+sha256 of their list (``taxiout.fusion.check_fit_days``), or nothing is
+written.
+
+**The window.** Where ``taxiout.models.WINDOW_APPLIED`` is True, every ranking
+row with ``LOBT_flt`` present has its written value clipped to the flight-plan
+window, ``taxiout.window`` (§1 of
+``reports/preregistered-2026-10-09-records.md``, measured in
+``reports/window.md``), after every other part, the rules and the fusion
+included; the manifest counts the rows it moved per airport and month.
+
 Beside the file it writes ``<team>_v<n>.booster.parquet``: the model's
 prediction for every ranking row before any substitution, in the template's
-order, as written (``TAXITIME_SEC_mvt``) and unrounded (``prediction``).
+order, as written (``TAXITIME_SEC_mvt``) and unrounded (``prediction``); and
+``<team>_v<n>.parts.parquet``, per ranking row what each part gave: the
+booster, the base, the rule that took the row with its weight, lag, rest mean
+and its cell's fitting rows, the fusion where it took the row, the value
+before the window and after it. ``scripts/check_final.py`` audits a file from
+it. ``--final`` names the four files ``<team>_final.*`` in place of
+``<team>_v<n>.*``, the final phase's one file.
 
 The file goes to ``data/submissions/<team>_v<n>.parquet``, with a manifest
 beside it at ``<team>_v<n>.manifest.json``, and the script checks with git
@@ -123,6 +143,7 @@ Usage
 -----
     python scripts/make_submission.py --team myteam
     python scripts/make_submission.py --team myteam --version 3
+    python scripts/make_submission.py --team myteam --final
     python scripts/make_submission.py --december-check
 """
 
@@ -183,6 +204,7 @@ from taxiout.models import (  # noqa: E402
     Booster,
     SEED_AVERAGE_ADOPTED,
     TAIL_RULES_SUBSTITUTED,
+    WINDOW_APPLIED,
     SeedAverage,
     booster_backend,
     fit_rows as fitting_rows,
@@ -326,6 +348,15 @@ def sha256(path: Path) -> str:
         for block in iter(lambda: fh.read(1 << 20), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+def month_of(frame) -> np.ndarray:
+    """``YYYY-MM`` of each row's take-off, UTC."""
+    return (
+        pd.to_datetime(frame["MVT_TIME_UTC_mvt"], utc=True)
+        .dt.strftime("%Y-%m")
+        .to_numpy()
+    )
 
 
 def next_version(team: str) -> int:
@@ -944,7 +975,7 @@ def fusion_stage(
     fit_path, rank_path = FUSION / "fit_2025.parquet", FUSION / "rank_2026.parquet"
     for p in (fit_path, rank_path):
         if not p.exists():
-            raise SystemExit(f"no {p.relative_to(REPO)}; make fusion")
+            raise SystemExit(f"no {p.relative_to(REPO)}; make fusion-tables")
     inputs = {str(p.relative_to(REPO)): sha256(p) for p in (fit_path, rank_path)}
     records = group_b.NEW_BASE_RECORDS if new_base else fusion.BASE_RECORDS
     for name in records:
@@ -953,9 +984,13 @@ def fusion_stage(
     print("fitting the fusion ...")
     t0 = time.time()
     base_2025 = group_b.read_new_base(BOARD) if new_base else fusion.read_base(BOARD)
-    frame = fusion.fit_frame(
-        pd.read_parquet(fit_path), base_2025, plan_shift_threshold_s()
-    )
+    fit_table = pd.read_parquet(fit_path)
+    try:
+        days_sha256 = fusion.check_fit_days(fit_table["day"].unique())
+    except RuntimeError as err:
+        raise SystemExit(f"{fit_path.relative_to(REPO)}: {err}") from None
+    frame = fusion.fit_frame(fit_table, base_2025, plan_shift_threshold_s())
+    del fit_table
     fits: dict = {}
     oof = fusion.leave_one_month_out(frame, log=fits)
     gate = fusion.gate_all(oof)
@@ -997,6 +1032,8 @@ def fusion_stage(
             "model_sha256": sha256(model_path),
             "model_file": model_path.name,
             "fit_rows": int(frame["fit_row"].sum()),
+            "fit_days": fusion.FIT_DAYS,
+            "fit_days_sha256": days_sha256,
             "out_of_fold_pred_sha256": {m: f["pred_sha256"] for m, f in fits.items()},
             "inputs_sha256": inputs,
             "base_booster_sha256": FUSION_BASE_BOOSTER_SHA256,
@@ -1011,6 +1048,65 @@ def fusion_stage(
     }
 
 
+def window_stage(rank, values: np.ndarray) -> dict:
+    """W on the written values: the clip, and what the manifest records of it.
+
+    ``values`` are the file's values once every other part has taken its rows,
+    floored and rounded; ``taxiout.window.apply`` clips them to the window
+    where ``LOBT_flt`` is present, floors and rounds again, and leaves every
+    other row exactly as it was.
+    """
+    from taxiout import window
+
+    lag = window.lag_s(rank)
+    before = np.asarray(values, dtype=float)
+    after, moved = window.apply(before, lag)
+    d2 = (after - before) ** 2
+    month = pd.to_datetime(rank["MVT_TIME_UTC_mvt"], utc=True).dt.strftime("%Y-%m")
+    by = pd.DataFrame(
+        {
+            "airport": rank["ADEP_mvt"].astype(str).to_numpy(),
+            "month": month.to_numpy(),
+            "moved": moved,
+            "d2": d2,
+        }
+    )
+    per = by.groupby(["airport", "month"])["moved"].sum()
+    return {
+        "values": after,
+        "moved": moved,
+        "lag": lag,
+        "record": {
+            "decision": "WINDOW_APPLIED",
+            "w_star_s": window.W_STAR_S,
+            "redraw_s": window.REDRAW_S,
+            "w_prime_s": window.w_prime_s(),
+            "rows_with_lobt": int(np.isfinite(lag).sum()),
+            "rows_moved": int(moved.sum()),
+            "rows_moved_by_airport_month": {
+                f"{a} {m}": int(n) for (a, m), n in per.items() if n
+            },
+            "rows_by_month": {m: int(n) for m, n in by.groupby("month").size().items()},
+            "sum_d2_by_month": {
+                m: float(v) for m, v in by.groupby("month")["d2"].sum().items()
+            },
+        },
+    }
+
+
+def write_parts_file(path: Path, rank, columns: dict) -> Path:
+    """Per ranking row what each part gave, in the ranking frame's order, by identifier."""
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    table = pa.table(
+        {ID: pa.array(rank[ID].to_numpy(dtype=float), type=pa.float64())}
+        | {k: pa.array(np.asarray(v)) for k, v in columns.items()}
+    )
+    pq.write_table(table, path)
+    return path
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--team", help="team name, as the organisers hold it")
@@ -1019,6 +1115,12 @@ def main() -> int:
         type=int,
         default=None,
         help="submission version; defaults to one past the highest written",
+    )
+    ap.add_argument(
+        "--final",
+        action="store_true",
+        help="name the files <team>_final.*, the final phase's one file, in place"
+        " of a version",
     )
     ap.add_argument(
         "--overwrite",
@@ -1034,6 +1136,8 @@ def main() -> int:
     args = ap.parse_args()
     if not args.december_check and not args.team:
         ap.error("--team is required unless --december-check")
+    if args.final and args.version is not None:
+        ap.error("--final names the final file; it takes no --version")
 
     if not (DATA / "ranking.parquet").exists():
         print(f"no challenge data under {DATA}; nothing to submit", file=sys.stderr)
@@ -1061,13 +1165,17 @@ def main() -> int:
         return 1
     submission, tails = modules
 
-    version = args.version or next_version(args.team)
-    path = SUBMISSIONS / f"{args.team}_v{version}.parquet"
-    manifest = SUBMISSIONS / f"{args.team}_v{version}.manifest.json"
-    booster_path = SUBMISSIONS / f"{args.team}_v{version}.booster.parquet"
-    fusion_path = SUBMISSIONS / f"{args.team}_v{version}.fusion.txt"
+    if args.final:
+        stem = f"{args.team}_final"
+    else:
+        stem = f"{args.team}_v{args.version or next_version(args.team)}"
+    path = SUBMISSIONS / f"{stem}.parquet"
+    manifest = SUBMISSIONS / f"{stem}.manifest.json"
+    booster_path = SUBMISSIONS / f"{stem}.booster.parquet"
+    fusion_path = SUBMISSIONS / f"{stem}.fusion.txt"
+    parts_path = SUBMISSIONS / f"{stem}.parts.parquet"
     submission.check_filename(path)
-    for p in (path, manifest, booster_path, fusion_path):
+    for p in (path, manifest, booster_path, fusion_path, parts_path):
         if not is_ignored(p):
             print(
                 f"refusing to write {p.relative_to(REPO)}: git does not ignore it, and "
@@ -1220,9 +1328,67 @@ def main() -> int:
         )
         values = with_fusion(values, fused["prediction"].to_numpy(), fused["applied"])
         print(f"  the fusion takes {int(fused['applied'].sum()):,} rows")
+    before_window = values
+    windowed = None
+    if WINDOW_APPLIED:
+        windowed = window_stage(rank, values)
+        values = windowed["values"]
+        print(
+            f"  the window moves {int(windowed['moved'].sum()):,} of"
+            f" {windowed['record']['rows_with_lobt']:,} rows with a flight plan"
+        )
     out = pd.DataFrame({ID: rank[ID].to_numpy(), TARGET: values})
     written = submission.write(out, template, path, overwrite=args.overwrite)
     print(f"wrote {written.relative_to(REPO)} ({written.stat().st_size:,} bytes)")
+
+    # Per row, what each part gave: read by scripts/check_final.py's audit.
+    c6_model = got["c6_model"]
+    rule = np.where(
+        tail.notna().to_numpy(),
+        "c6b" if RECORD_QUALITY_FROM_C6B else "term",
+        np.where(shifted.to_numpy(), "plan_shift", ""),
+    )
+    rule_value = np.where(
+        tail.notna().to_numpy(),
+        record_quality.to_numpy(dtype=float),
+        np.where(shifted.to_numpy(), plan_shift.to_numpy(dtype=float), np.nan),
+    )
+    weights = plan_shift_model.weights(rank)
+    weights.loc[~shifted.to_numpy()] = np.nan
+    if c6_model is not None:
+        term_rows = c6_model.weights(rank)
+        weights = term_rows.combine_first(weights)[term_rows.columns]
+    parts_columns = {
+        "ADEP_mvt": rank["ADEP_mvt"].astype(str).to_numpy(),
+        "month": month_of(rank),
+        "booster": physical.to_numpy(dtype=float),
+        "base": base.to_numpy(dtype=float),
+        "rule": rule.astype(str),
+        "rule_value": rule_value,
+        **{
+            c: weights[c].to_numpy(dtype=float)
+            if c in weights
+            else np.full(len(rank), np.nan)
+            for c in ("weight", "lag_s", "rest_mean_s", "cell_rows", "sub_cell_rows")
+        },
+        "submitted": pred.to_numpy(dtype=float),
+        "fusion_taken": np.zeros(len(rank), bool) if fused is None else fused["applied"],
+        "fusion_value": np.full(len(rank), np.nan)
+        if fused is None
+        else np.where(
+            fused["applied"], fused["prediction"].to_numpy(dtype=float), np.nan
+        ),
+        "before_window": np.asarray(before_window, dtype=float),
+        "window_lag_s": np.full(len(rank), np.nan)
+        if windowed is None
+        else windowed["lag"],
+        "window_moved": np.zeros(len(rank), bool)
+        if windowed is None
+        else windowed["moved"],
+        "written": np.asarray(values, dtype=float),
+    }
+    parts_file = write_parts_file(parts_path, rank, parts_columns)
+    print(f"wrote {parts_file.relative_to(REPO)} ({parts_file.stat().st_size:,} bytes)")
 
     # Written only once the file has read back and validated against the
     # template, so a manifest never describes a file that was refused.
@@ -1232,9 +1398,9 @@ def main() -> int:
     # and which decides whether ``k`` moves with the route: the training rows'
     # out-of-fold encoding and the ranking rows' lookup each carry their own.
     sides = {"training": encoded_train, "ranking": encoder} if encoder is not None else {}
-    c6_model = got["c6_model"]
     record = {
         "file": written.name,
+        "file_form": "final" if args.final else "version",
         "git_revision": git_revision,
         "git_tree_clean": git_clean,
         "booster_backend": backend,
@@ -1299,6 +1465,10 @@ def main() -> int:
         "fusion": None if fused is None else fused["record"],
         "group_b_applied": GROUP_B_APPLIED,
         "group_b": None if grouped is None else grouped["record"],
+        "window_applied": WINDOW_APPLIED,
+        "window": None if windowed is None else windowed["record"],
+        "parts_file": parts_file.name,
+        "parts_file_sha256": sha256(parts_file),
         "written_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "scorer_used_pairs": None,
         "scorer_score": None,

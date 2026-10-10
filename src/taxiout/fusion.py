@@ -11,9 +11,11 @@ from this module.
 
 **Rows.** One per departure, keyed on ``MVT_ID_mvt``: every departure of each
 fitting day (the UTC date of ``MVT_TIME_UTC_mvt``) and every ranking
-departure. Fitting days: the 2025 days of §5 (every second day from
-1 January) that have an adsb.lol table, less 2025-01-15 and 2025-07-16, the
-two training pilot days the after-gate amendment leaves out of every fit.
+departure. Fitting days: every day of 2025 that has an adsb.lol table (§1 of
+``reports/preregistered-2026-10-08-all-days.md``, C17, adopted; §5 read every
+second day from 1 January), less 2025-01-15 and 2025-07-16, the two training
+pilot days the after-gate amendment leaves out of every fit: 348 days, pinned
+by ``FIT_DAYS`` and ``FIT_DAYS_SHA256``.
 ``rules_row`` is 1 where the record-quality term or the plan-shifted class
 covers the row, both fitted on the whole training year (``taxiout.tails``).
 
@@ -104,14 +106,26 @@ PARAMS = {
     "seed": SEED,
 }
 
-# §5: every second day of 2025 from 1 January, and every day of January and
-# July 2026.
+# Every day of 2025 from 1 January (§1 of the all-days pre-registration of
+# 8 October 2026, C17, adopted; §5 read every second day), and every day of the
+# ranking months, which §2 of the four-month pre-registration of 8 October 2026
+# reads from the ranking file (``taxiout.challenge.ranking_months``) rather
+# than naming January and July 2026.
 ADSB_FIRST_2025 = dt.date(2025, 1, 1)
-ADSB_STEP_DAYS = 2
-RANKING_MONTHS: tuple[tuple[int, int], ...] = ((2026, 1), (2026, 7))
+ADSB_STEP_DAYS = 1
 # The after-gate amendment §1: the two training pilot days informed it and
 # are left out of every fit and every reading.
 EXCLUDED_FIT_DAYS: tuple[str, ...] = ("2025-01-15", "2025-07-16")
+# C17's fitting days: every 2025 day with a table by 9 October 2026, 06:00 UTC,
+# less the two pilot days. 365 dates less those two, the seven days of §5 that
+# exist only as ``prod-0tmp`` releases (29 May to 10 June, every second day),
+# the seven other days of 28 May to 9 June, which have no ``prod`` release
+# either, and 15 October, whose release carries a damaged member. The count and the sha256 of the
+# sorted list, one ISO date per line, are the days C17's model was fitted on;
+# ``check_fit_days`` refuses any other set, so a cache missing a day or holding
+# one more cannot fit a different model under C17's name.
+FIT_DAYS = 348
+FIT_DAYS_SHA256 = "17898a86cb2df412febda961620fd2b3eb86b5b961d5f577d41fbf62f67b9764"
 
 FEATURE_COLS = [
     "MVT_ID_mvt",
@@ -274,19 +288,41 @@ BASE_RECORDS: dict[str, tuple[int, str]] = {
 }
 
 
-def adsb_days() -> list[str]:
-    """§5's days, in calendar order: 183 of 2025 and 62 of 2026."""
+def adsb_days(ranking_months) -> list[str]:
+    """The days, in calendar order: every day of 2025, then every day of each ranking month.
+
+    ``ranking_months`` are ``YYYY-MM`` strings, as ``taxiout.challenge.ranking_months``
+    reads them from the ranking file.
+    """
     out = []
     d = ADSB_FIRST_2025
     while d.year == ADSB_FIRST_2025.year:
         out.append(d.isoformat())
         d += dt.timedelta(days=ADSB_STEP_DAYS)
-    for y, m in RANKING_MONTHS:
-        d = dt.date(y, m, 1)
+    for ym in sorted(set(ranking_months)):
+        d = dt.date.fromisoformat(f"{ym}-01")
+        m = d.month
         while d.month == m:
             out.append(d.isoformat())
             d += dt.timedelta(days=1)
     return out
+
+
+def fit_days_sha256(days) -> str:
+    """The sha256 of the sorted days, one ISO date per line, each line ended."""
+    return hashlib.sha256("".join(f"{d}\n" for d in sorted(days)).encode()).hexdigest()
+
+
+def check_fit_days(days) -> str:
+    """C17's fitting days, or a refusal: their count and the digest of the list."""
+    days = sorted(set(days))
+    got = fit_days_sha256(days)
+    if len(days) != FIT_DAYS or got != FIT_DAYS_SHA256:
+        raise RuntimeError(
+            f"{len(days)} fitting days, sha256 {got}; C17's are {FIT_DAYS},"
+            f" {FIT_DAYS_SHA256}"
+        )
+    return got
 
 
 def sha256_file(path: Path) -> str:
@@ -529,8 +565,8 @@ def feature_tables(challenge: Path, adsb_dir: Path, matched_dir: Path) -> dict:
     """
     import pyarrow.parquet as pq
 
-    from .challenge import movement_files
-    from .opdi import MATCH_MONTHS
+    from .challenge import movement_files, ranking_months
+    from .opdi import match_months
     from .tails import FIT_ONLY_INPUTS, PLAN_SHIFT_PREDICT_INPUTS, PREDICT_INPUTS
 
     files = movement_files(challenge)
@@ -567,14 +603,14 @@ def feature_tables(challenge: Path, adsb_dir: Path, matched_dir: Path) -> dict:
     matched = pd.concat(
         [
             pq.read_table(matched_dir / f"{ym}.parquet", columns=OPDI_READ).to_pandas()
-            for ym in MATCH_MONTHS
+            for ym in match_months(ranking_months(challenge))
         ],
         ignore_index=True,
     )
     if not matched["MVT_ID_mvt"].is_unique:
         raise RuntimeError("MVT_ID_mvt repeats across the matched months")
 
-    days = adsb_days()
+    days = adsb_days(ranking_months(challenge))
     have = {d for d in days if (adsb_dir / f"{d}.parquet").exists()}
     fit_days = [
         d
@@ -947,8 +983,10 @@ __all__ = [
     "applied_rows",
     "apply_gate",
     "build_rows",
+    "check_fit_days",
     "covered",
     "feature_tables",
+    "fit_days_sha256",
     "fit_frame",
     "gate_all",
     "gate_out_of_fold",

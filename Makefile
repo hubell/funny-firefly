@@ -9,8 +9,8 @@ PYTHON ?= python3
         geometry-gaps congestion occupancy residual headroom baseline transfer sweep \
         preregistered metar-history monthly monthly-fit monthly-ladder monthly-ladder-fit \
         monthly-seeds monthly-seeds-fit monthly-pairs monthly-pairs-fit planshift c6 \
-        istanbul fiumicino submission paper-docx test lint licence-check provenance \
-        adsb opdi fusion group-b fusion-new-base clean help
+        istanbul fiumicino submission final paper-docx test lint licence-check provenance \
+        adsb opdi fusion fusion-tables group-b fusion-new-base window clean help
 
 help:
 	@echo "make data     fetch and cache OSM geometry      -> data/raw/<ICAO>.json.gz"
@@ -36,15 +36,18 @@ help:
 	@echo "make monthly-pairs   the geometry claim by month  -> reports/monthly_pairs.md"
 	@echo "make planshift     the plan-shifted departures   -> reports/planshift.md"
 	@echo "make c6           the term's rows from the schedule -> reports/c6.md"
+	@echo "make window       the flight-plan window on 2025  -> reports/window.md"
 	@echo "make adsb         verify the adsb.lol event tables -> data/raw/adsb/"
 	@echo "make opdi         fetch OPDI and match it          -> data/interim/opdi/matched/"
 	@echo "make fusion       the fusion model and its gates   -> reports/fusion.md"
+	@echo "make fusion-tables  the fusion's two feature tables -> data/processed/fusion/"
 	@echo "make group-b      group B of the last week, read   -> reports/group-b.md"
 	@echo "make fusion-new-base  the fusion on group B's base -> reports/fusion-new-base.md"
 	@echo "make istanbul      Istanbul's February and January 2026 -> reports/istanbul.md"
 	@echo "make fiumicino     the last three blocks at Fiumicino -> reports/fiumicino.md"
 	@echo "make paper-docx    the paper as a Word document  -> docs/paper.docx"
 	@echo "make submission TEAM=<name>  fit and write     -> data/submissions/<name>_v<n>.parquet"
+	@echo "make final TEAM=<name>  the final phase's file  -> data/submissions/<name>_final.parquet"
 	@echo "make test     run the unit tests                (no network, no challenge data)"
 	@echo "make lint     ruff check and format check"
 	@echo "make licence-check  verify no OSM-derived content is tracked"
@@ -112,7 +115,8 @@ data:
 	$(PYTHON) scripts/fetch_osm.py
 
 # Network. The Iowa State Mesonet's ASOS/METAR archive, for the training year
-# and the two ranking months at every airport; the request and the terms are
+# and each month the ranking file contains, at every airport (reads the ranking
+# file's months); the request and the terms are
 # recorded in data/raw/metar/MANIFEST.json. Resumable per station and period.
 metar:
 	$(PYTHON) scripts/fetch_metar.py
@@ -293,10 +297,17 @@ planshift:
 c6:
 	$(PYTHON) scripts/report_c6.py
 
-# adsb.lol's per-leg event tables for section 5's 245 days, under ODbL 1.0, in
-# data/raw/adsb/ with a manifest and the notice. With the cache in place this
+# W under section 1 of reports/preregistered-2026-10-09-records.md, from the
+# training files alone: the largest gap between a departure's off-block time
+# and its flight plan's, the wall below it, per airport. No fit.
+window:
+	$(PYTHON) scripts/report_window.py
+
+# adsb.lol's per-leg event tables for every day of 2025 and every day of each
+# ranking month (485 for the four months of the final phase), under ODbL 1.0,
+# in data/raw/adsb/ with a manifest and the notice. With the cache in place this
 # verifies it against the manifest and touches no network; fetching the days
-# from scratch is `python scripts/fetch_adsb.py --all`, about 750 GB of
+# from scratch is `python scripts/fetch_adsb.py --all`, more than a terabyte of
 # releases, set by the download.
 adsb:
 	$(PYTHON) scripts/fetch_adsb.py --verify
@@ -313,6 +324,11 @@ opdi:
 # data/processed/fusion/, twelve fits, and reports/fusion.md.
 fusion:
 	$(PYTHON) scripts/report_fusion.py
+
+# The same two feature tables alone, checked against C17's fitting days: what
+# make submission reads, without the fits or the report. A few minutes.
+fusion-tables:
+	$(PYTHON) scripts/report_fusion.py --tables-only
 
 # From the records of group B's fits and the configuration's under
 # data/processed/candidates_board/: every derived prediction formed again and
@@ -344,6 +360,12 @@ fiumicino:
 submission:
 	@test -n "$(TEAM)" || { echo "usage: make submission TEAM=<name>"; exit 1; }
 	$(PYTHON) scripts/make_submission.py --team $(TEAM)
+
+# The final phase's one file, <name>_final.parquet, built as submission builds a
+# version; then scripts/check_final.py audits it against its control.
+final:
+	@test -n "$(TEAM)" || { echo "usage: make final TEAM=<name>"; exit 1; }
+	$(PYTHON) scripts/make_submission.py --team $(TEAM) --final
 
 # The paper as a Word document, tracked beside docs/paper.md and regenerated
 # whenever the paper moves. With pandoc installed: pandoc's GFM reader and its

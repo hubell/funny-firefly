@@ -2,8 +2,11 @@
 # SPDX-License-Identifier: GPL-3.0-only
 """Fetch adsb.lol's globe history and cache the per-leg event tables.
 
-The days are §5's: every second day of 2025 from 1 January, and every day of
-January and July 2026, 245 in all (``taxiout.fusion.adsb_days``). For each, the
+The days are every day of 2025 (§1 of
+``reports/preregistered-2026-10-08-all-days.md``; §5 read every second day)
+and every day of each month the ranking file contains
+(``taxiout.fusion.adsb_days`` of ``taxiout.challenge.ranking_months``), 485 in
+all for the four months of the final phase. For each, the
 ``prod`` release is fetched from ``adsblol/globe_history_<YYYY>`` on GitHub,
 streamed through ``taxiout.adsb``'s extraction, and the day's table written to
 ``data/raw/adsb/<day>.parquet``; the release parts are deleted once the table
@@ -12,7 +15,10 @@ and a day of 2026 about 3.6 GB; the fetch, not the parse, sets the time.
 
 Seven days of 2025 (29 and 31 May, and 2 to 10 June every second day) exist
 only as ``prod-0tmp`` releases, which carry no digests and are not §5's
-``prod`` variant. They are left out, with that reason, in the manifest.
+``prod`` variant. They are left out, with that reason, in the manifest. Seven
+more, 28 May to 9 June every second day, have no ``prod`` release at all, and
+15 October's release carries a damaged member, on which the extraction fails
+as a whole; the runner's log gives each reason and the manifest reads it.
 
 ``data/raw/adsb/MANIFEST.json`` records each day's table sha256 and rows, or
 the reason it has none, and the release it was built from;
@@ -23,7 +29,7 @@ the deposit beside this repository.
 
 ``--verify`` reads the cache against the manifest, every table's sha256, rows
 and notice, and touches no network: what ``make adsb`` does once the cache is
-there. Reads no challenge data.
+there. Reads the ranking file's months and no other challenge data.
 
 Contains data from adsb.lol, available under the Open Database License (ODbL) 1.0.
 
@@ -47,8 +53,10 @@ REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / "src"))
 
 from taxiout import adsb  # noqa: E402
+from taxiout.challenge import ranking_months  # noqa: E402
 from taxiout.fusion import adsb_days  # noqa: E402
 
+DATA = REPO / "data" / "challenge"
 CACHE = REPO / "data" / "raw" / "adsb"
 PARTS = REPO / "data" / "interim" / "adsb_parts"
 MANIFEST = CACHE / "MANIFEST.json"
@@ -181,7 +189,7 @@ def main() -> int:
     ap.add_argument("--parts-dir", default=str(PARTS), help="where parts go or are found")
     args = ap.parse_args()
 
-    every = adsb_days()
+    every = adsb_days(ranking_months(DATA))
     if args.verify:
         return verify(every)
     if args.manifest:

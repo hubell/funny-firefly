@@ -328,6 +328,8 @@ _FETCH = "the OPDI fetch of 4 October"
 _FUSION = "the fusion model's measurement"
 _LANDING = "the landing of v10"
 _REPORT_FILE = r"\(`" + _NOTE_FILE + r"`\)"
+_REFIT = "the fusion's refit on group B's base"
+_FOUR_INPUTS = "the measurement of the four months' inputs"
 
 COPIES_OF_7_OCTOBER = {
     "reports/preregistered-2026-10-04-adsb-leg.md": (
@@ -549,6 +551,115 @@ COPIES_OF_7_OCTOBER = {
             ),
         ),
         3,
+    ),
+    # the five notes of 8 and 9 October, made the same way on 9 October; the
+    # records note's opening named a research memo by a working path that names
+    # a tool, matched here by form
+    "reports/preregistered-2026-10-08-all-days.md": (
+        "preregistration_2026-10-08_all_days.md",
+        "695fa658d54abd8aed10c8e5465f941fc013ecebadb980dff46e19d0313f51a9",
+        (
+            (
+                r"\(Blocks\s+\d+ to \d+\)",
+                "(the work from the overnight run of 6 October to the landing of v11)",
+            ),
+            (
+                _WORK_BLOCK
+                + r"'s stacker refitted on v11's base by\n  "
+                + _WORK_BLOCK
+                + r" and gated",
+                "the stacker of "
+                + _FUSION
+                + " refitted on v11's base by\n  "
+                + _REFIT
+                + " and gated",
+            ),
+            (r"\(" + _WORK_BLOCK + r"\)", "(the measurement of group C)"),
+            (
+                _WORK_BLOCK + r" measured the fetch",
+                "The extraction of §5's days measured the fetch",
+            ),
+            # the five inside C17's definition
+            (r"as\n  in " + _WORK_BLOCK + r"\.", "as\n  in " + _FUSION + "."),
+            (
+                r"\(Blocks\s+\d+, \d+[a-z],\n  \d+[a-z], \d+[a-z] and \d+\)",
+                "(the pilot, the OPDI fetch of 4 October,\n  the feature tables of"
+                " 5 October, " + _FUSION + " and " + _REFIT + ")",
+            ),
+            (
+                r"\(" + _WORK_BLOCK + r"'s `heldout-2025-MM__c14__seed0`\)",
+                "(the overnight run's `heldout-2025-MM__c14__seed0`)",
+            ),
+            (
+                _WORK_BLOCK + r"'s stacker, its parameters",
+                "The stacker of " + _FUSION + ", its parameters",
+            ),
+            (
+                _WORK_BLOCK + r"'s twelve leave-one-month-out models",
+                "The twelve leave-one-month-out models of " + _REFIT,
+            ),
+        ),
+        5,
+    ),
+    "reports/preregistered-2026-10-08-four-months.md": (
+        "preregistration_2026-10-08_four_months.md",
+        "8c37c25b6a10c779d946885265d24c9896a5e934b9b424e56217d6cc8b72c372",
+        (
+            (
+                r"\("
+                + _WORK_BLOCK
+                + r"'s `heldout-2025-MM__c14__seed0` and "
+                + _WORK_BLOCK
+                + r"'s fusion\n  fits\)",
+                "(the overnight run's `heldout-2025-MM__c14__seed0` and the fusion\n"
+                "  fits of " + _REFIT + ")",
+            ),
+            (r"\(" + _WORK_BLOCK + r"\)", "(the measurement of C17)"),
+            # the two inside v12's definition
+            (
+                r"in place of " + _WORK_BLOCK + r"'s if C17",
+                "in place of that of " + _REFIT + " if C17",
+            ),
+            (
+                r"v12 uses\n  " + _WORK_BLOCK + r"'s fusion and",
+                "v12 uses\n  the fusion of " + _REFIT + " and",
+            ),
+        ),
+        2,
+    ),
+    "reports/preregistered-2026-10-08-final-phase.md": (
+        "preregistration_2026-10-08_final_phase.md",
+        "553e042f94494798c2c7fd1c92823713069514eebdc90ba61a161d9bd12f41fa",
+        ((r"otherwise " + _WORK_BLOCK + r"'s\)", "otherwise that of " + _REFIT + ")"),),
+        1,
+    ),
+    "reports/preregistered-2026-10-09-jj-check.md": (
+        "preregistration_2026-10-09_jj_check.md",
+        "05214673d1868f88f6215bee204ed43c17e733f527f16b18a56143b89ca0d85e",
+        (
+            (
+                r"after " + _WORK_BLOCK + r"'s report\n\(`" + _NOTE_FILE + r"`, sha256",
+                "after the report of " + _FOUR_INPUTS + "\n(" + _REPORT + ", sha256",
+            ),
+            (r"## What " + _WORK_BLOCK + r" found", "## What " + _FOUR_INPUTS + " found"),
+            # the one inside check (i)
+            (
+                r"as " + _WORK_BLOCK + r" explained the 3,617",
+                "as " + _FOUR_INPUTS + " explained the 3,617",
+            ),
+        ),
+        1,
+    ),
+    "reports/preregistered-2026-10-09-records.md": (
+        "preregistration_2026-10-09_records.md",
+        "908780852884eee96a4619986eb2fca47a8680ab4fd8462cf5029711c92895eb",
+        (
+            (
+                r"\(`[a-z]+/[a-z-]+-memo-\d{4}-\d{2}-\d{2}\.md`\nin the project\)",
+                "(" + _UNPUBLISHED + ")",
+            ),
+        ),
+        0,
     ),
 }
 

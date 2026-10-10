@@ -10,7 +10,9 @@ predicted taxi-out times for the corresponding ``MVT_ID_mvt`` values."
 ``MVT_ID_mvt`` before the ranking script can use the prediction to calculate
 the RMSE." "The ranking script will issue an error if: an ``MVT_ID_mvt``
 does not match; any rows are missing; or extra rows are included." The file
-is named "``<team-name>_v<incremental integer>.parquet``". The template
+is named "``<team-name>_v<incremental integer>.parquet``", and the final
+phase's one file, in the page's words, "using the following filename:
+``<team-name>_final.parquet``". The template
 itself fixes the rest: two columns, ``MVT_ID_mvt`` as a double and
 ``TAXITIME_SEC_mvt`` as a 32-bit integer, one row per ranking departure.
 
@@ -42,6 +44,9 @@ COLUMNS: tuple[str, str] = (ID, TARGET)
 FILENAME = re.compile(
     r"^(?P<team>[A-Za-z0-9][A-Za-z0-9_\-]*)_v(?P<version>[1-9]\d*)\.parquet$"
 )
+# ``<team>_final.parquet``, the final phase's single file, beside the versions
+# and not replacing them: the ``_v<n>`` convention stays as it is.
+FINAL_FILENAME = re.compile(r"^(?P<team>[A-Za-z0-9][A-Za-z0-9_\-]*)_final\.parquet$")
 
 INT32_MIN = np.iinfo(np.int32).min
 INT32_MAX = np.iinfo(np.int32).max
@@ -127,13 +132,19 @@ def validate(pred: pd.DataFrame, template: pd.DataFrame) -> None:
         raise SubmissionError(f"{TARGET!r} values outside int32")
 
 
-def check_filename(path: Path | str) -> tuple[str, int]:
-    """The (team, version) a filename encodes; raises if it does not."""
+def check_filename(path: Path | str) -> tuple[str, int | None]:
+    """The (team, version) a filename encodes, version ``None`` for the final
+    file; raises if it encodes neither."""
     name = Path(path).name
     m = FILENAME.match(name)
-    if m is None:
-        raise SubmissionError(f"filename {name!r} does not match <team>_v<n>.parquet")
-    return m.group("team"), int(m.group("version"))
+    if m is not None:
+        return m.group("team"), int(m.group("version"))
+    m = FINAL_FILENAME.match(name)
+    if m is not None:
+        return m.group("team"), None
+    raise SubmissionError(
+        f"filename {name!r} matches neither <team>_v<n>.parquet nor <team>_final.parquet"
+    )
 
 
 # --------------------------------------------------------------------------
@@ -216,6 +227,7 @@ def read(path: Path | str) -> pd.DataFrame:
 __all__ = [
     "COLUMNS",
     "FILENAME",
+    "FINAL_FILENAME",
     "ID",
     "TARGET",
     "SubmissionError",

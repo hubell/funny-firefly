@@ -1714,7 +1714,7 @@ CONSTANTS: tuple[Constant, ...] = (
             "TAIL_EXCLUSION_ADOPTED_H",
             (4.0,),
             CHOSEN,
-            "lines 913 to 934: fixed at four hours on the mechanism and not by a sweep,"
+            "lines 933 to 954: fixed at four hours on the mechanism and not by a sweep,"
             " because no aircraft taxis for four hours, and reported against an"
             " un-excluded fit and a two-hour arm both fixed before the run",
         ),
@@ -2168,6 +2168,43 @@ CONSTANTS: tuple[Constant, ...] = (
             " forward legs let months after a leg's month inform its choice;"
             " both copies and the report say so",
         ),
+        (
+            "WINDOW_APPLIED",
+            (True,),
+            CHOSEN,
+            "the recorded decision that v12 clips its predictions to W, the"
+            " flight-plan window, after every other part, by §1 of"
+            " `reports/preregistered-2026-10-09-records.md`, which fixed the"
+            " measurement, its two conditions and the clip before any count"
+            " existed and makes the clip v12's if W is valid; `reports/window.md`"
+            " measures W* on the 2025 departures with a flight plan and prints"
+            " `W: valid`. The clip overrides the plan-shifted departures' rule"
+            " where the two disagree, which the copy discloses",
+        ),
+    ),
+    *_mod(
+        "src/taxiout/window.py",
+        (
+            "W_STAR_S",
+            (3606,),
+            DERIVED,
+            "`reports/window.md`: the largest absolute difference between"
+            " `BLOCK_TIME_UTC_mvt` and `LOBT_flt` over the 2025 departures with"
+            " `LOBT_flt` present, which `scripts/report_window.py` recomputes and"
+            " refuses to print unless it equals this constant",
+        ),
+        (
+            "REDRAW_S",
+            (12,),
+            QUOTED,
+            "§1 of `reports/preregistered-2026-10-09-records.md`: the ranking"
+            " set's take-off times are redrawn within 12 s either way, so the"
+            " window on the ranking rows is W* + 12 s, as `reports/window.md`"
+            " prints it; read from the comparison of the ranking file of"
+            " 4 September with the final phase's, every take-off of a row in both"
+            " moved by at most 12 s, which the archived file and the current one"
+            " recompute",
+        ),
     ),
     *_mod(
         "src/taxiout/adsb.py",
@@ -2333,8 +2370,12 @@ CONSTANTS: tuple[Constant, ...] = (
             QUOTED,
             "OPDI v0.0.2's event files span ten days each, as published",
         ),
-        ("MATCH_MONTHS", (1, 13), MECHANISM, "the twelve months of 2025, as a range"),
-        ("LIST_MONTHS", (12,), MECHANISM, "a slice of MATCH_MONTHS, the twelve of 2025"),
+        (
+            "TRAINING_MONTHS",
+            (1, 13),
+            MECHANISM,
+            "the twelve months of 2025, as a range",
+        ),
     ),
     *_mod(
         "src/taxiout/fusion.py",
@@ -2392,21 +2433,27 @@ CONSTANTS: tuple[Constant, ...] = (
             "ADSB_FIRST_2025",
             (2025, 1, 1),
             CHOSEN,
-            "§5 of `reports/preregistered-2026-10-04.md`"
-            + "'s scale-up: every second day of 2025 from 1 January",
+            "§1 of `reports/preregistered-2026-10-08-all-days.md`: every day of"
+            " 2025 from 1 January (§5 of `reports/preregistered-2026-10-04.md`"
+            " began on the same day)",
         ),
         (
             "ADSB_STEP_DAYS",
-            (2,),
+            (1,),
             CHOSEN,
-            "§5 of `reports/preregistered-2026-10-04.md`"
-            + "'s scale-up: every second day",
+            "§1 of `reports/preregistered-2026-10-08-all-days.md` (C17, adopted):"
+            " every day of 2025 with a table; §5 of"
+            " `reports/preregistered-2026-10-04.md` read every second day",
         ),
         (
-            "RANKING_MONTHS",
-            (2026, 1, 2026, 7),
-            QUOTED,
-            "the ranking set's two months, January and July 2026",
+            "FIT_DAYS",
+            (348,),
+            DERIVED,
+            "the 2025 days with an adsb.lol table in `data/raw/adsb/` by 9 October"
+            " 2026, 06:00 UTC, less the two training pilot days, as §1 of"
+            " `reports/preregistered-2026-10-08-all-days.md` defines C17's days;"
+            " `taxiout.fusion.check_fit_days` recomputes the count and the"
+            " sha256 of the list from the fitting table and refuses any other",
         ),
         ("MONTHS", (1, 13), MECHANISM, "the twelve months, as a range"),
         (
@@ -2873,6 +2920,79 @@ FROZEN_DOCUMENTS: tuple[Frozen, ...] = (
         " 2026, which `tests/test_preregistered_copies.py` checks against the"
         " note where the note is on hand",
     ),
+    Frozen(
+        "reports/preregistered-2026-10-08-all-days.md",
+        "b72572a6c420dd939ec54ae2cbb3150f2bd23744afde85e97d5f209a525d222a",
+        "the pre-registration of C17, the fusion fitted on every day of 2025"
+        " with an adsb.lol table, with the rule that decides whether it"
+        " replaces v11's fusion; C17 cleared its rule and is v12's fusion. What"
+        " is frozen is this published copy, at the digest beside it. What fixed"
+        " the order is the working note it was copied from, sha256"
+        " 695fa658d54abd8aed10c8e5465f941fc013ecebadb980dff46e19d0313f51a9,"
+        " written on 8 October 2026 before any figure it governs existed. The"
+        " copy differs from it in the nine places its closing section lists,"
+        " five of them inside a rule by the owner's decision of 7 October 2026,"
+        " which `tests/test_preregistered_copies.py` checks against the note"
+        " where the note is on hand",
+    ),
+    Frozen(
+        "reports/preregistered-2026-10-08-four-months.md",
+        "d12773007e423cb5356c7e6e0d3bc237f327b3c5f426686f2bb795f3fb3fa372",
+        "the pre-registration of v12 on the four ranking months of the final"
+        " phase, amending the third section of C17's; its season candidates"
+        " were withdrawn by the final-phase amendment. What is frozen is this"
+        " published copy, at the digest beside it. What fixed the order is the"
+        " working note it was copied from, sha256"
+        " 8c37c25b6a10c779d946885265d24c9896a5e934b9b424e56217d6cc8b72c372,"
+        " written on 8 October 2026 before any figure it governs existed. The"
+        " copy differs from it in the four places its closing section lists,"
+        " two of them inside a rule by the owner's decision of 7 October 2026,"
+        " which `tests/test_preregistered_copies.py` checks against the note"
+        " where the note is on hand",
+    ),
+    Frozen(
+        "reports/preregistered-2026-10-08-final-phase.md",
+        "d807e6fa6b448c468598b1c888e2552c88f6762ea3ad7f331a82fa2148992c71",
+        "the amendment of the four-month pre-registration for the final phase:"
+        " the season candidates withdrawn, v12 the single final file, uploaded"
+        " once, and the checks before that upload. What is frozen is this"
+        " published copy, at the digest beside it. What fixed the order is the"
+        " working note it was copied from, sha256"
+        " 553e042f94494798c2c7fd1c92823713069514eebdc90ba61a161d9bd12f41fa,"
+        " written on 8 October 2026 before any figure it governs existed. The"
+        " copy differs from it in the one place its closing section lists,"
+        " inside a rule by the owner's decision of 7 October 2026, which"
+        " `tests/test_preregistered_copies.py` checks against the note where"
+        " the note is on hand",
+    ),
+    Frozen(
+        "reports/preregistered-2026-10-09-jj-check.md",
+        "7a83f2c6c61370354d977caed45c2f30ee5ef48d9ff8d3b6eeb7972bd91c236f",
+        "the amendment of the January and July check after the organizers drew"
+        " those months' times again, and of the final file's name. What is"
+        " frozen is this published copy, at the digest beside it. What fixed"
+        " the order is the working note it was copied from, sha256"
+        " 05214673d1868f88f6215bee204ed43c17e733f527f16b18a56143b89ca0d85e,"
+        " written on 9 October 2026 before any figure it governs existed. The"
+        " copy differs from it in the three places its closing section lists,"
+        " one of them inside a rule by the owner's decision of 7 October 2026,"
+        " which `tests/test_preregistered_copies.py` checks against the note"
+        " where the note is on hand",
+    ),
+    Frozen(
+        "reports/preregistered-2026-10-09-records.md",
+        "538f06efa65dc6c891044bb79304098f4eaa7603dea852800089ca770bbbf226",
+        "the pre-registration of W, the flight-plan window, of the tests of the"
+        " shifted records and C20, and of the audit of the final file; W was"
+        " found valid and is v12's last step, and C20 was not adopted. What is"
+        " frozen is this published copy, at the digest beside it. What fixed"
+        " the order is the working note it was copied from, sha256"
+        " 908780852884eee96a4619986eb2fca47a8680ab4fd8462cf5029711c92895eb,"
+        " written on 9 October 2026 before any figure it governs existed. The"
+        " copy differs from it in the one place its closing section lists,"
+        " which `tests/test_preregistered_copies.py` checks against the note"
+        " where the note is on hand",
+    ),
 )
 
 
@@ -3214,6 +3334,7 @@ REPORT_INPUTS_DECLARED: tuple[tuple[str, str], ...] = (
     ("scripts/report_synthetic_airport.py", "reports/synthetic_airport.md"),
     ("scripts/report_tails.py", "reports/tails.md"),
     ("scripts/report_transfer.py", "reports/transfer.md"),
+    ("scripts/report_window.py", "reports/window.md"),
     ("scripts/review_challenge_data.py", "reports/data_review.md"),
     ("scripts/run_baselines.py", "reports/baseline.md"),
 )

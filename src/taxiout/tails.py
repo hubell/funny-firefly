@@ -447,6 +447,26 @@ class PlanShiftModel:
         out = np.where(picked, value, np.nan)
         return pd.Series(out, index=frame.index, name="plan_shift", dtype=float)
 
+    def weights(self, frame: pd.DataFrame) -> pd.DataFrame:
+        """What ``predict`` mixes, per row it picks: the add-one share on the
+        lag, the lag from ``LOBT_flt``, the airport's rest mean and the class's
+        count in the fit; NaN elsewhere. Read by the audit of the final file,
+        and changes no prediction."""
+        self._check_fitted()
+        picked = plan_shifted(frame).to_numpy(dtype=bool)
+        lag = (
+            (_utc(frame["MVT_TIME_UTC_mvt"]) - _utc(frame["LOBT_flt"]))
+            .dt.total_seconds()
+            .to_numpy(dtype=float)
+        )
+        rest = frame["ADEP_mvt"].astype(str).map(self.rest_mean).to_numpy(dtype=float)
+        out = pd.DataFrame(index=frame.index)
+        out["weight"] = np.where(picked, self.share, np.nan)
+        out["lag_s"] = np.where(picked, lag, np.nan)
+        out["rest_mean_s"] = np.where(picked, rest, np.nan)
+        out["cell_rows"] = np.where(picked, float(self.n), np.nan)
+        return out
+
     def _check_fitted(self) -> None:
         if self.share is None:
             raise RuntimeError("PlanShiftModel is not fitted")
@@ -750,6 +770,42 @@ class C6Model:
         if covered.any():
             out[covered] = self.c6b.predict(frame[covered])
         return pd.Series(out, index=frame.index, name="c6b", dtype=float)
+
+    def weights(self, frame: pd.DataFrame) -> pd.DataFrame:
+        """What C6b mixes, per row the term covers: the classifier's probability
+        that the row is at the schedule (the weight on the lag), the schedule
+        lag, C6a's rest mean, and the fitting rows of the row's sub-cell and of
+        its cell (``cell_rows``: the sub-cell's, or the cell's where the
+        sub-cell fell back to it or the fit never saw it); NaN elsewhere. Read
+        by the audit of the final file, and changes no prediction."""
+        if self.c6b is None:
+            raise RuntimeError("C6Model is not fitted")
+        covered = self.term.predict(frame).notna().to_numpy()
+        out = pd.DataFrame(
+            np.nan,
+            index=frame.index,
+            columns=["weight", "lag_s", "rest_mean_s", "cell_rows", "sub_cell_rows"],
+        )
+        if covered.any():
+            rows = frame[covered]
+            X = self.c6b.features(rows)
+            p = self.c6b.booster.predict(X)
+            _, rest = self.c6a.values(rows)
+            sub = c6_sub_cell(rows).to_numpy(dtype=object)
+            cell = c6_cell(rows).to_numpy(dtype=object)
+            n_sub = np.array(
+                [self.c6a.subs[x][2] if x in self.c6a.subs else np.nan for x in sub]
+            )
+            fell = np.array(
+                [self.c6a.subs[x][3] if x in self.c6a.subs else True for x in sub]
+            )
+            n_cell = np.array([self.c6a.cells[c][2] for c in cell], dtype=float)
+            out.loc[covered, "weight"] = p
+            out.loc[covered, "lag_s"] = X["lag"].to_numpy(dtype=float)
+            out.loc[covered, "rest_mean_s"] = rest
+            out.loc[covered, "sub_cell_rows"] = n_sub
+            out.loc[covered, "cell_rows"] = np.where(fell, n_cell, n_sub)
+        return out
 
 
 __all__ = [

@@ -361,6 +361,32 @@ def test_the_airports_copy_exempts_its_five_candidate_names_only(
     assert "reports/other.md" in capsys.readouterr().out
 
 
+@pytest.mark.parametrize(
+    "exempt",
+    [
+        "reports/preregistered-2026-10-09-jj-check.md",
+        "reports/preregistered-2026-10-09-records.md",
+    ],
+)
+def test_the_copies_of_9_october_exempt_one_candidate_name_only(
+    exempt, tmp_path, monkeypatch, capsys
+):
+    assert hygiene.IDENTIFIER_EXEMPTIONS[exempt][0] == frozenset({"C18"})
+    _quiet(monkeypatch)
+    monkeypatch.setattr(
+        hygiene, "osm_stand_identifiers", lambda: {"C18", "B7X", "A9Z", "D4Q"}
+    )
+    credit = "\n\nData (c) OpenStreetMap contributors, ODbL 1.0.\n"
+    (tmp_path / exempt).parent.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(hygiene, "REPO", tmp_path)
+    (tmp_path / exempt).write_text("C18, and stands B7X and A9Z." + credit)
+    assert hygiene.main() == 0
+    capsys.readouterr()
+    (tmp_path / exempt).write_text("C18, and stands B7X, A9Z and D4Q." + credit)
+    assert hygiene.main() == 1
+    assert exempt in capsys.readouterr().out
+
+
 def test_the_group_b_report_exempts_the_same_five_names_only(
     tmp_path, monkeypatch, capsys
 ):

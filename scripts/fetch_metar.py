@@ -6,8 +6,9 @@ Gate 2b of ``docs/plan.md``. Weather enters the model as regime flags per
 airport-hour (``taxiout.metar``), and the flags need the reports. The Iowa
 Environmental Mesonet (IEM) at Iowa State University serves an archive of
 ASOS/METAR observations for airports worldwide through a documented request
-endpoint, and this script asks it for the training year and the two ranking
-months at every listed airport.
+endpoint, and this script asks it for the training year and each of the
+months the ranking file contains (``taxiout.challenge.ranking_months``) at
+every listed airport.
 
 Scripted and cached exactly as the OpenStreetMap fetch is, because an
 external dataset a reader cannot re-fetch fails the reproduction clause of
@@ -49,8 +50,10 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
 
 from taxiout.airports import AIRPORTS  # noqa: E402
+from taxiout.challenge import ranking_months  # noqa: E402
 from taxiout.metar import FIELDS  # noqa: E402
 
+DATA = REPO / "data" / "challenge"
 CACHE = REPO / "data" / "raw" / "metar"
 MANIFEST = CACHE / "MANIFEST.json"
 
@@ -68,12 +71,10 @@ WARRANTY = (
     "presented."
 )
 
-# The training year and the two ranking months, as [start, end) dates.
-PERIODS: tuple[tuple[str, str], ...] = (
-    ("2025-01-01", "2026-01-01"),
-    ("2026-01-01", "2026-02-01"),
-    ("2026-07-01", "2026-08-01"),
-)
+# The training year, as [start, end) dates. Each ranking month is a period of
+# its own, read from the ranking file (``periods``), as January and July 2026
+# were when they were named here.
+TRAINING_PERIOD: tuple[str, str] = ("2025-01-01", "2026-01-01")
 
 # The archive's request parameters, fixed here so the manifest can record
 # them and a reader can repeat them. ``report_type=3`` is routine hourly
@@ -97,6 +98,15 @@ DATA_FIELDS = tuple(f for f in FIELDS if f not in ("station", "valid"))
 PAUSE_S = 2.0
 RETRIES = 4
 TIMEOUT_S = 120
+
+
+def periods(months) -> tuple[tuple[str, str], ...]:
+    """The training year and each ranking month (``YYYY-MM``), as [start, end) dates."""
+    out = [TRAINING_PERIOD]
+    for ym in sorted(set(months)):
+        y, m = int(ym[:4]), int(ym[5:7])
+        out.append((f"{ym}-01", f"{y + (m == 12)}-{m % 12 + 1:02d}-01"))
+    return tuple(out)
 
 
 def request_url(icao: str, start: str, end: str) -> str:
@@ -157,10 +167,17 @@ def main() -> int:
     if args.airports:
         airports = [a for a in airports if a in set(args.airports)]
 
+    if not (DATA / "ranking.parquet").exists():
+        print(
+            f"no ranking file under {DATA}; the ranking months are read from it",
+            file=sys.stderr,
+        )
+        return 1
+    spans = periods(ranking_months(DATA))
     CACHE.mkdir(parents=True, exist_ok=True)
     manifest = load_manifest()
     for icao in airports:
-        for start, end in PERIODS:
+        for start, end in spans:
             path = cache_path(icao, start, end)
             if path.exists():
                 print(f"{path.name}: cached")

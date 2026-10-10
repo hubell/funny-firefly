@@ -152,6 +152,47 @@ def test_centred_truncation_looks_both_ways():
     assert truncated_centred(t, 900, start, end).tolist() == [True, False]
 
 
+def test_four_ranking_months_are_two_blocks():
+    # January and February 2026 are one covered block and June and July 2026
+    # another: a window on 31 January reaching into February is not truncated,
+    # one on 1 June reaching into May is
+    t = ts(
+        "2026-01-31T23:50:00Z",
+        "2026-02-01T00:10:00Z",
+        "2026-02-15T12:00:00Z",
+        "2026-06-01T00:10:00Z",
+        "2026-06-30T23:50:00Z",
+        "2026-07-15T12:00:00Z",
+    )
+    start, end = coverage_start(t), coverage_end(t)
+    jan = seconds(ts("2026-01-01T00:00:00Z"))[0]
+    jun = seconds(ts("2026-06-01T00:00:00Z"))[0]
+    mar = seconds(ts("2026-03-01T00:00:00Z"))[0]
+    aug = seconds(ts("2026-08-01T00:00:00Z"))[0]
+    assert start.tolist() == [jan, jan, jan, jun, jun, jun]
+    assert end.tolist() == [mar, mar, mar, aug, aug, aug]
+    # the trailing hour of 1 February 00:10 reaches 31 January, inside the
+    # block; that of 1 June 00:10 reaches 31 May, outside it
+    assert truncated(t, 3600, start).tolist() == [
+        False,
+        False,
+        False,
+        True,
+        False,
+        False,
+    ]
+    # a centred quarter hour on 31 January 23:50 reaches into February and one
+    # on 30 June 23:50 into July, and neither leaves its block
+    assert truncated_centred(t, 900, start, end).tolist() == [
+        False,
+        False,
+        False,
+        True,
+        False,
+        False,
+    ]
+
+
 # --------------------------------------------------------------------------
 # configuration
 

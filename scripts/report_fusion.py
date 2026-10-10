@@ -53,8 +53,8 @@ import candidates as cb  # noqa: E402
 import monthly as c  # noqa: E402
 from taxiout import fusion  # noqa: E402
 from taxiout.adsb import NOTICE  # noqa: E402
-from taxiout.challenge import movement_files  # noqa: E402
-from taxiout.opdi import MATCH_MONTHS  # noqa: E402
+from taxiout.challenge import movement_files, ranking_months  # noqa: E402
+from taxiout.opdi import match_months  # noqa: E402
 from taxiout.tails import plan_shift_threshold_s  # noqa: E402
 from taxiout.validation import cluster_bootstrap, cluster_sums  # noqa: E402
 
@@ -238,7 +238,9 @@ def per_airport(rows: pd.DataFrame, arm: str, ref: str) -> list[list[str]]:
 # the run
 
 
-def build() -> dict:
+def tables() -> tuple[dict, dict]:
+    """The two feature tables, written to ``data/processed/fusion/``: what
+    ``scripts/make_submission.py`` reads, and what ``--tables-only`` writes."""
     run: dict = {}
     t0 = time.monotonic()
     got = fusion.feature_tables(DATA, ADSB, MATCHED)
@@ -259,6 +261,11 @@ def build() -> dict:
         OUT_DIR / "rank_2026.parquet",
         {**meta, "days": got["rank_days"]},
     )
+    return run, got
+
+
+def build() -> dict:
+    run, got = tables()
     run["rules"] = got["rules"]
     run["fit_days"] = got["fit_days"]
     run["days_without_table"] = got["days_without_table"]
@@ -533,16 +540,31 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--out", type=Path, default=DEFAULT_OUT)
     ap.add_argument("--json", type=Path, default=OUT_DIR / "readings.json")
+    ap.add_argument(
+        "--tables-only",
+        action="store_true",
+        help="write the two feature tables the submission reads, checked against"
+        " C17's fitting days, and nothing else: no fit and no report",
+    )
     args = ap.parse_args(argv)
     if not (DATA / "ranking.parquet").exists():
         print(f"no challenge data under {DATA}", file=sys.stderr)
         return 1
+    if args.tables_only:
+        run, got = tables()
+        print(
+            f"fitting days: {len(got['fit_days'])}, sha256 "
+            f"{fusion.check_fit_days(got['fit_days'])}"
+        )
+        print(f"fit_2025.parquet {len(got['fit']):,} rows, sha256 {run['fit_sha256']}")
+        print(f"rank_2026.parquet {len(got['rank']):,} rows, sha256 {run['rank_sha256']}")
+        return 0
     run = build()
     inputs = (
         list(movement_files(DATA))
         + [DATA / "ranking.parquet", read_reports()[0], *read_reports()[1]]
         + sorted(ADSB.glob("*.parquet"))
-        + [MATCHED / f"{ym}.parquet" for ym in MATCH_MONTHS]
+        + [MATCHED / f"{ym}.parquet" for ym in match_months(ranking_months(DATA))]
         + [BOARD / f"{n}.{x}" for n in fusion.BASE_RECORDS for x in ("parquet", "json")]
     )
     text = build_report(run, inputs)

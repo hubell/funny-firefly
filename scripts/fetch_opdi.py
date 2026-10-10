@@ -10,9 +10,12 @@ So no OPDI file and no table built from one is tracked or deposited: this
 script fetches the published files again, into ``data/raw/opdi/``, and builds
 every table from them, into ``data/interim/opdi/``. Both are gitignored.
 
-The files fetched are those ``taxiout.opdi`` names: the 45 ten-day event files
-overlapping the training year and the two ranking months, and the 16 monthly
-lists from December 2024 to December 2025, January, June and July 2026. A file
+The files fetched are those ``taxiout.opdi`` names for the training year and
+the months the ranking file contains (``taxiout.challenge.ranking_months``):
+the ten-day event files overlapping those months (``match_months``), and the
+monthly lists of those months and of the month before each run of them
+(``list_months``); for January and July 2026, 45 event files and 16 lists,
+December 2024 to December 2025, January, June and July 2026. A file
 already in the cache at the size and sha256 its manifest line records is not
 fetched again; ``data/raw/opdi/MANIFEST.json`` records each file's size,
 sha256 and fetch time, or the HTTP status it failed with. On 4 October 2026
@@ -21,7 +24,7 @@ without it, as the matched tables of that day did.
 
 Then, each step reading the previous one's output only (``taxiout.opdi``): the
 reduction of each event file, the tie map, the month tables and the match of
-every departure of the fourteen months, written as
+every departure of the training year and the ranking months, written as
 ``data/interim/opdi/matched/<YYYYMM>.parquet`` keyed on ``MVT_ID_mvt``. The
 matched tables carry challenge identifiers and stay on the machine that built
 them. The whole pipeline takes about five minutes on eight cores once the
@@ -51,6 +54,7 @@ sys.path.insert(0, str(REPO / "src"))
 
 from taxiout import opdi  # noqa: E402
 from taxiout.adsb import sha256_file  # noqa: E402
+from taxiout.challenge import ranking_months  # noqa: E402
 
 DATA = REPO / "data" / "challenge"
 RAW = REPO / "data" / "raw" / "opdi"
@@ -121,11 +125,17 @@ def _reduce(name: str) -> dict:
     return opdi.reduce_file(RAW / name, WORK / "reduced" / name)
 
 
-def build(workers: int) -> dict:
-    """The reduction, the tie, the month tables and the match, from the cache."""
+def build(workers: int, match: tuple[str, ...]) -> dict:
+    """The reduction, the tie, the month tables and the match, from the cache.
+
+    ``match`` is ``opdi.match_months`` of the ranking file's months.
+    """
     log = {}
-    names = [n for n in opdi.event_files() if (RAW / n).exists()]
-    log["event_files_missing"] = [n for n in opdi.event_files() if not (RAW / n).exists()]
+    lists = opdi.list_months(match)
+    names = [n for n in opdi.event_files(match) if (RAW / n).exists()]
+    log["event_files_missing"] = [
+        n for n in opdi.event_files(match) if not (RAW / n).exists()
+    ]
     t0 = time.monotonic()
     with ProcessPoolExecutor(max_workers=workers) as pool:
         log["reduction"] = list(pool.map(_reduce, names))
@@ -133,13 +143,13 @@ def build(workers: int) -> dict:
     reduced = [WORK / "reduced" / n for n in names]
 
     t0 = time.monotonic()
-    tm, log["tie"] = opdi.tie_map(RAW, reduced)
+    tm, log["tie"] = opdi.tie_map(RAW, reduced, lists)
     opdi.write_table(tm, WORK / "meta" / "tie_map.parquet")
     log["tie_s"] = round(time.monotonic() - t0, 1)
 
     t0 = time.monotonic()
     log["months"] = {}
-    for ym in opdi.LIST_MONTHS:
+    for ym in lists:
         table, info = opdi.month_table(ym, RAW, reduced, tm)
         opdi.write_table(table, WORK / "events" / f"opdi_{ym}.parquet")
         log["months"][ym] = info
@@ -147,7 +157,7 @@ def build(workers: int) -> dict:
 
     t0 = time.monotonic()
     log["matched"] = {}
-    for ym in opdi.MATCH_MONTHS:
+    for ym in match:
         frames = [
             pd.read_parquet(WORK / "events" / f"opdi_{m}.parquet")
             for m in opdi.months_around(ym)
@@ -171,12 +181,14 @@ def main() -> int:
     if not (DATA / "ranking.parquet").exists():
         print(f"no challenge data under {DATA}; the match needs it", file=sys.stderr)
         return 1
-    manifest = fetch(opdi.event_files() + opdi.list_files(), args.offline)
-    missing = [n for n in opdi.list_files() if not (RAW / n).exists()]
+    match = opdi.match_months(ranking_months(DATA))
+    lists = opdi.list_files(opdi.list_months(match))
+    manifest = fetch(opdi.event_files(match) + lists, args.offline)
+    missing = [n for n in lists if not (RAW / n).exists()]
     if missing:
         print("flight lists missing: " + " ".join(missing), file=sys.stderr)
         return 1
-    log = build(args.workers)
+    log = build(args.workers, match)
     print(
         f"{len(manifest['files'])} files in the manifest; event files missing:"
         f" {log['event_files_missing'] or 'none'}; {len(log['matched'])} months matched"

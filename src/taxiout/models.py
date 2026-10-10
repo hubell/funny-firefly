@@ -441,11 +441,18 @@ SUBMISSION_CONFIGURATION: tuple[str, ...] | None = ("c1", "c4", "c3b")
 # decides nothing itself; False is v9.
 FUSION_G1N_APPLIED: bool = True
 
-# The booster file the fusion's ranking base was measured on, v9's: a rebuild
-# whose booster prediction is not these bytes is not the base the candidate
-# was built on, and the build refuses to write a file.
+# The booster file of the candidate the build must reproduce: a rebuild whose
+# booster prediction is not these bytes is not the base the candidate was
+# built on, and the build refuses to write a file. Through v11 it held v9's
+# booster file over the 344,841 rows of January and July, the base the fusion
+# was measured on. A booster file over the four months of the final phase
+# cannot be those bytes, so for v12 it holds the digest of v12's own booster
+# file, read from the candidate built twice, byte for byte the same, in a
+# clone of the tree that this commit lands, and written here before the
+# commit: the build at the clean tree then refuses to write unless its
+# booster file reproduces the candidate's.
 FUSION_BASE_BOOSTER_SHA256 = (
-    "59b27527f4cf50a3837cc46e005a127387f23711d46b74e0593f13d1bd85be61"
+    "b7522b508490c159d240f102f78498470a1c184b4c5a55f4b40c445756c793ae"
 )
 
 # Whether the ranking rows take group B's combination as their base, the new
@@ -463,6 +470,19 @@ FUSION_BASE_BOOSTER_SHA256 = (
 # after a leg's month inform its choice. ``scripts/make_submission.py`` reads
 # this and ``GROUP_B_BASE`` and decides nothing itself; False is v10.
 GROUP_B_APPLIED: bool = True
+
+# Whether the ranking rows' predictions are clipped to the flight-plan window
+# W (``taxiout.window``), after every other part of the submission. §1 of
+# ``reports/preregistered-2026-10-09-records.md`` defines the measurement, its
+# two conditions and the clip, fixed before any count existed; and
+# ``reports/window.md`` measures W* on the 2025 departures with a flight plan
+# and prints "W: valid": the largest |off-block less plan| is at most 3,900 s,
+# and the rows within 300 s of it are at least half of those in the 300 s
+# below. The clip overrides the plan-shifted departures' rule where the two
+# disagree, an amendment of the 2 October rule's output the note makes and
+# discloses. ``scripts/make_submission.py`` reads this and decides nothing
+# itself; False is v11's assembly.
+WINDOW_APPLIED: bool = True
 
 # The new base per airport for the ranking rows, as ``taxiout.group_b`` names
 # the menu: the selector's choice over all twelve held-out months, which
@@ -1338,6 +1358,7 @@ __all__ = [
     "SUBMISSION_CONFIGURATION",
     "FUSION_G1N_APPLIED",
     "FUSION_BASE_BOOSTER_SHA256",
+    "WINDOW_APPLIED",
     "GROUP_B_APPLIED",
     "GROUP_B_BASE",
     "TAIL_EXCLUSION_ADOPTED_H",

@@ -164,6 +164,20 @@ def load_submitting(root: Path) -> pa.Table:
     return pq.read_table(root / SUBMITTING)
 
 
+def ranking_months(root: Path) -> tuple[str, ...]:
+    """The calendar months of the ranking file's movements, ``YYYY-MM`` (UTC), sorted.
+
+    The ranking months are read from the file the organizers publish rather
+    than named in the code, so that every input fetched for them, the OPDI
+    match and the adsb.lol days follow the file.
+    """
+    import pandas as pd
+
+    t = pq.read_table(root / RANKING, columns=["MVT_TIME_UTC_mvt"])
+    stamps = pd.to_datetime(t["MVT_TIME_UTC_mvt"].to_pandas(), utc=True).dropna()
+    return tuple(sorted(stamps.dt.strftime("%Y-%m").unique()))
+
+
 def to_pandas(table: pa.Table):
     """Pandas frame; dictionary-encoded strings arrive as categoricals."""
     return table.to_pandas()

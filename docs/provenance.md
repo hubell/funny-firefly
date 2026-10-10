@@ -25,20 +25,20 @@ the gate's job is to prove there is no fifth.
 
 ## The constants
 
-`taxiout.provenance.CONSTANTS` carries **313** entries, one
+`taxiout.provenance.CONSTANTS` carries **315** entries, one
 per module-level numeric assignment the scanner finds outside the
-authored artifact. The scanner finds **368** in all, of which
+authored artifact. The scanner finds **370** in all, of which
 **50** are in `src/taxiout/synthetic.py` and are covered by
 `AUTHORED_ARTIFACTS` as a module rather than one by one.
 
 | class | entries | what it means |
 | --- | ---: | --- |
-| `mechanism` | 128 | definitional or a unit conversion; nobody chose it |
-| `chosen` | 145 | somebody picked it, and the basis says what against |
-| `derived` | 1 | computed from the data and frozen into the source |
+| `mechanism` | 127 | definitional or a unit conversion; nobody chose it |
+| `chosen` | 146 | somebody picked it, and the basis says what against |
+| `derived` | 3 | computed from the data and frozen into the source |
 | `quoted` | 39 | a measurement from a named run or document |
 
-**Of the 145 chosen constants, 14 record
+**Of the 146 chosen constants, 14 record
 no reason at all, and a further
 17 record the method, the convention or a neighbouring
 use and not the value.** That is the finding this register was built to
@@ -93,7 +93,7 @@ either direction without somebody seeing it.
 
 ## What a report declares it was generated from
 
-**28** generators write a footer naming every
+**29** generators write a footer naming every
 path the run read, with a sha256 each; check 8 recomputes them and calls
 the report verified, stale or unverifiable. The rule for who carries one
 is the Makefile's own measured time: under five minutes and the generator
@@ -248,7 +248,7 @@ than this record claiming it.
 
 ## Frozen documents
 
-**30** dated records, each with a sha256. These need
+**35** dated records, each with a sha256. These need
 the opposite gate from every other file here: the risk is not that they go
 stale, it is that somebody edits them. A currency check over one would
 demand destroying the record.
@@ -285,6 +285,11 @@ demand destroying the record.
 | `reports/preregistered-2026-10-06-g1n.md` | the amendment that defines G1n, the fusion gated by coverage and by airport out of fold, and C9b, and fixes v10's configuration: the source of `taxiout.models.FUSION_G1N_APPLIED`. Both candidates were chosen after 22d's figures were seen, and the copy says so in its opening paragraph. What is frozen is this published copy, at the digest beside it. What fixed the order is the working note it was copied from, sha256 4e6958eb394e72d663234ce364ee93982447834909436f593c2416e7080805f4, written on 6 October 2026 before any figure it governs existed. The copy differs from it in the six places its closing section lists, three of them inside a rule by the owner's decision of 7 October 2026, which `tests/test_preregistered_copies.py` checks against the note where the note is on hand |
 | `reports/preregistered-2026-10-06-airports.md` | the amendment of the last week's group B, airport by airport: every held-out month fitted for the new member and the longer booster, one booster per airport, the airport-by-airport selector and the combination rewritten around it; the source of `taxiout.models.GROUP_B_APPLIED`. What is frozen is this published copy, at the digest beside it. What fixed the order is the working note it was copied from, sha256 9ef5691f36365e2691204380b5f4e984d7049a0e2a8922f80943ed5309724a4a, written on 6 October 2026 before any figure it governs existed. The copy differs from it in the three places its closing section lists, none inside a rule, which `tests/test_preregistered_copies.py` checks against the note where the note is on hand |
 | `reports/preregistered-2026-10-07-group-c.md` | the pre-registration of group C: the booster's share in the blend with the refitted member, and a larger fusion stacker, with the rule that decides whether a v12 is built; neither cleared, so group C built no v12. What is frozen is this published copy, at the digest beside it. What fixed the order is the working note it was copied from, sha256 cb0ced3de2e6fb1a0a75bb8d9a4a41af29390ecee52356df25bbbf456d1be060, written on 7 October 2026 before any figure it governs existed. The copy differs from it in the eight places its closing section lists, three of them inside a rule by the owner's decision of 7 October 2026, which `tests/test_preregistered_copies.py` checks against the note where the note is on hand |
+| `reports/preregistered-2026-10-08-all-days.md` | the pre-registration of C17, the fusion fitted on every day of 2025 with an adsb.lol table, with the rule that decides whether it replaces v11's fusion; C17 cleared its rule and is v12's fusion. What is frozen is this published copy, at the digest beside it. What fixed the order is the working note it was copied from, sha256 695fa658d54abd8aed10c8e5465f941fc013ecebadb980dff46e19d0313f51a9, written on 8 October 2026 before any figure it governs existed. The copy differs from it in the nine places its closing section lists, five of them inside a rule by the owner's decision of 7 October 2026, which `tests/test_preregistered_copies.py` checks against the note where the note is on hand |
+| `reports/preregistered-2026-10-08-four-months.md` | the pre-registration of v12 on the four ranking months of the final phase, amending the third section of C17's; its season candidates were withdrawn by the final-phase amendment. What is frozen is this published copy, at the digest beside it. What fixed the order is the working note it was copied from, sha256 8c37c25b6a10c779d946885265d24c9896a5e934b9b424e56217d6cc8b72c372, written on 8 October 2026 before any figure it governs existed. The copy differs from it in the four places its closing section lists, two of them inside a rule by the owner's decision of 7 October 2026, which `tests/test_preregistered_copies.py` checks against the note where the note is on hand |
+| `reports/preregistered-2026-10-08-final-phase.md` | the amendment of the four-month pre-registration for the final phase: the season candidates withdrawn, v12 the single final file, uploaded once, and the checks before that upload. What is frozen is this published copy, at the digest beside it. What fixed the order is the working note it was copied from, sha256 553e042f94494798c2c7fd1c92823713069514eebdc90ba61a161d9bd12f41fa, written on 8 October 2026 before any figure it governs existed. The copy differs from it in the one place its closing section lists, inside a rule by the owner's decision of 7 October 2026, which `tests/test_preregistered_copies.py` checks against the note where the note is on hand |
+| `reports/preregistered-2026-10-09-jj-check.md` | the amendment of the January and July check after the organizers drew those months' times again, and of the final file's name. What is frozen is this published copy, at the digest beside it. What fixed the order is the working note it was copied from, sha256 05214673d1868f88f6215bee204ed43c17e733f527f16b18a56143b89ca0d85e, written on 9 October 2026 before any figure it governs existed. The copy differs from it in the three places its closing section lists, one of them inside a rule by the owner's decision of 7 October 2026, which `tests/test_preregistered_copies.py` checks against the note where the note is on hand |
+| `reports/preregistered-2026-10-09-records.md` | the pre-registration of W, the flight-plan window, of the tests of the shifted records and C20, and of the audit of the final file; W was found valid and is v12's last step, and C20 was not adopted. What is frozen is this published copy, at the digest beside it. What fixed the order is the working note it was copied from, sha256 908780852884eee96a4619986eb2fca47a8680ab4fd8462cf5029711c92895eb, written on 9 October 2026 before any figure it governs existed. The copy differs from it in the one place its closing section lists, which `tests/test_preregistered_copies.py` checks against the note where the note is on hand |
 
 ## What a rebuild of an external input is pinned to
 

@@ -93,6 +93,9 @@ def test_broken_template_is_rejected():
         ("team_v1.parquet", ("team", 1)),
         ("my_team_v12.parquet", ("my_team", 12)),
         ("a-b_v3.parquet", ("a-b", 3)),
+        ("team_final.parquet", ("team", None)),
+        ("funny-firefly_final.parquet", ("funny-firefly", None)),
+        ("my_team_final.parquet", ("my_team", None)),
     ],
 )
 def test_filename_pattern_accepts(name, expected):
@@ -108,6 +111,10 @@ def test_filename_pattern_accepts(name, expected):
         "team_v1.csv",
         "_v1.parquet",
         "team_v1.parquet.bak",
+        "_final.parquet",
+        "team_Final.parquet",
+        "team-final.parquet",
+        "team_final.csv",
     ],
 )
 def test_filename_pattern_rejects(name):

@@ -23,7 +23,8 @@ def ts(s):
 
 
 def test_the_ten_day_grid_and_the_monthly_lists():
-    ev = opdi.event_files()
+    match = opdi.match_months(("2026-01", "2026-07"))
+    ev = opdi.event_files(match)
     assert len(ev) == 45
     assert ev[0] == "flight_events_20241226_20250105.parquet"
     assert "flight_events_20251231_20260110.parquet" in ev
@@ -31,7 +32,7 @@ def test_the_ten_day_grid_and_the_monthly_lists():
     assert ev[-1] == "flight_events_20260729_20260808.parquet"
     # a file wholly in June 2026 is not read
     assert "flight_events_20260619_20260629.parquet" not in ev
-    lists = opdi.list_files()
+    lists = opdi.list_files(opdi.list_months(match))
     assert len(lists) == 16
     assert (
         lists[0] == "flight_list_202412.parquet"
@@ -39,6 +40,37 @@ def test_the_ten_day_grid_and_the_monthly_lists():
     )
     assert opdi.url_of(ev[0]).endswith("/v002/flight_events/" + ev[0])
     assert opdi.url_of(lists[0]).endswith("/v002/flight_list/" + lists[0])
+
+
+def test_the_two_ranking_months_give_the_lists_they_were_named_with():
+    match = opdi.match_months(("2026-01", "2026-07"))
+    assert match == tuple(f"2025{m:02d}" for m in range(1, 13)) + ("202601", "202607")
+    assert opdi.match_months(("202607", "202601")) == match
+    assert opdi.list_months(match) == (
+        ("202412",) + match[:12] + ("202601", "202606", "202607")
+    )
+
+
+def test_four_ranking_months_read_their_files_and_the_month_before_each_run():
+    match = opdi.match_months(("2026-01", "2026-02", "2026-06", "2026-07"))
+    assert match[-4:] == ("202601", "202602", "202606", "202607")
+    lists = opdi.list_months(match)
+    # December 2024 before the training year and January and February 2026,
+    # May 2026 before June and July
+    assert set(lists) - set(match) == {"202412", "202605"}
+    ev = opdi.event_files(match)
+    two = opdi.event_files(opdi.match_months(("2026-01", "2026-07")))
+    assert set(two) <= set(ev)
+    assert sorted(set(ev) - set(two)) == [
+        "flight_events_20260209_20260219.parquet",
+        "flight_events_20260219_20260301.parquet",
+        "flight_events_20260530_20260609.parquet",
+        "flight_events_20260609_20260619.parquet",
+        "flight_events_20260619_20260629.parquet",
+    ]
+    # a file wholly in March or in May 2026 is not read
+    assert "flight_events_20260301_20260311.parquet" not in ev
+    assert "flight_events_20260520_20260530.parquet" not in ev
 
 
 def test_ids_are_the_same_64_bits_whether_stored_unsigned_or_signed():

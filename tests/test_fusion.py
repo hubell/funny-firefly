@@ -48,13 +48,46 @@ def legs(rows):
     )
 
 
-def test_the_days_of_section_5():
-    days = fusion.adsb_days()
-    assert len(days) == 245
-    assert days[0] == "2025-01-01" and days[182] == "2025-12-31"
-    assert "2025-01-02" not in days
-    assert days[183] == "2026-01-01" and days[-1] == "2026-07-31"
+def test_the_days_are_every_day_of_2025_then_the_ranking_months():
+    # C17 (§1 of the all-days note) reads every day of 2025, where §5 of the
+    # board note read every second one
+    days = fusion.adsb_days(("2026-01", "2026-07"))
+    assert len(days) == 365 + 31 + 31
+    assert days[0] == "2025-01-01" and days[364] == "2025-12-31"
+    assert "2025-01-02" in days
+    assert days[365] == "2026-01-01" and days[-1] == "2026-07-31"
     assert set(fusion.EXCLUDED_FIT_DAYS) <= set(days)
+
+
+def test_the_days_follow_the_ranking_months():
+    # four ranking months: every day of each, after the 365 of 2025, in order
+    days = fusion.adsb_days(("2026-07", "2026-01", "2026-06", "2026-02"))
+    assert len(days) == 365 + 31 + 28 + 30 + 31
+    assert days[365] == "2026-01-01" and days[-1] == "2026-07-31"
+    assert days == sorted(days)
+    assert {"2026-02-28", "2026-06-01", "2026-06-30"} <= set(days)
+    assert not {"2026-03-01", "2026-05-31"} & set(days)
+    assert days[:396] == fusion.adsb_days(("2026-01", "2026-07"))[:396]
+
+
+def test_the_ranking_months_are_read_from_the_file(tmp_path):
+    pq = pytest.importorskip("pyarrow.parquet")
+    pa = pytest.importorskip("pyarrow")
+    from taxiout.challenge import RANKING, ranking_months
+
+    stamps = pd.to_datetime(
+        [
+            "2026-07-31T23:59:59Z",
+            "2026-01-01T00:00:00Z",
+            "2026-02-28T12:00:00Z",
+            "2026-06-01T00:00:00Z",
+            None,
+        ],
+        utc=True,
+    )
+    table = pa.table({"MVT_TIME_UTC_mvt": pa.array(stamps, pa.timestamp("us", "UTC"))})
+    pq.write_table(table, tmp_path / RANKING)
+    assert ranking_months(tmp_path) == ("2026-01", "2026-02", "2026-06", "2026-07")
 
 
 def test_the_match_window_is_120_s_and_a_tie_goes_to_the_callsign():
@@ -269,3 +302,28 @@ def test_the_model_constants_are_section_5s():
     )
     assert p["deterministic"] and p["force_col_wise"] and p["num_threads"] == 8
     assert p["seed"] == 20260902 and fusion.ROUNDS == 1000
+
+
+def c17_days():
+    """Every day of 2025 but the two training pilot days (15 January, 16 July)
+    and the fifteen without an adsb.lol table (28 May to 10 June, 15 October)."""
+    first = pd.Timestamp("2025-01-01")
+    out = {"2025-01-15", "2025-07-16", "2025-10-15"} | {
+        (pd.Timestamp("2025-05-28") + pd.Timedelta(days=i)).strftime("%Y-%m-%d")
+        for i in range(14)
+    }
+    every = [(first + pd.Timedelta(days=i)).strftime("%Y-%m-%d") for i in range(365)]
+    return [d for d in every if d not in out]
+
+
+def test_the_fitting_days_are_c17s_by_count_and_by_list():
+    days = c17_days()
+    assert len(days) == fusion.FIT_DAYS == 348
+    assert fusion.check_fit_days(days) == fusion.FIT_DAYS_SHA256
+    # the order the days arrive in, and a day seen twice, do not count
+    assert fusion.check_fit_days(days[::-1] + days[:3]) == fusion.FIT_DAYS_SHA256
+    # a day dropped, or one swapped for a day without a table, is refused
+    with pytest.raises(RuntimeError):
+        fusion.check_fit_days(days[1:])
+    with pytest.raises(RuntimeError):
+        fusion.check_fit_days(days[1:] + ["2025-06-01"])
