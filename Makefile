@@ -11,7 +11,7 @@ PYTHON ?= python3
         monthly-seeds monthly-seeds-fit monthly-pairs monthly-pairs-fit planshift c6 \
         istanbul fiumicino submission final paper-docx test lint licence-check provenance \
         adsb opdi fusion fusion-tables group-b group-b-fit fusion-new-base window \
-        v12-ladder clean help
+        v12-ladder-rows v12-ladder clean help
 
 help:
 	@echo "make data     fetch and cache OSM geometry      -> data/raw/<ICAO>.json.gz"
@@ -45,6 +45,7 @@ help:
 	@echo "make group-b      group B of the last week, read   -> reports/group-b.md"
 	@echo "make group-b-fit  what the final file reads of group B -> data/processed/candidates_board/"
 	@echo "make fusion-new-base  the fusion on group B's base -> reports/fusion-new-base.md"
+	@echo "make v12-ladder-rows  the two fusions' held-out rows -> data/processed/v12_ladder/"
 	@echo "make v12-ladder   v12 step by step on the held-out year -> reports/v12-ladder.md"
 	@echo "make istanbul      Istanbul's February and January 2026 -> reports/istanbul.md"
 	@echo "make fiumicino     the last three blocks at Fiumicino -> reports/fiumicino.md"
@@ -364,10 +365,18 @@ fusion-new-base:
 group-b-fit:
 	$(PYTHON) -u scripts/report_group_b.py --fit-c14
 
+# The two fusions' out-of-fold rows v12-ladder reads, written to
+# data/processed/v12_ladder/ (gitignored): C17's fitting frame formed as make
+# final forms it, from fusion-tables' 2025 table and group-b-fit's records; then
+# C17's twelve held-out fits, and the same twelve on v11's fusion's 174 fitting
+# days, every second day of 2025. 7 min 54 s on eight cores on 11 October 2026;
+# both files equal, byte for byte, the rows of the run that read C17.
+v12-ladder-rows:
+	$(PYTHON) -u scripts/report_v12_ladder.py --rows
+
 # v12 decomposed on the held-out year, step by step. Reads group-b-fit's
-# records, the training files and the two fusions' out-of-fold rows under
-# data/processed/v12_ladder/, which no target writes: they are the rows of the
-# run that read C17. Fits only the two cell rules: 1 min 21 s on 11 October 2026.
+# records, the training files and v12-ladder-rows' two files. Fits only the two
+# cell rules: 1 min 21 s on 11 October 2026.
 v12-ladder:
 	$(PYTHON) scripts/report_v12_ladder.py
 
@@ -389,7 +398,9 @@ submission:
 	$(PYTHON) scripts/make_submission.py --team $(TEAM)
 
 # The final phase's one file, <name>_final.parquet, built as submission builds a
-# version; then scripts/check_final.py audits it against its control. Reads the
+# version. scripts/check_final.py, run on its own, audits it against its
+# control, a second build of January and July alone, and the tables its
+# docstring names; this target does not run it. Reads the
 # challenge data, the matrices, the METAR cache, the OurAirports table, the
 # fusion's tables (fusion-tables) and group B's records (group-b-fit). 3 h 41 min
 # 17 s on eight cores in a clean clone on 11 October 2026, at a 32.4 GiB peak.

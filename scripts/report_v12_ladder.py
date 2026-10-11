@@ -32,7 +32,13 @@ and must rebuild C14's record to the bit from its parts. S3 and S4 read the two
 fusions' out-of-fold rows under ``data/processed/v12_ladder/``: per held-out
 month, each fusion fitted on the other eleven months' fitting rows, with C14's
 out-of-fold prediction as its base; every row's base must equal S2's model
-prediction and its target the record's. The fusion's July leg (fitted January
+prediction and its target the record's. ``--rows`` writes those two files
+first: C17's fitting frame formed as ``scripts/make_submission.py --final``
+forms it (``make fusion-tables``' 2025 table on C17's 348 fitting days, group
+B's new base from the board), then ``c17_rows.parquet``, C17's twelve
+held-out fits as the submission fits them, and ``reference_rows.parquet``,
+v11's fusion: the same twelve fits on the 174 of those days that fall every
+second day from 1 January, each predicting its month's scored rows on all 348. The fusion's July leg (fitted January
 to June) was never fitted, so the July leg reads S0 to S2 only. The two rules
 are fitted here per split, on the split's training months, as
 ``scripts/report_c6.py`` fits C6b and the submission fits the rule; they are
@@ -50,12 +56,14 @@ the three pairs, as an annex.
 
 Usage::
 
+    python scripts/report_v12_ladder.py --rows     # writes data/processed/v12_ladder/
     python scripts/report_v12_ladder.py            # writes reports/v12-ladder.md
 """
 
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import json
 import sys
 from pathlib import Path
@@ -76,8 +84,12 @@ from taxiout.validation import cluster_bootstrap, cluster_sums  # noqa: E402
 DATA = REPO / "data" / "challenge"
 BOARD = REPO / "data" / "processed" / "candidates_board"
 ROWS = REPO / "data" / "processed" / "v12_ladder"
+FUSION = REPO / "data" / "processed" / "fusion"
 DEFAULT_OUT = REPO / "reports" / "v12-ladder.md"
 FUSION_ROWS = {"S3": "reference_rows.parquet", "S4": "c17_rows.parquet"}
+# v11's fusion's fitting days, as ``taxiout.fusion.check_fit_days`` pins C17's:
+# the sha256 of the sorted list, one ISO date per line.
+REFERENCE_DAYS_SHA256 = "d94475e15b3caa45a7ad7c7662a13832deec76ea22b7e55abe5259aca2750d6a"
 STEPS = ("S0", "S1", "S2", "S3", "S4", "S5")
 LABELS = {
     "S0": "S0 booster alone",
@@ -113,8 +125,14 @@ EXTRA_COLUMNS = (
 def numbers() -> dict:
     """The report's fixed numbers, in a function so that the provenance
     register has no module-level literal to categorise: twelve months, the
-    long-row threshold of four hours the other held-out reports count."""
-    return {"months": tuple(f"{m:02d}" for m in range(1, 13)), "long_s": 4 * 3600.0}
+    long-row threshold of four hours the other held-out reports count; and
+    v11's fusion's fitting days, every second day of 2025 among C17's, 174."""
+    return {
+        "months": tuple(f"{m:02d}" for m in range(1, 13)),
+        "long_s": 4 * 3600.0,
+        "reference_step_days": 2,
+        "reference_days": 174,
+    }
 
 
 def split_plan() -> list[tuple[str, str, tuple[int, ...]]]:
@@ -222,6 +240,85 @@ def rules(T: pd.DataFrame, k: pd.DataFrame, train_months: tuple[int, ...]):
     if rterm.any():
         tail[rterm] = c6b.predict(V[rterm])
     return pd.Series(tail), ps.predict(V).reset_index(drop=True), window.lag_s(V)
+
+
+def fit_frame_2025() -> pd.DataFrame:
+    """C17's fitting frame, formed as ``make_submission.fusion_stage`` forms it."""
+    from taxiout.tails import plan_shift_threshold_s
+
+    path = FUSION / "fit_2025.parquet"
+    if not path.exists():
+        raise SystemExit(f"no {path.relative_to(REPO)}; make fusion-tables")
+    table = pd.read_parquet(path)
+    try:
+        fusion.check_fit_days(table["day"].unique())
+    except RuntimeError as err:
+        raise SystemExit(f"{path.relative_to(REPO)}: {err}") from None
+    base = group_b.read_new_base(BOARD)
+    return fusion.fit_frame(table, base, plan_shift_threshold_s())
+
+
+def reference_days(days) -> list[str]:
+    """v11's fusion's fitting days: every second day of 2025 from 1 January among C17's."""
+    n = numbers()
+    first = fusion.ADSB_FIRST_2025
+    out = sorted(
+        d
+        for d in set(days)
+        if (dt.date.fromisoformat(d) - first).days % n["reference_step_days"] == 0
+    )
+    got = fusion.fit_days_sha256(out)
+    if len(out) != n["reference_days"] or got != REFERENCE_DAYS_SHA256:
+        raise SystemExit(
+            f"{len(out)} reference days, sha256 {got}; v11's fusion's are"
+            f" {n['reference_days']}, {REFERENCE_DAYS_SHA256}"
+        )
+    return out
+
+
+def reference_out_of_fold(frame: pd.DataFrame, days: list[str]) -> pd.DataFrame:
+    """Each month's scored rows on every day, by the fit on the other months' fitting
+    rows of ``days``; laid out as ``fusion.leave_one_month_out`` lays out its rows."""
+    fit = frame[frame["day"].isin(days) & frame["fit_row"]]
+    out = []
+    for mm in fusion.MONTHS:
+        model = fusion.train(fit[fit["month"] != mm])
+        sc = frame[(frame["month"] == mm) & frame["scored_row"]]
+        out.append(
+            pd.DataFrame(
+                {
+                    ID: sc[ID].to_numpy(),
+                    "day": sc["day"].to_numpy(),
+                    "month": mm,
+                    "ADEP_mvt": sc["ADEP_mvt"].to_numpy(),
+                    "y": sc["y"].to_numpy(),
+                    "base": sc["base"].to_numpy(),
+                    "fusion": fusion.predict(model, sc),
+                    "a_covered": sc["a_covered"].to_numpy(),
+                    "o_covered": sc["o_covered"].to_numpy(),
+                }
+            )
+        )
+        print(f"  reference {mm}: {len(sc):,} rows")
+    return pd.concat(out, ignore_index=True)
+
+
+def write_rows() -> int:
+    """The two fusions' out-of-fold rows under ``data/processed/v12_ladder/``."""
+    frame = fit_frame_2025()
+    ROWS.mkdir(parents=True, exist_ok=True)
+    days = reference_days(frame["day"].unique())
+    written_rows = {
+        "c17_rows.parquet": fusion.leave_one_month_out(frame),
+        "reference_rows.parquet": reference_out_of_fold(frame, days),
+    }
+    for name, rows in written_rows.items():
+        path = ROWS / name
+        rows.to_parquet(path, index=False)
+        print(
+            f"{path.relative_to(REPO)}: {len(rows):,} rows, sha256 {fusion.sha256_file(path)}"
+        )
+    return 0
 
 
 def fusion_rows(used: set[Path]) -> dict[str, tuple[pd.DataFrame, pd.DataFrame]]:
@@ -509,7 +606,14 @@ def build_report(frames, readings_all, readings_core, inputs) -> str:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--out", type=Path, default=DEFAULT_OUT)
+    ap.add_argument(
+        "--rows",
+        action="store_true",
+        help="write the two fusions' out-of-fold rows to data/processed/v12_ladder/ and stop",
+    )
     args = ap.parse_args(argv)
+    if args.rows:
+        return write_rows()
     before = c.fingerprint()
     used: set[Path] = set()
     T = training()

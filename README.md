@@ -257,7 +257,8 @@ make adsb        # verifies the adsb.lol tables under data/raw/adsb/ against the
 make opdi        # fetches OPDI where its cache lacks a file (network), then matches it; needs the challenge data
 make fusion-tables  # needs both caches above; writes data/processed/fusion/
 make group-b-fit # fits what group B's selector lacks on the held-out months; writes data/processed/candidates_board/
-make v12-ladder  # needs group-b-fit's records and data/processed/v12_ladder/; writes reports/v12-ladder.md
+make v12-ladder-rows  # needs fusion-tables' tables and group-b-fit's records; writes data/processed/v12_ladder/
+make v12-ladder  # needs group-b-fit's records and v12-ladder-rows' files; writes reports/v12-ladder.md
 make submission TEAM=<name>   # needs the challenge data; writes a submission
 make final TEAM=<name>        # needs everything from make reports to make group-b-fit; writes data/submissions/<name>_final.parquet
 make licence-check  # verify no OSM-derived or challenge content is tracked
@@ -292,7 +293,7 @@ data review and everything after it need `pip install -e ".[modelling]"`.
 | `scripts/fetch_metar.py` | Iowa State Mesonet ASOS archive | `data/raw/metar/<ICAO>_<period>.csv`, `MANIFEST.json` |
 | `scripts/fetch_metar_history.py` | `data/challenge/` (which airports have departures), Iowa State Mesonet ASOS archive, 2015 to 2024 | `data/raw/metar_history/<ICAO>_<period>.csv`, `MANIFEST.json` |
 | `scripts/fetch_ourairports.py` | OurAirports `airports.csv` | `data/raw/ourairports_airports.csv`, `ourairports_MANIFEST.json` |
-| `scripts/fetch_adsb.py` | adsb.lol globe history on GitHub (`adsblol/globe_history_2025`, `_2026`), the `prod` release of each of 245 days | `data/raw/adsb/<day>.parquet` (ODbL 1.0), `MANIFEST.json`, `ODbL-NOTICE.md`; `--verify` reads the cache offline |
+| `scripts/fetch_adsb.py` | adsb.lol globe history on GitHub (`adsblol/globe_history_2025`, `_2026`), the `prod` release of each of 485 days, 470 of which have a table | `data/raw/adsb/<day>.parquet` (ODbL 1.0), `MANIFEST.json`, `ODbL-NOTICE.md`; `--verify` reads the cache offline |
 | `scripts/fetch_opdi.py` | OPDI v0.0.2 flight events and flight lists (EUROCONTROL), `data/challenge/` | `data/raw/opdi/` (`MANIFEST.json`), `data/interim/opdi/matched/<YYYYMM>.parquet`; never deposited |
 | `scripts/report_coverage.py` | `data/raw/` | `reports/stand_coverage.md` |
 | `scripts/build_taxi_graph.py` | `data/raw/` | `data/processed/taxi_distance/`, `reports/taxi_routing.md` |
@@ -317,7 +318,7 @@ data review and everything after it need `pip install -e ".[modelling]"`.
 | `scripts/report_istanbul.py` | `data/challenge/`, `data/processed/monthly_seeds/`, `data/raw/metar/`, `data/raw/metar_history/` | `reports/istanbul.md` |
 | `scripts/report_fiumicino.py` | `data/challenge/`, `data/processed/monthly_ladder/` | `reports/fiumicino.md` |
 | `scripts/report_group_b.py` | `data/challenge/`, `data/processed/candidates_board/`, `data/raw/metar/`, `reports/monthly_seeds.md` | `reports/group-b.md`; `--refit` refits one recorded fit; `--fit-c14` fits the selector's parts on the held-out months where their records are absent and forms its records, into `data/processed/candidates_board/` (gitignored) |
-| `scripts/report_v12_ladder.py` | `data/challenge/`, `data/processed/candidates_board/`, `data/processed/v12_ladder/` | `reports/v12-ladder.md` |
+| `scripts/report_v12_ladder.py` | `data/challenge/`, `data/processed/candidates_board/`, `data/processed/fusion/` (`--rows`), `data/processed/v12_ladder/` | `data/processed/v12_ladder/` (`--rows`, gitignored); `reports/v12-ladder.md` |
 | `scripts/report_fusion_new_base.py` | `data/processed/fusion/`, `data/processed/candidates_board/`, `reports/monthly_seeds.md` | `reports/fusion-new-base.md` |
 | `scripts/sweep_params.py` | `data/challenge/`, `data/processed/taxi_distance/`, `data/raw/metar/` | `data/processed/sweep_october.csv` (gitignored) |
 | `scripts/make_submission.py` | `data/challenge/`, `data/processed/taxi_distance/`, `data/raw/metar/`, `data/raw/ourairports_airports.csv`, `data/processed/fusion/`, `data/processed/candidates_board/` | `data/submissions/<team>_v<n>.parquet`, or `<team>_final.parquet` with `--final` (gitignored; the directory is made if absent) |
@@ -388,11 +389,11 @@ answers, fetched at their pins as above or copied from the deposit into
 the two OurAirports tables into `data/raw/`. Those two are cached fetches
 recorded with their requests and terms, and OurAirports is rebuilt nightly, so
 a fetch made later would not return the files the committed figures were
-computed from. v12 reads two caches more, which the deposit does not hold
-(below): the adsb.lol event tables into `data/raw/adsb/`, one per day with a
-table (470 days) beside the manifest, the notice and the fetch log; and
-OPDI's flight events and lists into `data/raw/opdi/`, 68 files with the
-manifest. From the first four of those inputs, on 27 September 2026, a fresh
+computed from. v12 reads two caches more: from the deposit, the adsb.lol
+event tables into `data/raw/adsb/`, one per day with a table (470 days)
+beside the manifest and the notice; and OPDI's flight events and lists into
+`data/raw/opdi/`, 68 files with the manifest, which the deposit does not hold
+(below). From the first four of those inputs, on 27 September 2026, a fresh
 clone at the tag rebuilt the 35 matrix files and the 52 residual files byte
 for byte, regenerated fourteen
 reports with no figure moved, passed the paper's own check
@@ -442,11 +443,12 @@ matrix files and the eleven Overpass answers with their `PINS.json`, and,
 public domain, the METAR cache, the ten years of METARs before it and the
 two OurAirports tables, each with the manifest the fetcher wrote. Its `README.md` says how each part is verified
 against this repository at the tag, and `SHA256SUMS` covers every file in it.
-It does not hold v12's two further caches. The adsb.lol tables are fetched
-again with `python scripts/fetch_adsb.py --all`, more than a terabyte of
-releases; OPDI's site states no data licence and the entry uses OPDI on the
-organizers' confirmation, so no OPDI file is deposited, and `make opdi`
-fetches the files again from EUROCONTROL.
+It holds, under ODbL, the adsb.lol event tables v12 reads, 470 days with
+their manifest and notice, which `make adsb` then verifies offline;
+`python scripts/fetch_adsb.py --all` fetches them again instead, more than a
+terabyte of releases. It does not hold OPDI: OPDI's site states no data
+licence and the entry uses OPDI on the organizers' confirmation, so no OPDI
+file is deposited, and `make opdi` fetches the files again from EUROCONTROL.
 
 ## Data sources
 
@@ -483,10 +485,26 @@ fetches the files again from EUROCONTROL.
   endpoint and terms and cached, gitignored, under `data/raw/metar_history/`
   with its own `MANIFEST.json`; it sets 2025's weather against a ten-year
   norm in one table of `reports/monthly_ladder.md` and enters no model.
+- **adsb.lol**: the globe history of ADS-B positions, under the
+  [Open Database License 1.0](https://opendatacommons.org/licenses/odbl/1-0/).
+  `scripts/fetch_adsb.py` fetches each day's `prod` release from
+  `adsblol/globe_history_2025` and `_2026` on GitHub and caches one table of
+  per-leg ground events per day, gitignored, under `data/raw/adsb/`, with
+  `MANIFEST.json` and `ODbL-NOTICE.md`: 470 days, 350 of 2025 and the 120 of
+  the four ranking months. The fusion model reads it and nothing else does.
+- **OPDI**: the flight events and flight lists of EUROCONTROL's Open
+  Performance Data Initiative, v0.0.2. Its site states no data licence; the
+  entry uses OPDI on the organizers' confirmation that it is open to the
+  challenge (`docs/prior_art.md`). `scripts/fetch_opdi.py` fetches the
+  published files into `data/raw/opdi/` and matches them to the departures
+  under `data/interim/opdi/`; both are gitignored, and no OPDI file or table
+  built from one is tracked or deposited. Like adsb.lol, it enters only the
+  fusion model.
 
-Those two are the additional *datasets*. Both, as the entry read them, are in
-the Zenodo deposit [10.5281/zenodo.23133051](https://doi.org/10.5281/zenodo.23133051) beside the OSM-derived matrices and answers, so a
-reader has the exact inputs and not only the request that fetched them. One
+Those four are the additional *datasets*. The first three, as the entry read
+them, are in the Zenodo deposit [10.5281/zenodo.23133051](https://doi.org/10.5281/zenodo.23133051) beside the OSM-derived matrices and answers, so a
+reader has the exact inputs and not only the request that fetched them; OPDI
+is not, for the reason under *The deposit* above. One
 further external input is not a dataset at all and is listed separately so
 the distinction is not blurred:
 
@@ -509,8 +527,9 @@ source and it is not used for commercial purposes" and states that the
 information "may not be modified without prior written permission", which is
 non-commercial and no-derivatives, and this entry reads that as failing the
 prize rules' requirement that additional datasets be "openly available under
-an open source license", the same reading that excluded OPDI in
-[`docs/prior_art.md`](docs/prior_art.md). ERA5 (Copernicus, CC-BY since July
+an open source license", the same reading that kept OPDI out of the entry
+until the organizers confirmed it open to the challenge, as
+[`docs/prior_art.md`](docs/prior_art.md) records. ERA5 (Copernicus, CC-BY since July
 2025) clears the rule and was not pursued: the nearest test, the METAR's own
 wind, ceiling, temperature and thunderstorm fields, bought nothing.
 
