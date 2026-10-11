@@ -135,9 +135,15 @@ edge sets under ``data/processed/taxi_distance/`` (``make reports``), the METAR
 cache under ``data/raw/metar/`` (``make metar``) and the OurAirports table under
 ``data/raw/`` (``make ourairports``), which the weather and destination blocks
 read and without either of which this refuses to write, and the modelling
-extras. Takes about half an hour on eight cores: v7, the five-seed file, took
-32 min 26 s on 2 October 2026 by ``/usr/bin/time``, and its second build that
-day, byte for byte the same file, 31 min 2 s.
+extras. Where the fusion is applied, also the fusion's two feature tables under
+``data/processed/fusion/`` (``make fusion-tables``, from the adsb.lol and OPDI
+caches); where group B's base is, also its records for the twelve held-out
+months under ``data/processed/candidates_board/`` (``make group-b-fit``, sixty
+fits on a board that holds none). ``data/submissions/`` is made if absent.
+Takes about three and a half hours on eight cores for v12: 3 h 36 min 46 s and
+3 h 37 min 30 s on 10 October 2026 by ``/usr/bin/time``, two builds of the same
+file, and 3 h 41 min 17 s in a clean clone on 11 October. v7, the five-seed
+file before the fusion and group B, took 32 min 26 s on 2 October 2026.
 
 Usage
 -----
@@ -1191,6 +1197,9 @@ def main() -> int:
                 file=sys.stderr,
             )
             return 1
+    # A clean checkout has no data/submissions/: made here, once every path in
+    # it is known to be ignored, and not at the first write after the fit.
+    SUBMISSIONS.mkdir(parents=True, exist_ok=True)
     git_revision, git_clean = revision()
 
     inputs = load_inputs()

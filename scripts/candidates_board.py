@@ -3533,8 +3533,13 @@ class GroupB:
         return self.derive(name, frame, how)
 
     def base(self, split: str, seed: int) -> pd.DataFrame | None:
-        """v9's configuration: stored at seed 0, the second-seed members' half-and-half otherwise."""
-        if seed == 0:
+        """v9's configuration: stored at seed 0, the members' half-and-half otherwise.
+
+        At seed 0 the configuration stage's record is read where it exists; a
+        board that holds only the fitted parts forms it as every other seed is
+        formed.
+        """
+        if seed == 0 and cb.record_path(cb.record_name(split, "combo4", 0)).exists():
             return self.kept("combo4", split, 0)
         half = board_rule().blend_weight
         return self.blended("combo4", split, seed, "combo4_booster", "c3b_member", half)

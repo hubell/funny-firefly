@@ -3334,6 +3334,7 @@ REPORT_INPUTS_DECLARED: tuple[tuple[str, str], ...] = (
     ("scripts/report_synthetic_airport.py", "reports/synthetic_airport.md"),
     ("scripts/report_tails.py", "reports/tails.md"),
     ("scripts/report_transfer.py", "reports/transfer.md"),
+    ("scripts/report_v12_ladder.py", "reports/v12-ladder.md"),
     ("scripts/report_window.py", "reports/window.md"),
     ("scripts/review_challenge_data.py", "reports/data_review.md"),
     ("scripts/run_baselines.py", "reports/baseline.md"),

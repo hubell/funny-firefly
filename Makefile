@@ -10,7 +10,8 @@ PYTHON ?= python3
         preregistered metar-history monthly monthly-fit monthly-ladder monthly-ladder-fit \
         monthly-seeds monthly-seeds-fit monthly-pairs monthly-pairs-fit planshift c6 \
         istanbul fiumicino submission final paper-docx test lint licence-check provenance \
-        adsb opdi fusion fusion-tables group-b fusion-new-base window clean help
+        adsb opdi fusion fusion-tables group-b group-b-fit fusion-new-base window \
+        v12-ladder clean help
 
 help:
 	@echo "make data     fetch and cache OSM geometry      -> data/raw/<ICAO>.json.gz"
@@ -42,7 +43,9 @@ help:
 	@echo "make fusion       the fusion model and its gates   -> reports/fusion.md"
 	@echo "make fusion-tables  the fusion's two feature tables -> data/processed/fusion/"
 	@echo "make group-b      group B of the last week, read   -> reports/group-b.md"
+	@echo "make group-b-fit  what the final file reads of group B -> data/processed/candidates_board/"
 	@echo "make fusion-new-base  the fusion on group B's base -> reports/fusion-new-base.md"
+	@echo "make v12-ladder   v12 step by step on the held-out year -> reports/v12-ladder.md"
 	@echo "make istanbul      Istanbul's February and January 2026 -> reports/istanbul.md"
 	@echo "make fiumicino     the last three blocks at Fiumicino -> reports/fiumicino.md"
 	@echo "make paper-docx    the paper as a Word document  -> docs/paper.docx"
@@ -315,13 +318,19 @@ adsb:
 # Network, then offline. OPDI's flight events and lists into data/raw/opdi/,
 # fetched where missing, then reduced, tied and matched to every departure of
 # the training year and the ranking months: data/interim/opdi/matched/. Needs
-# the challenge data. Neither directory is ever deposited.
+# the challenge data. Neither directory is ever deposited. The cache lacks one
+# event file for good (it answered 404 on 4 October 2026), so this asks the
+# network for it on every run; `python scripts/fetch_opdi.py --offline` builds
+# the same tables from the cache alone.
 opdi:
 	$(PYTHON) scripts/fetch_opdi.py
 
 # From both caches above, the training and ranking files and the adopted
 # configuration's held-out months: the feature tables in
-# data/processed/fusion/, twelve fits, and reports/fusion.md.
+# data/processed/fusion/, twelve fits, and reports/fusion.md. It reads the
+# tables in place: after fusion-tables, the 348 days the final file reads, and
+# not the 174 of 7 October that reports/fusion.md and fusion-new-base.md were
+# generated on; it then rewrites lomo.parquet, which the second declares.
 fusion:
 	$(PYTHON) scripts/report_fusion.py
 
@@ -334,7 +343,8 @@ fusion-tables:
 # data/processed/candidates_board/: every derived prediction formed again and
 # checked against its record, every rule read, reports/group-b.md. Refits
 # nothing; `python scripts/report_group_b.py --refit NAME --refit-out DIR`
-# refits one recorded fit and compares it to the bit.
+# refits one recorded fit and compares it to the bit, and needs that record;
+# a board without the records is filled by group-b-fit.
 group-b:
 	$(PYTHON) scripts/report_group_b.py --json data/processed/candidates_board/group_b.json
 
@@ -343,6 +353,23 @@ group-b:
 # reports/fusion-new-base.md.
 fusion-new-base:
 	$(PYTHON) scripts/report_fusion_new_base.py
+
+# What the final file reads of group B, on a board that lacks it: for each of
+# the twelve held-out months, the five parts the selector's menu is formed
+# from (the configuration's booster, C3b's, C11's, C12's and C13's) fitted
+# where their records are absent, then the configuration, the menu items and
+# C14 formed and written. Sixty fits on a bare board, by the same harness:
+# 11 h 14 min 44 s on eight cores on 10 and 11 October 2026. Records already
+# present are read and checked, not refitted.
+group-b-fit:
+	$(PYTHON) -u scripts/report_group_b.py --fit-c14
+
+# v12 decomposed on the held-out year, step by step. Reads group-b-fit's
+# records, the training files and the two fusions' out-of-fold rows under
+# data/processed/v12_ladder/, which no target writes: they are the rows of the
+# run that read C17. Fits only the two cell rules: 1 min 21 s on 11 October 2026.
+v12-ladder:
+	$(PYTHON) scripts/report_v12_ladder.py
 
 # From monthly-seeds' residuals, the training and ranking files and both METAR
 # caches.
@@ -362,7 +389,10 @@ submission:
 	$(PYTHON) scripts/make_submission.py --team $(TEAM)
 
 # The final phase's one file, <name>_final.parquet, built as submission builds a
-# version; then scripts/check_final.py audits it against its control.
+# version; then scripts/check_final.py audits it against its control. Reads the
+# challenge data, the matrices, the METAR cache, the OurAirports table, the
+# fusion's tables (fusion-tables) and group B's records (group-b-fit). 3 h 41 min
+# 17 s on eight cores in a clean clone on 11 October 2026, at a 32.4 GiB peak.
 final:
 	@test -n "$(TEAM)" || { echo "usage: make final TEAM=<name>"; exit 1; }
 	$(PYTHON) scripts/make_submission.py --team $(TEAM) --final

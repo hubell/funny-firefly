@@ -251,11 +251,35 @@ make istanbul    # needs monthly-seeds' residuals and the METAR history; writes 
 make fiumicino   # needs monthly-ladder's residuals; writes reports/fiumicino.md
 make group-b     # needs group B's records; writes reports/group-b.md
 make fusion-new-base  # needs make fusion's tables and group B's records; writes reports/fusion-new-base.md
+make c6          # needs the challenge data; writes reports/c6.md
+make window      # needs the challenge data; writes reports/window.md
+make adsb        # verifies the adsb.lol tables under data/raw/adsb/ against their manifest (offline)
+make opdi        # fetches OPDI where its cache lacks a file (network), then matches it; needs the challenge data
+make fusion-tables  # needs both caches above; writes data/processed/fusion/
+make group-b-fit # fits what group B's selector lacks on the held-out months; writes data/processed/candidates_board/
+make v12-ladder  # needs group-b-fit's records and data/processed/v12_ladder/; writes reports/v12-ladder.md
 make submission TEAM=<name>   # needs the challenge data; writes a submission
+make final TEAM=<name>        # needs everything from make reports to make group-b-fit; writes data/submissions/<name>_final.parquet
 make licence-check  # verify no OSM-derived or challenge content is tracked
 make provenance     # verify every number is categorised; writes docs/provenance.md
 make paper-docx     # the paper as a Word document; writes docs/paper.docx
 ```
+
+`make opdi` touches the network only for a file its cache lacks, and the cache
+lacks one for good: the event file that answered 404 on 4 October 2026, which
+the pipeline runs without. So a rebuild from a cache already in place is
+`python scripts/fetch_opdi.py --offline`, which builds the same tables without
+the network.
+
+`make fusion-tables` writes the two tables the final file reads, on the 348
+days of 2025 with an adsb.lol table. `reports/fusion.md` and
+`reports/fusion-new-base.md` were generated on the 174 days of 7 October; the
+provenance check holds the second to that day's two tables, kept in
+`data/processed/fusion/archive_2026-09-04/`, and to its `lomo.parquet`, kept
+in place. `make fusion` reads the tables in place, so run after
+`make fusion-tables` it fits and reads the 348 days and rewrites
+`lomo.parquet` on them: it is not the run those two reports record, and the
+second's declared `lomo.parquet` would no longer match.
 
 `make test` works on a clean checkout with nothing installed but `pytest`
 (the join tests additionally need `pandas`, and skip without it). For the
@@ -292,10 +316,11 @@ data review and everything after it need `pip install -e ".[modelling]"`.
 | `scripts/report_planshift.py` | `data/challenge/`, `data/processed/monthly/`, `data/submissions/funny-firefly_v6.parquet`, `reports/preregistered-2026-10-02.md` | `reports/planshift.md` |
 | `scripts/report_istanbul.py` | `data/challenge/`, `data/processed/monthly_seeds/`, `data/raw/metar/`, `data/raw/metar_history/` | `reports/istanbul.md` |
 | `scripts/report_fiumicino.py` | `data/challenge/`, `data/processed/monthly_ladder/` | `reports/fiumicino.md` |
-| `scripts/report_group_b.py` | `data/challenge/`, `data/processed/candidates_board/`, `data/raw/metar/`, `reports/monthly_seeds.md` | `reports/group-b.md`; `--refit` refits one recorded fit |
+| `scripts/report_group_b.py` | `data/challenge/`, `data/processed/candidates_board/`, `data/raw/metar/`, `reports/monthly_seeds.md` | `reports/group-b.md`; `--refit` refits one recorded fit; `--fit-c14` fits the selector's parts on the held-out months where their records are absent and forms its records, into `data/processed/candidates_board/` (gitignored) |
+| `scripts/report_v12_ladder.py` | `data/challenge/`, `data/processed/candidates_board/`, `data/processed/v12_ladder/` | `reports/v12-ladder.md` |
 | `scripts/report_fusion_new_base.py` | `data/processed/fusion/`, `data/processed/candidates_board/`, `reports/monthly_seeds.md` | `reports/fusion-new-base.md` |
 | `scripts/sweep_params.py` | `data/challenge/`, `data/processed/taxi_distance/`, `data/raw/metar/` | `data/processed/sweep_october.csv` (gitignored) |
-| `scripts/make_submission.py` | `data/challenge/`, `data/processed/taxi_distance/`, `data/raw/metar/` | `data/submissions/<team>_v<n>.parquet` (gitignored) |
+| `scripts/make_submission.py` | `data/challenge/`, `data/processed/taxi_distance/`, `data/raw/metar/`, `data/raw/ourairports_airports.csv`, `data/processed/fusion/`, `data/processed/candidates_board/` | `data/submissions/<team>_v<n>.parquet`, or `<team>_final.parquet` with `--final` (gitignored; the directory is made if absent) |
 
 Only `fetch_osm.py`, `fetch_metar.py`, `fetch_metar_history.py`,
 `fetch_ourairports.py` and `check_runways_ourairports.py` touch the network.
@@ -354,15 +379,22 @@ Three tags mark the history: `freeze-2026-10-04` the model's freeze,
 `entry-2026-10-04` the file that was scored first. The four files after it are
 tagged `model-v8-2026-10-04`, `model-v9-2026-10-06`, `model-v10-2026-10-07` and
 `model-v11-2026-10-07`, and `scripts/make_submission.py` at the last of them
-builds v11, the entry's file. A reader brings the challenge data, from the
-organizers, into `data/challenge/`; the eleven Overpass answers, fetched at
-their pins as above or copied from the deposit into `data/raw/`; and, from
-the deposit, the METAR cache into `data/raw/metar/` and the two OurAirports
-tables into `data/raw/`. Those two are cached fetches recorded with their
-requests and terms, and OurAirports is rebuilt nightly, so a fetch made later
-would not return the files the committed figures were computed from. From
-those inputs, on 27 September 2026, a fresh clone at the tag rebuilt the 35
-matrix files and the 52 residual files byte for byte, regenerated fourteen
+builds v11. v12, the final phase's one file, carries no tag yet: `make final`
+builds it at the commit that landed its code and at every commit after it
+that leaves what the script computes unchanged. A reader brings the challenge
+data, from the organizers, into `data/challenge/`; the eleven Overpass
+answers, fetched at their pins as above or copied from the deposit into
+`data/raw/`; and, from the deposit, the METAR cache into `data/raw/metar/` and
+the two OurAirports tables into `data/raw/`. Those two are cached fetches
+recorded with their requests and terms, and OurAirports is rebuilt nightly, so
+a fetch made later would not return the files the committed figures were
+computed from. v12 reads two caches more, which the deposit does not hold
+(below): the adsb.lol event tables into `data/raw/adsb/`, one per day with a
+table (470 days) beside the manifest, the notice and the fetch log; and
+OPDI's flight events and lists into `data/raw/opdi/`, 68 files with the
+manifest. From the first four of those inputs, on 27 September 2026, a fresh
+clone at the tag rebuilt the 35 matrix files and the 52 residual files byte
+for byte, regenerated fourteen
 reports with no figure moved, passed the paper's own check
 (`scripts/check_paper.py --strict`) and every declared-input check but one,
 and built the submission byte for byte;
@@ -384,11 +416,37 @@ matrices and the residuals unchanged.
 records both versions by size and digest, so a copy in hand can be told
 from the other.
 
+**v12 from a clean checkout.** On 10 and 11 October 2026 a fresh clone at the
+commit that landed v12's code, given the inputs above and no network, built
+`funny-firefly_final.parquet` byte for byte, with its booster file, its
+fusion model and its parts file. The order is `make reports`, `make adsb`,
+`python scripts/fetch_opdi.py --offline`, `make fusion-tables`, the records
+of group B's selector on the twelve held-out months, and `make final`. Those
+records are what `make group-b-fit` writes: sixty fits, five parts per month,
+then the configuration, the menu items and the selector's choice formed from
+them. That run fitted and formed them with the committed harness in the same
+steps; the target, added after it, formed the same records byte for byte
+from the same sixty fits. By `/usr/bin/time` on eight cores, the fits took
+11 h 14 min 44 s, the first of them slowed by other work on the machine, and
+the build 3 h 41 min 17 s. Every record's prediction equals the entry's to the
+bit, but 18 of the formed records differ from the entry's in their
+`with_term` column, on one to four record-quality rows each. The build does
+not read that column, so the file is identical and the manifest differs from
+the entry's in its time and in up to nine of the fusion's input digests. At
+that commit `make final` did not make `data/submissions/`, and the clone's
+first build stopped at its first write after the fit; it makes the directory
+now.
+
 **The deposit.** The Zenodo deposit [10.5281/zenodo.23133051](https://doi.org/10.5281/zenodo.23133051) holds, under ODbL, the 35
 matrix files and the eleven Overpass answers with their `PINS.json`, and,
 public domain, the METAR cache, the ten years of METARs before it and the
 two OurAirports tables, each with the manifest the fetcher wrote. Its `README.md` says how each part is verified
 against this repository at the tag, and `SHA256SUMS` covers every file in it.
+It does not hold v12's two further caches. The adsb.lol tables are fetched
+again with `python scripts/fetch_adsb.py --all`, more than a terabyte of
+releases; OPDI's site states no data licence and the entry uses OPDI on the
+organizers' confirmation, so no OPDI file is deposited, and `make opdi`
+fetches the files again from EUROCONTROL.
 
 ## Data sources
 

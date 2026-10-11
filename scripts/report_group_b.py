@@ -22,8 +22,16 @@ disclosures, both the copies' own: C10's weight is a selection among four
 weights, and C14's forward legs let months after a leg's month inform its
 choice.
 
-``--refit NAME --out DIR`` refits one recorded fit with the committed code
-into ``DIR`` and compares its prediction with the record's, to the bit.
+``--refit NAME --refit-out DIR`` refits one recorded fit with the committed
+code into ``DIR`` and compares its prediction with the record's, to the bit; it
+reads the record it compares with, so it needs one.
+
+``--fit-c14`` writes what ``scripts/make_submission.py`` reads of group B on a
+board that lacks it: C14 at the ladder's seed for the twelve held-out months.
+Each month's five parts are fitted where their records are absent, and the
+configuration, the menu items and C14 are formed from them by
+``candidates_board.GroupB``, each checked against its record where one exists.
+On a board holding none, sixty fits, about eleven hours on eight cores.
 
 Writes only aggregates. Reads the records in about four minutes on eight
 cores; a refit of one CatBoost member takes about sixteen, as the records
@@ -637,10 +645,54 @@ def refit(name: str, out: Path) -> dict:
     return got
 
 
+def fit_c14() -> int:
+    """C14 at seed 0 for the twelve held-out months, the records the build reads.
+
+    Each month's five parts (the configuration's booster, C3b's member, C11's
+    member, C12's and C13's boosters) are fitted by the committed code where
+    their record is absent and read where it is present; the configuration,
+    the menu items and C14 are then formed by ``candidates_board.GroupB``,
+    each checked against its record where one exists and written where none
+    does.
+    """
+    members = board.group_b_members()
+    members["c3b_member"] = board.Member("c3b_member", backend="catboost")
+    keys = ("combo4_booster", "c3b_member", "c11_member", "c12_booster", "c13_booster")
+    frame = None
+    for s in cb.month_plan():
+        todo = [
+            k for k in keys if not cb.record_path(cb.record_name(s.name, k, 0)).exists()
+        ]
+        if not todo:
+            continue
+        if frame is None:
+            frame = board.BoardFrame()
+        prep = frame.prepare(s)
+        for k in todo:
+            print(f"fitting {cb.record_name(s.name, k, 0)}", flush=True)
+            cb.write_record(*board.fit_group_b(frame, prep, members[k], 0))
+        del prep
+    g = board.GroupB()
+    of = g.c14_of(g.c14_choices())
+    missing = [s.name for s in cb.month_plan() if of(s.name, 0) is None]
+    if missing:
+        print(f"C14 could not be formed for {missing}", file=sys.stderr)
+        return 1
+    print(
+        f"C14 formed for {len(cb.month_plan())} months; {len(g.derived)} derived records"
+    )
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--out", type=Path, default=DEFAULT_OUT)
     ap.add_argument("--json", type=Path, default=None)
+    ap.add_argument(
+        "--fit-c14",
+        action="store_true",
+        help="fit what C14's twelve held-out months lack, then form C14",
+    )
     ap.add_argument("--refit", help="a recorded fit's name, refitted and compared")
     ap.add_argument("--refit-out", type=Path, help="where the refit is written")
     ap.add_argument(
@@ -648,6 +700,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = ap.parse_args(argv)
     board.point_harness()
+    if args.fit_c14:
+        return fit_c14()
     if args.refit:
         if args.refit_out is None:
             ap.error("--refit needs --refit-out")
