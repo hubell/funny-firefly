@@ -17,7 +17,7 @@ Put the buckets here as they arrive:
 ```
 data/challenge/
   movements/            twelve monthly parquets, full-year 2025
-  ranking.parquet       the movements to predict (Jan + Jul 2026)
+  ranking.parquet       the movements to predict (Jan, Feb, Jun and Jul 2026)
   submitting.parquet    the submission template
 ```
 
