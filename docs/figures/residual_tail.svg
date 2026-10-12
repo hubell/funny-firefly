@@ -1,51 +1,56 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 478" width="900" height="478" font-family="sans-serif">
-<rect width="900" height="478" fill="#ffffff"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 526" width="800" height="526" font-family="sans-serif">
+<rect width="800" height="526" fill="#ffffff"/>
 <title>The residual tail</title>
-<text x="20.0" y="28.0" font-size="15" text-anchor="start" fill="#222222" font-weight="bold">Figure 5. A thin tail of rows carries much of the squared error</text>
-<text x="20.0" y="50.0" font-size="12.5" text-anchor="start" fill="#6b6b6b" font-weight="normal">Rows whose residual exceeds the threshold: their share of all rows, and their share of the squared error (SSE).</text>
-<line x1="300.0" y1="82.0" x2="300.0" y2="322.0" stroke="#dddddd" stroke-width="0.7"/>
-<text x="300.0" y="342.0" font-size="12.5" text-anchor="middle" fill="#6b6b6b" font-weight="normal">0%</text>
-<line x1="380.0" y1="82.0" x2="380.0" y2="322.0" stroke="#dddddd" stroke-width="0.7"/>
-<text x="380.0" y="342.0" font-size="12.5" text-anchor="middle" fill="#6b6b6b" font-weight="normal">20%</text>
-<line x1="460.0" y1="82.0" x2="460.0" y2="322.0" stroke="#dddddd" stroke-width="0.7"/>
-<text x="460.0" y="342.0" font-size="12.5" text-anchor="middle" fill="#6b6b6b" font-weight="normal">40%</text>
-<line x1="540.0" y1="82.0" x2="540.0" y2="322.0" stroke="#dddddd" stroke-width="0.7"/>
-<text x="540.0" y="342.0" font-size="12.5" text-anchor="middle" fill="#6b6b6b" font-weight="normal">60%</text>
-<line x1="620.0" y1="82.0" x2="620.0" y2="322.0" stroke="#dddddd" stroke-width="0.7"/>
-<text x="620.0" y="342.0" font-size="12.5" text-anchor="middle" fill="#6b6b6b" font-weight="normal">80%</text>
-<line x1="700.0" y1="82.0" x2="700.0" y2="322.0" stroke="#dddddd" stroke-width="0.7"/>
-<text x="700.0" y="342.0" font-size="12.5" text-anchor="middle" fill="#6b6b6b" font-weight="normal">100%</text>
-<text x="20.0" y="108.0" font-size="13" text-anchor="start" fill="#222222" font-weight="normal">December, residual over 600 s</text>
-<rect x="300.0" y="96.0" width="7.1" height="15.0" fill="#6b6b6b" stroke="none"/>
-<text x="313.1" y="108.0" font-size="12.5" text-anchor="start" fill="#6b6b6b" font-weight="normal">1.78% of rows (2,950)</text>
-<rect x="300.0" y="116.0" width="153.2" height="15.0" fill="#3b6ea5" stroke="none"/>
-<text x="459.2" y="128.0" font-size="12.5" text-anchor="start" fill="#3b6ea5" font-weight="bold">38.3% of SSE</text>
-<text x="880.0" y="128.0" font-size="12.5" text-anchor="end" fill="#6b6b6b" font-weight="normal">61% under-predicted</text>
-<text x="20.0" y="168.0" font-size="13" text-anchor="start" fill="#222222" font-weight="normal">December, residual over 1,200 s</text>
-<rect x="300.0" y="156.0" width="0.9" height="15.0" fill="#6b6b6b" stroke="none"/>
-<text x="306.9" y="168.0" font-size="12.5" text-anchor="start" fill="#6b6b6b" font-weight="normal">0.23% of rows (373)</text>
-<rect x="300.0" y="176.0" width="68.8" height="15.0" fill="#3b6ea5" stroke="none"/>
-<text x="374.8" y="188.0" font-size="12.5" text-anchor="start" fill="#3b6ea5" font-weight="bold">17.2% of SSE</text>
-<text x="880.0" y="188.0" font-size="12.5" text-anchor="end" fill="#6b6b6b" font-weight="normal">80% under-predicted</text>
-<text x="20.0" y="228.0" font-size="13" text-anchor="start" fill="#222222" font-weight="normal">July, three airports, over 600 s</text>
-<rect x="300.0" y="216.0" width="7.3" height="15.0" fill="#6b6b6b" stroke="none"/>
-<text x="313.3" y="228.0" font-size="12.5" text-anchor="start" fill="#6b6b6b" font-weight="normal">1.82% of rows (1,174)</text>
-<rect x="300.0" y="236.0" width="194.4" height="15.0" fill="#3b6ea5" stroke="none"/>
-<text x="500.4" y="248.0" font-size="12.5" text-anchor="start" fill="#3b6ea5" font-weight="bold">48.6% of SSE</text>
-<text x="880.0" y="248.0" font-size="12.5" text-anchor="end" fill="#6b6b6b" font-weight="normal">55% under-predicted</text>
-<text x="20.0" y="288.0" font-size="13" text-anchor="start" fill="#222222" font-weight="normal">July, three airports, over 1,200 s</text>
-<rect x="300.0" y="276.0" width="1.3" height="15.0" fill="#6b6b6b" stroke="none"/>
-<text x="307.3" y="288.0" font-size="12.5" text-anchor="start" fill="#6b6b6b" font-weight="normal">0.33% of rows (214)</text>
-<rect x="300.0" y="296.0" width="125.6" height="15.0" fill="#3b6ea5" stroke="none"/>
-<text x="431.6" y="308.0" font-size="12.5" text-anchor="start" fill="#3b6ea5" font-weight="bold">31.4% of SSE</text>
-<text x="880.0" y="308.0" font-size="12.5" text-anchor="end" fill="#6b6b6b" font-weight="normal">66% under-predicted</text>
-<rect x="20.0" y="358.0" width="26.0" height="12.0" fill="#6b6b6b" stroke="none"/>
-<text x="56.0" y="368.0" font-size="12.5" text-anchor="start" fill="#6b6b6b" font-weight="normal">share of rows</text>
-<rect x="169.2" y="358.0" width="26.0" height="12.0" fill="#3b6ea5" stroke="none"/>
-<text x="205.2" y="368.0" font-size="12.5" text-anchor="start" fill="#6b6b6b" font-weight="normal">share of SSE</text>
-<text x="20.0" y="394.0" font-size="12.5" text-anchor="start" fill="#6b6b6b" font-weight="normal">The tail is one-sided: most of these rows are under-predicted.</text>
-<line x1="20.0" y1="406.0" x2="880.0" y2="406.0" stroke="#dddddd" stroke-width="1"/>
-<text x="20.0" y="424.0" font-size="12.5" text-anchor="start" fill="#222222" font-weight="normal">Data: Validation residuals of the base configuration's rung, one seed, over the rows the record-quality term leaves to the</text>
-<text x="20.0" y="442.0" font-size="12.5" text-anchor="start" fill="#222222" font-weight="normal">model. December 2025: all ten airports. July 2025: Frankfurt, Heathrow and Schiphol, the three airports the July test set</text>
-<text x="20.0" y="460.0" font-size="12.5" text-anchor="start" fill="#222222" font-weight="normal">contains.</text>
+<text x="24.0" y="30.0" font-size="16" text-anchor="start" fill="#1c1c1c" font-weight="bold">Figure 5. A thin tail of rows carries much of the squared error</text>
+<text x="24.0" y="52.0" font-size="13" text-anchor="start" fill="#595959" font-weight="normal">Rows whose residual exceeds the threshold: their share of all rows, and their share of the squared error (SSE).</text>
+<line x1="272.0" y1="108.0" x2="272.0" y2="336.0" stroke="#e0e0e0" stroke-width="0.7"/>
+<line x1="338.7" y1="108.0" x2="338.7" y2="336.0" stroke="#e0e0e0" stroke-width="0.7"/>
+<line x1="405.3" y1="108.0" x2="405.3" y2="336.0" stroke="#e0e0e0" stroke-width="0.7"/>
+<line x1="472.0" y1="108.0" x2="472.0" y2="336.0" stroke="#e0e0e0" stroke-width="0.7"/>
+<line x1="272.0" y1="336.0" x2="472.0" y2="336.0" stroke="#595959" stroke-width="1.0"/>
+<line x1="272.0" y1="336.0" x2="272.0" y2="340.0" stroke="#595959" stroke-width="1.0"/>
+<text x="272.0" y="355.0" font-size="13" text-anchor="middle" fill="#595959" font-weight="normal">0%</text>
+<line x1="338.7" y1="336.0" x2="338.7" y2="340.0" stroke="#595959" stroke-width="1.0"/>
+<text x="338.7" y="355.0" font-size="13" text-anchor="middle" fill="#595959" font-weight="normal">20%</text>
+<line x1="405.3" y1="336.0" x2="405.3" y2="340.0" stroke="#595959" stroke-width="1.0"/>
+<text x="405.3" y="355.0" font-size="13" text-anchor="middle" fill="#595959" font-weight="normal">40%</text>
+<line x1="472.0" y1="336.0" x2="472.0" y2="340.0" stroke="#595959" stroke-width="1.0"/>
+<text x="472.0" y="355.0" font-size="13" text-anchor="middle" fill="#595959" font-weight="normal">60%</text>
+<text x="372.0" y="375.0" font-size="13" text-anchor="middle" fill="#1c1c1c" font-weight="normal">Share (%)</text>
+<text x="594.0" y="94.0" font-size="13" text-anchor="end" fill="#595959" font-weight="normal">% of rows (n)</text>
+<text x="668.0" y="94.0" font-size="13" text-anchor="end" fill="#595959" font-weight="normal">% of SSE</text>
+<text x="776.0" y="94.0" font-size="13" text-anchor="end" fill="#595959" font-weight="normal">under-predicted</text>
+<text x="24.0" y="143.0" font-size="14" text-anchor="start" fill="#1c1c1c" font-weight="normal">December, residual over 600 s</text>
+<rect x="272.0" y="124.0" width="5.9" height="12.0" fill="#a3a3a3" stroke="none"/>
+<rect x="272.0" y="140.0" width="127.7" height="12.0" fill="#1f4f8a" stroke="none"/>
+<text x="594.0" y="143.0" font-size="13" text-anchor="end" fill="#595959" font-weight="normal">1.78% (2,950)</text>
+<text x="668.0" y="143.0" font-size="13" text-anchor="end" fill="#1f4f8a" font-weight="bold">38.3%</text>
+<text x="776.0" y="143.0" font-size="13" text-anchor="end" fill="#595959" font-weight="normal">61%</text>
+<text x="24.0" y="199.0" font-size="14" text-anchor="start" fill="#1c1c1c" font-weight="normal">December, residual over 1,200 s</text>
+<rect x="272.0" y="180.0" width="0.8" height="12.0" fill="#a3a3a3" stroke="none"/>
+<rect x="272.0" y="196.0" width="57.3" height="12.0" fill="#1f4f8a" stroke="none"/>
+<text x="594.0" y="199.0" font-size="13" text-anchor="end" fill="#595959" font-weight="normal">0.23% (373)</text>
+<text x="668.0" y="199.0" font-size="13" text-anchor="end" fill="#1f4f8a" font-weight="bold">17.2%</text>
+<text x="776.0" y="199.0" font-size="13" text-anchor="end" fill="#595959" font-weight="normal">80%</text>
+<text x="24.0" y="255.0" font-size="14" text-anchor="start" fill="#1c1c1c" font-weight="normal">July, three airports, over 600 s</text>
+<rect x="272.0" y="236.0" width="6.1" height="12.0" fill="#a3a3a3" stroke="none"/>
+<rect x="272.0" y="252.0" width="162.0" height="12.0" fill="#1f4f8a" stroke="none"/>
+<text x="594.0" y="255.0" font-size="13" text-anchor="end" fill="#595959" font-weight="normal">1.82% (1,174)</text>
+<text x="668.0" y="255.0" font-size="13" text-anchor="end" fill="#1f4f8a" font-weight="bold">48.6%</text>
+<text x="776.0" y="255.0" font-size="13" text-anchor="end" fill="#595959" font-weight="normal">55%</text>
+<text x="24.0" y="311.0" font-size="14" text-anchor="start" fill="#1c1c1c" font-weight="normal">July, three airports, over 1,200 s</text>
+<rect x="272.0" y="292.0" width="1.1" height="12.0" fill="#a3a3a3" stroke="none"/>
+<rect x="272.0" y="308.0" width="104.7" height="12.0" fill="#1f4f8a" stroke="none"/>
+<text x="594.0" y="311.0" font-size="13" text-anchor="end" fill="#595959" font-weight="normal">0.33% (214)</text>
+<text x="668.0" y="311.0" font-size="13" text-anchor="end" fill="#1f4f8a" font-weight="bold">31.4%</text>
+<text x="776.0" y="311.0" font-size="13" text-anchor="end" fill="#595959" font-weight="normal">66%</text>
+<rect x="24.0" y="398.0" width="26.0" height="12.0" fill="#a3a3a3" stroke="none"/>
+<text x="60.0" y="408.0" font-size="13" text-anchor="start" fill="#595959" font-weight="normal">share of rows</text>
+<rect x="171.8" y="398.0" width="26.0" height="12.0" fill="#1f4f8a" stroke="none"/>
+<text x="207.8" y="408.0" font-size="13" text-anchor="start" fill="#595959" font-weight="normal">share of SSE</text>
+<text x="24.0" y="436.0" font-size="13" text-anchor="start" fill="#595959" font-weight="normal">The tail is one-sided: most of these rows are under-predicted.</text>
+<line x1="24.0" y1="458.0" x2="776.0" y2="458.0" stroke="#e0e0e0" stroke-width="1"/>
+<text x="24.0" y="478.0" font-size="12.5" fill="#1c1c1c"><tspan font-weight="bold">Data:</tspan> Validation residuals of the base configuration's rung, one seed, over the rows the record-quality term leaves to</text>
+<text x="24.0" y="495.0" font-size="12.5" text-anchor="start" fill="#1c1c1c" font-weight="normal">the model. December 2025: all ten airports. July 2025: Frankfurt, Heathrow and Schiphol, the three airports the July</text>
+<text x="24.0" y="512.0" font-size="12.5" text-anchor="start" fill="#1c1c1c" font-weight="normal">test set contains.</text>
 </svg>

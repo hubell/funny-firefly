@@ -1,48 +1,48 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 488" width="820" height="488" font-family="sans-serif">
-<rect width="820" height="488" fill="#ffffff"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 497" width="800" height="497" font-family="sans-serif">
+<rect width="800" height="497" fill="#ffffff"/>
 <title>The error on the four months, after each step</title>
-<text x="20.0" y="28.0" font-size="15" text-anchor="start" fill="#222222" font-weight="bold">Figure 3a. The error after each step of the final configuration</text>
-<text x="20.0" y="50.0" font-size="12.5" text-anchor="start" fill="#6b6b6b" font-weight="normal">RMSE in seconds, pooled over the four months read (671,293 rows).</text>
-<text x="20.0" y="116.0" font-size="13" text-anchor="start" fill="#222222" font-weight="normal">1. The booster, with the two feature groups</text>
-<text x="20.0" y="160.0" font-size="13" text-anchor="start" fill="#222222" font-weight="normal">2. The refitted CatBoost learner, blended in</text>
-<text x="20.0" y="204.0" font-size="13" text-anchor="start" fill="#222222" font-weight="normal">3. The per-airport choice of blend</text>
-<text x="20.0" y="248.0" font-size="13" text-anchor="start" fill="#222222" font-weight="normal">4. The ground-movement correction, fitted on 174 days</text>
-<text x="20.0" y="292.0" font-size="13" text-anchor="start" fill="#222222" font-weight="normal">5. The same correction, fitted on 348 days</text>
-<text x="20.0" y="336.0" font-size="13" text-anchor="start" fill="#222222" font-weight="normal">6. The flight-plan window</text>
-<line x1="400.0" y1="362.0" x2="780.0" y2="362.0" stroke="#6b6b6b" stroke-width="1.0"/>
-<line x1="400.0" y1="362.0" x2="400.0" y2="366.0" stroke="#6b6b6b" stroke-width="1.0"/>
-<text x="400.0" y="379.0" font-size="12.5" text-anchor="middle" fill="#6b6b6b" font-weight="normal">292</text>
-<line x1="400.0" y1="88.0" x2="400.0" y2="362.0" stroke="#dddddd" stroke-width="0.7"/>
-<line x1="495.0" y1="362.0" x2="495.0" y2="366.0" stroke="#6b6b6b" stroke-width="1.0"/>
-<text x="495.0" y="379.0" font-size="12.5" text-anchor="middle" fill="#6b6b6b" font-weight="normal">296</text>
-<line x1="495.0" y1="88.0" x2="495.0" y2="362.0" stroke="#dddddd" stroke-width="0.7"/>
-<line x1="590.0" y1="362.0" x2="590.0" y2="366.0" stroke="#6b6b6b" stroke-width="1.0"/>
-<text x="590.0" y="379.0" font-size="12.5" text-anchor="middle" fill="#6b6b6b" font-weight="normal">300</text>
-<line x1="590.0" y1="88.0" x2="590.0" y2="362.0" stroke="#dddddd" stroke-width="0.7"/>
-<line x1="685.0" y1="362.0" x2="685.0" y2="366.0" stroke="#6b6b6b" stroke-width="1.0"/>
-<text x="685.0" y="379.0" font-size="12.5" text-anchor="middle" fill="#6b6b6b" font-weight="normal">304</text>
-<line x1="685.0" y1="88.0" x2="685.0" y2="362.0" stroke="#dddddd" stroke-width="0.7"/>
-<line x1="780.0" y1="362.0" x2="780.0" y2="366.0" stroke="#6b6b6b" stroke-width="1.0"/>
-<text x="780.0" y="379.0" font-size="12.5" text-anchor="middle" fill="#6b6b6b" font-weight="normal">308</text>
-<line x1="780.0" y1="88.0" x2="780.0" y2="362.0" stroke="#dddddd" stroke-width="0.7"/>
-<text x="590.0" y="398.0" font-size="12.5" text-anchor="middle" fill="#222222" font-weight="normal">RMSE (s)</text>
-<line x1="732.5" y1="88.0" x2="732.5" y2="362.0" stroke="#6b6b6b" stroke-width="1" stroke-dasharray="5 4"/>
-<text x="732.5" y="80.0" font-size="12.5" text-anchor="middle" fill="#6b6b6b" font-weight="normal">the booster alone, 306.0</text>
-<circle cx="732.5" cy="112.0" r="5.5" fill="#3b6ea5" stroke="none"/>
-<text x="744.5" y="116.0" font-size="13" text-anchor="start" fill="#222222" font-weight="bold">306.0</text>
-<circle cx="715.9" cy="156.0" r="5.5" fill="#3b6ea5" stroke="none"/>
-<text x="727.9" y="160.0" font-size="13" text-anchor="start" fill="#222222" font-weight="bold">305.3</text>
-<circle cx="715.9" cy="200.0" r="5.5" fill="#3b6ea5" stroke="none"/>
-<text x="727.9" y="204.0" font-size="13" text-anchor="start" fill="#222222" font-weight="bold">305.3</text>
-<circle cx="580.5" cy="244.0" r="5.5" fill="#3b6ea5" stroke="none"/>
-<text x="592.5" y="248.0" font-size="13" text-anchor="start" fill="#222222" font-weight="bold">299.6</text>
-<circle cx="573.4" cy="288.0" r="5.5" fill="#3b6ea5" stroke="none"/>
-<text x="585.4" y="292.0" font-size="13" text-anchor="start" fill="#222222" font-weight="bold">299.3</text>
-<circle cx="457.0" cy="332.0" r="5.5" fill="#3b6ea5" stroke="none"/>
-<text x="469.0" y="336.0" font-size="13" text-anchor="start" fill="#222222" font-weight="bold">294.4</text>
-<text x="20.0" y="404.0" font-size="12.5" text-anchor="start" fill="#6b6b6b" font-weight="normal">Point estimates. Figure 3b gives what each step changed, with its interval.</text>
-<line x1="20.0" y1="416.0" x2="800.0" y2="416.0" stroke="#dddddd" stroke-width="1"/>
-<text x="20.0" y="434.0" font-size="12.5" text-anchor="start" fill="#222222" font-weight="normal">Data: 2025 flights at all ten airports. January, February, June and July, each held out in turn and predicted from</text>
-<text x="20.0" y="452.0" font-size="12.5" text-anchor="start" fill="#222222" font-weight="normal">the other eleven months (671,293 rows over 120 days). RMSE over every row, including those the record-quality term</text>
-<text x="20.0" y="470.0" font-size="12.5" text-anchor="start" fill="#222222" font-weight="normal">covers.</text>
+<text x="24.0" y="30.0" font-size="16" text-anchor="start" fill="#1c1c1c" font-weight="bold">Figure 3a. The error after each step of the final configuration</text>
+<text x="24.0" y="52.0" font-size="13" text-anchor="start" fill="#595959" font-weight="normal">RMSE in seconds, pooled over the four months read (671,293 rows).</text>
+<line x1="392.0" y1="104.0" x2="392.0" y2="354.0" stroke="#e0e0e0" stroke-width="0.7"/>
+<line x1="452.0" y1="104.0" x2="452.0" y2="354.0" stroke="#e0e0e0" stroke-width="0.7"/>
+<line x1="512.0" y1="104.0" x2="512.0" y2="354.0" stroke="#e0e0e0" stroke-width="0.7"/>
+<line x1="572.0" y1="104.0" x2="572.0" y2="354.0" stroke="#e0e0e0" stroke-width="0.7"/>
+<line x1="632.0" y1="104.0" x2="632.0" y2="354.0" stroke="#e0e0e0" stroke-width="0.7"/>
+<line x1="392.0" y1="354.0" x2="632.0" y2="354.0" stroke="#595959" stroke-width="1.0"/>
+<line x1="392.0" y1="354.0" x2="392.0" y2="358.0" stroke="#595959" stroke-width="1.0"/>
+<text x="392.0" y="373.0" font-size="13" text-anchor="middle" fill="#595959" font-weight="normal">292</text>
+<line x1="452.0" y1="354.0" x2="452.0" y2="358.0" stroke="#595959" stroke-width="1.0"/>
+<text x="452.0" y="373.0" font-size="13" text-anchor="middle" fill="#595959" font-weight="normal">296</text>
+<line x1="512.0" y1="354.0" x2="512.0" y2="358.0" stroke="#595959" stroke-width="1.0"/>
+<text x="512.0" y="373.0" font-size="13" text-anchor="middle" fill="#595959" font-weight="normal">300</text>
+<line x1="572.0" y1="354.0" x2="572.0" y2="358.0" stroke="#595959" stroke-width="1.0"/>
+<text x="572.0" y="373.0" font-size="13" text-anchor="middle" fill="#595959" font-weight="normal">304</text>
+<line x1="632.0" y1="354.0" x2="632.0" y2="358.0" stroke="#595959" stroke-width="1.0"/>
+<text x="632.0" y="373.0" font-size="13" text-anchor="middle" fill="#595959" font-weight="normal">308</text>
+<text x="512.0" y="393.0" font-size="13" text-anchor="middle" fill="#1c1c1c" font-weight="normal">RMSE (s)</text>
+<line x1="602.0" y1="104.0" x2="602.0" y2="354.0" stroke="#595959" stroke-width="1.2" stroke-dasharray="5 4"/>
+<text x="606.0" y="96.0" font-size="13" text-anchor="end" fill="#595959" font-weight="normal">the booster alone, 306.0</text>
+<text x="664.0" y="96.0" font-size="13" text-anchor="start" fill="#595959" font-weight="normal">RMSE (s)</text>
+<text x="24.0" y="131.0" font-size="14" text-anchor="start" fill="#1c1c1c" font-weight="normal">1. The booster, with the two feature groups</text>
+<circle cx="602.0" cy="126.0" r="5" fill="#1f4f8a" stroke="none"/>
+<text x="664.0" y="131.0" font-size="14" text-anchor="start" fill="#1f4f8a" font-weight="bold">306.0</text>
+<text x="24.0" y="171.0" font-size="14" text-anchor="start" fill="#1c1c1c" font-weight="normal">2. The refitted CatBoost learner, blended in</text>
+<circle cx="591.5" cy="166.0" r="5" fill="#1f4f8a" stroke="none"/>
+<text x="664.0" y="171.0" font-size="14" text-anchor="start" fill="#1f4f8a" font-weight="bold">305.3</text>
+<text x="24.0" y="211.0" font-size="14" text-anchor="start" fill="#1c1c1c" font-weight="normal">3. The per-airport choice of blend</text>
+<circle cx="591.5" cy="206.0" r="5" fill="#1f4f8a" stroke="none"/>
+<text x="664.0" y="211.0" font-size="14" text-anchor="start" fill="#1f4f8a" font-weight="bold">305.3</text>
+<text x="24.0" y="251.0" font-size="14" text-anchor="start" fill="#1c1c1c" font-weight="normal">4. The ground-movement correction, fitted on 174 days</text>
+<circle cx="506.0" cy="246.0" r="5" fill="#1f4f8a" stroke="none"/>
+<text x="664.0" y="251.0" font-size="14" text-anchor="start" fill="#1f4f8a" font-weight="bold">299.6</text>
+<text x="24.0" y="291.0" font-size="14" text-anchor="start" fill="#1c1c1c" font-weight="normal">5. The same correction, fitted on 348 days</text>
+<circle cx="501.5" cy="286.0" r="5" fill="#1f4f8a" stroke="none"/>
+<text x="664.0" y="291.0" font-size="14" text-anchor="start" fill="#1f4f8a" font-weight="bold">299.3</text>
+<text x="24.0" y="331.0" font-size="14" text-anchor="start" fill="#1c1c1c" font-weight="normal">6. The flight-plan window</text>
+<circle cx="428.0" cy="326.0" r="5" fill="#1f4f8a" stroke="none"/>
+<text x="664.0" y="331.0" font-size="14" text-anchor="start" fill="#1f4f8a" font-weight="bold">294.4</text>
+<text x="24.0" y="424.0" font-size="13" text-anchor="start" fill="#595959" font-weight="normal">Point estimates. Figure 3b gives what each step changed, with its interval.</text>
+<line x1="24.0" y1="446.0" x2="776.0" y2="446.0" stroke="#e0e0e0" stroke-width="1"/>
+<text x="24.0" y="466.0" font-size="12.5" fill="#1c1c1c"><tspan font-weight="bold">Data:</tspan> 2025 flights at all ten airports. January, February, June and July, each held out in turn and predicted from the</text>
+<text x="24.0" y="483.0" font-size="12.5" text-anchor="start" fill="#1c1c1c" font-weight="normal">other eleven months (671,293 rows over 120 days). RMSE over every row, including those the record-quality term covers.</text>
 </svg>
