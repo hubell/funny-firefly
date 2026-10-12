@@ -1733,7 +1733,7 @@ over four months.
 | v9 | 6 October | both rules restored; two feature groups and a CatBoost learner added; the term's rows predicted per row | 282.399 |
 | v10 | 7 October | a correction from ground movements seen in open ADS-B and OPDI, gated by coverage and by airport | 272.0897 |
 | v11 | 8 October | the CatBoost learner refitted with v9's feature groups, a choice of blend per airport; the correction refitted on top | 269.1368 |
-| v12 | 13 October | the final phase's four months; the ground-movement correction refitted on every day of 2025; the flight-plan window | **[result]** |
+| v12 | 11 October | the final phase's four months; the ground-movement correction refitted on every day of 2025; the flight-plan window | follows the final ranking |
 
 Each file was uploaded once, after its rule had decided, and the leaderboard
 ranks a team by its best file, so none of these scores chose anything. Read in
@@ -1847,6 +1847,12 @@ records shifted by a day or by a UTC offset were read under the same
 pre-registration; the candidate built on them did not pass, and nothing joined
 v12 from it. §8.8 reads what each step of v12 is worth.
 
+v12 was built twice at a clean tree, byte for byte, and uploaded once, on 11
+October 2026, to the destination the organizers set for the final phase; the
+object's ETag and size equal the file's MD5 and size. The organizers' figure
+for it follows the final ranking, and its record is
+`reports/submission-2026-10-11-v12.md`.
+
 #### 8.7.7 The working names, and where to find them
 
 The pre-registrations and reports name each change by a short code, written
@@ -1878,7 +1884,8 @@ Sources: `reports/preregistered-2026-10-08-all-days.md`,
 *The steps*;
 `reports/submission-2026-10-04.md`, `reports/submission-2026-10-04-v8.md`,
 `reports/submission-2026-10-06-v9.md`, `reports/submission-2026-10-07-v10.md` and
-`reports/submission-2026-10-08-v11.md`, dated records;
+`reports/submission-2026-10-08-v11.md` and `reports/submission-2026-10-11-v12.md`,
+dated records;
 `reports/candidates-2026-10-05.md`, *Section 4's combination*; `reports/c6.md`,
 *Mean squared error, s²*; `reports/fusion.md`, *1. The fusion under §5's rule*,
 *2. G1, the fusion gated by coverage* and *3. G1n, the fusion gated by coverage

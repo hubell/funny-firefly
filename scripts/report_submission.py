@@ -47,16 +47,29 @@ Needs what ``scripts/make_submission.py`` needs: the challenge data under
 ``data/challenge/``, the distance matrices and edge sets, the METAR cache and
 the OurAirports table. A few minutes; it builds both frames.
 
+**The final file.** With ``--final`` the file read is ``<team>_final.parquet``,
+the final phase's one file, and the record carries what its manifest adds: the
+flight-plan window and the rows it moved, the parts file, and the days the
+fusion was fitted on. ``--upload DIR`` names the directory the one upload wrote
+its start and end times, the bucket's listing and the object's metadata to;
+the record gives the times, and whether the object's ETag and size equal the
+file's MD5 and size. Until the organizers publish a figure for it, the record
+says so. Every row this adds reads a manifest field the earlier files lack, so
+their records regenerate unchanged but for the date.
+
 Usage
 -----
     python scripts/report_submission.py --team funny-firefly --version 4
     python scripts/report_submission.py --team funny-firefly --version 4 \\
         --first-build /path/to/the/first/build --date 2026-09-19
+    python scripts/report_submission.py --team funny-firefly --version 12 \\
+        --final --upload /path/to/the/upload/records --date 2026-10-11
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import sys
@@ -204,7 +217,29 @@ def label(month: str) -> str:
     return pd.Period(month, freq="M").strftime("%B %Y")
 
 
-def section_truncation(tables: dict) -> list[str]:
+WORDS = ("no", "one", "two", "three", "four", "five", "six")
+
+
+def blocks(months: list[str]) -> str:
+    """The covered blocks of a frame's months, worded: runs of consecutive months."""
+    runs: list[list[pd.Period]] = []
+    for p in sorted(pd.Period(m, freq="M") for m in months):
+        if runs and p == runs[-1][-1] + 1:
+            runs[-1].append(p)
+        else:
+            runs.append([p])
+
+    def one(run: list[pd.Period]) -> str:
+        if len(run) == 1:
+            return run[0].strftime("%B %Y")
+        if run[0].year == run[-1].year:
+            return f"{run[0].strftime('%B')} to {run[-1].strftime('%B %Y')}"
+        return f"{run[0].strftime('%B %Y')} to {run[-1].strftime('%B %Y')}"
+
+    return f"{WORDS[len(runs)]}, " + " and ".join(one(r) for r in runs)
+
+
+def section_truncation(tables: dict, rank_months: list[str]) -> list[str]:
     columns = list(FLAGS) + [ANY]
     share_rows, edge_rows = [], []
     for side, by_month in tables.items():
@@ -229,7 +264,7 @@ def section_truncation(tables: dict) -> list[str]:
         "",
         "`taxiout.windows.coverage_start` reads the blocks of covered months from"
         " the frame itself. The training frame is one block, January to December"
-        " 2025; the ranking frame is two, January 2026 and July 2026. A flag is set"
+        f" 2025; the ranking frame is {blocks(rank_months)}. A flag is set"
         " where its feature's window reaches outside the row's block:",
         "",
         *(f"- `{c}`: {MEANS[c]}." for c in FLAGS),
@@ -260,9 +295,14 @@ def section_truncation(tables: dict) -> list[str]:
 
 
 def section_file(
-    team: str, version: int, first_build: Path | None, term: dict[str, int]
+    team: str,
+    version: int,
+    first_build: Path | None,
+    term: dict[str, int],
+    final: bool = False,
+    upload: Path | None = None,
 ) -> list[str]:
-    name = f"{team}_v{version}"
+    name = f"{team}_final" if final else f"{team}_v{version}"
     path = SUBMISSIONS / f"{name}.parquet"
     manifest = SUBMISSIONS / f"{name}.manifest.json"
     head = ["## The file", ""]
@@ -378,6 +418,38 @@ def section_file(
             else []
         ),
         *(
+            [["days the fusion was fitted on", num(m["fusion"]["fit_days"])]]
+            if (m.get("fusion") or {}).get("fit_days")
+            else []
+        ),
+        *(
+            [
+                [
+                    "the flight-plan window applied (W)",
+                    "yes" if m["window_applied"] else "no",
+                ],
+                [
+                    "the window's edge, and the clip applied",
+                    f"{num(m['window']['w_star_s'])} s; {num(m['window']['w_prime_s'])} s",
+                ],
+                ["ranking rows with a flight plan", num(m["window"]["rows_with_lobt"])],
+                ["rows the window moved", num(m["window"]["rows_moved"])],
+                *(
+                    [f"rows the window moved in {label(k)}", num(v)]
+                    for k, v in sorted(
+                        _by_month(m["window"]["rows_moved_by_airport_month"]).items()
+                    )
+                ),
+            ]
+            if m.get("window")
+            else []
+        ),
+        *(
+            [["parts file sha256", f"`{m['parts_file_sha256']}`"]]
+            if m.get("parts_file_sha256")
+            else []
+        ),
+        *(
             [f"record-quality term: ranking rows in {label(k)}", num(v)]
             for k, v in sorted(by_month.items())
         ),
@@ -454,7 +526,9 @@ def section_file(
         else:
             out += [f"No earlier build of `{path.name}` under the directory given.", ""]
     used, score = m.get("scorer_used_pairs"), m.get("scorer_score")
-    if used is None and score is None:
+    if final:
+        out += section_upload(path, upload, used, score)
+    elif used is None and score is None:
         out += [
             "**The scorer.** Not uploaded. The manifest's `scorer_used_pairs` and"
             " `scorer_score` are empty.",
@@ -478,6 +552,57 @@ def section_file(
             "",
         ]
     return out
+
+
+def _by_month(by_airport_month: dict[str, int]) -> dict[str, int]:
+    """Sum an ``"<ICAO> <YYYY-MM>"`` count over the airports."""
+    out: dict[str, int] = {}
+    for k, v in by_airport_month.items():
+        month = k.split()[-1]
+        out[month] = out.get(month, 0) + int(v)
+    return out
+
+
+def section_upload(path: Path, upload: Path | None, used, score) -> list[str]:
+    """The one upload of the final file, from the records the upload wrote."""
+    head = ["**The upload.**"]
+    if upload is None or not (upload / "upload.end").exists():
+        return head[:0] + ["**The upload.** Not uploaded.", ""]
+    stat = next(
+        json.loads(line)
+        for line in (upload / "stat.json").read_text(encoding="utf-8").splitlines()
+        if line.strip().startswith("{")
+    )
+    md5 = hashlib.md5(path.read_bytes()).hexdigest()
+    etag = str(stat.get("etag", "")).strip('"')
+    size = int(stat.get("size", -1))
+    started = (upload / "upload.start").read_text(encoding="utf-8").strip()
+    ended = (upload / "upload.end").read_text(encoding="utf-8").strip()
+    rows = [
+        ["object", f"`{stat.get('key') or stat.get('name') or path.name}`"],
+        ["started (UTC)", started],
+        ["ended (UTC)", ended],
+        ["the object's ETag is the file's MD5", "yes" if etag == md5 else "**no**"],
+        [
+            "the object's size is the file's",
+            "yes" if size == path.stat().st_size else "**no**",
+        ],
+    ]
+    if used is None and score is None:
+        rows.append(["the organizers' figure", "not yet published; recorded when it is"])
+    else:
+        rows += [
+            ["`usedPairs`", num(float(used)) if used is not None else "n/a"],
+            ["score", str(score)],
+        ]
+    return [
+        "**The upload.** The file was uploaded once, to the destination and in"
+        " the form the organizers set for the final phase. What is read back is"
+        " what the upload rule allows, and nothing was chosen on it:",
+        "",
+        *table(["", ""], rows, "--"),
+        "",
+    ]
 
 
 def check_no_identifiers(text: str, stands: set[str], movements: set[str]) -> None:
@@ -515,6 +640,17 @@ def main() -> int:
         help="directory an earlier build of the same version was copied to",
     )
     ap.add_argument(
+        "--final",
+        action="store_true",
+        help="read <team>_final.parquet, the final phase's one file",
+    )
+    ap.add_argument(
+        "--upload",
+        type=Path,
+        default=None,
+        help="with --final: the directory the one upload wrote its records to",
+    )
+    ap.add_argument(
         "--date",
         default=datetime.now(timezone.utc).strftime("%Y-%m-%d"),
         help="the date in the report's name; defaults to today, UTC",
@@ -548,15 +684,19 @@ def main() -> int:
 
     generated = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     lines = [
-        f"# The scored file, `{args.team}_v{args.version}`",
+        f"# The final file, `{args.team}_final`"
+        if args.final
+        else f"# The scored file, `{args.team}_v{args.version}`",
         "",
         f"Generated by `scripts/report_submission.py` on {generated} from the data"
         " under `data/challenge/` and the file and manifest under"
         " `data/submissions/`. Every figure below is computed there, and the"
         " generator refuses to write a movement or a stand identifier.",
         "",
-        *section_truncation(tables),
-        *section_file(args.team, args.version, args.first_build, term),
+        *section_truncation(tables, rank_months),
+        *section_file(
+            args.team, args.version, args.first_build, term, args.final, args.upload
+        ),
         # The frames read the distance matrices, so the report carries their
         # attribution, as every report the licence gate reads must.
         "Distance matrices derived from OpenStreetMap: data (c) "

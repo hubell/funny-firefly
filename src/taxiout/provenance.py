@@ -2754,6 +2754,18 @@ FROZEN_DOCUMENTS: tuple[Frozen, ...] = (
         " manifest of whatever file is on disk, and the readback happens once",
     ),
     Frozen(
+        "reports/submission-2026-10-11-v12.md",
+        "c0ae4c86124ea7ff720368ec811327145c055ff1a9ba2b5718906d13fb687bc9",
+        "the record of the final phase's one upload: `funny-firefly_final.parquet`,"
+        " v11's configuration and rules over the four ranking months with the"
+        " fusion refitted on every day of 2025 and the flight-plan window applied"
+        " last, its target's type, and the upload itself, made once on 11 October"
+        " 2026, the object's ETag and size checked against the file; the"
+        " organizers' figure follows the final ranking. Frozen for the reason the"
+        " earlier records are: regenerating it would read the manifest of"
+        " whatever file is on disk, and the upload happens once",
+    ),
+    Frozen(
         "reports/preregistered-2026-10-04.md",
         "568299d1f2fd63cd049c83d40bfab3a0af6ebe548ad0318d23c7a26a992d3990",
         "the decision that every file uploaded from 4 October 2026 predicts"

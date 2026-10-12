@@ -126,6 +126,11 @@ modeling stage, measured against the target.
       among them: [`reports/group-b.md`](reports/group-b.md)
 - [x] Five scored files, v7 to v11, each uploaded once and recorded in
       `reports/submission-2026-10-0*.md`, and read in the paper's results
+- [x] The final phase's one file, v12, over January, February, June and July
+      2026, uploaded once on 11 October 2026 and recorded in
+      [`reports/submission-2026-10-11-v12.md`](reports/submission-2026-10-11-v12.md);
+      its score follows the final ranking. The paper's results read it step by
+      step, from [`reports/v12-ladder.md`](reports/v12-ladder.md)
 - [x] Write-up: [`docs/paper.md`](docs/paper.md)
 
 ## What the data turned out to contain
