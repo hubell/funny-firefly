@@ -3682,23 +3682,6 @@ _PREREGISTERED = (
 # longer, and the dated record of 28 September is the only place they stand.
 PAPER_HISTORICAL_FIGURES: tuple[PaperFigure, ...] = (
     PaperFigure(
-        "§2.1",
-        "215,876",
-        "the row count of the template of 2 September, which the entry was"
-        " built on until 28 September and which no live report reads any"
-        " longer: the live reports count the template of 4 September, 344,841"
-        " rows, and the record of 28 September carries both counts side by"
-        " side. The sentence dates the file it counts",
-    ),
-    PaperFigure(
-        "§2.1",
-        "92%",
-        "the share of the departures both versions of the ranking file hold"
-        " whose movement time differs between them, 91.9%, measured once in the"
-        " comparison of 28 September and recorded there: a fact about two"
-        " files, not about the model, and no live report compares them",
-    ),
-    PaperFigure(
         "§6.4",
         "10.0",
         "the saturation rung's oracle ceiling on December as measured on 3 and"

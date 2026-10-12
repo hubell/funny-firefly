@@ -169,13 +169,11 @@ reported with their figure count rather than skipped.
 | section | why |
 | --- | --- |
 
-**34** historical figures stand, each with
+**32** historical figures stand, each with
 its reason.
 
 | section | figure | why |
 | --- | --- | --- |
-| §2.1 | 215,876 | the row count of the template of 2 September, which the entry was built on until 28 September and which no live report reads any longer: the live reports count the template of 4 September, 344,841 rows, and the record of 28 September carries both counts side by side. The sentence dates the file it counts |
-| §2.1 | 92% | the share of the departures both versions of the ranking file hold whose movement time differs between them, 91.9%, measured once in the comparison of 28 September and recorded there: a fact about two files, not about the model, and no live report compares them |
 | §6.4 | 10.0 | the saturation rung's oracle ceiling on December as measured on 3 and 4 September under the parameters then in force, from the entry of 4 September in `docs/plan.md`: the measurement Gate 3 was stopped on. The sentence dates it, and the rung's ceiling under the parameters that ship is given two sentences later from `reports/congestion.md` |
 | §6.4 | 8.5 | the same rung's ceiling on July on the same day, from the same entry; dated in the same sentence |
 | §7.4 | 1.29 | the route-length check's ratio before 19 September, with the encoding fitted on the unflagged training rows, from the dated record of 10 September. The sentence dates it and gives beside it the reading since then, 1.56, from the live ladder report |
