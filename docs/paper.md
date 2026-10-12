@@ -72,7 +72,7 @@ the route an aircraft taxis from its stand to its runway, can be recovered from
 OpenStreetMap and carries over to stand and runway pairs a model has never seen,
 where a memorized pair mean has nothing to carry. The criterion was fixed in the project plan, before the first model was fitted: the geometry is
 judged on pairs held out of training, not on a forward split. The test is
-therefore a difference in differences: how much more the geometry block is worth
+therefore a difference in differences (Angrist & Pischke, 2009, chap. 5): how much more the geometry block is worth
 on held-out pairs than on pairs the model has seen.
 
 The hypothesis holds. The geometry block's held-out-pair contrast is **+18.5 s
@@ -116,13 +116,15 @@ it; §8.7.2 states it as the one exception.
 
 ### 1.3 Prior art, and what is new here
 
-Building a routable graph from OSM `aeroway` geometry is not new; `traffic`
-(Olive, MIT) ships one, and Olive, Waltert & Schultz (ATRD 2025) document the
-same defects this pipeline repairs. Ravizza et al. (2013) established that
+Taxi-out has been modelled as a queue (Idris et al., 2002; Simaiakis &
+Balakrishnan, 2016) and predicted by regression and machine-learning models
+fitted to departure records (Lee et al., 2016; Ravizza et al., 2014). Building a
+routable graph from OSM `aeroway` geometry is not new; `traffic` (Olive, 2019)
+ships one, and Olive et al. (2025) document the same defects this pipeline
+repairs. Ravizza et al. (2013) established that
 route shape (turn angle, junction-free running) predicts taxi speed nearly as
 well as distance. What appears not to have been done is the downstream half: using these recovered
-quantities as regression features for taxi-out. Earlier entries to this
-challenge, in 2024 and 2025, appear not to have used OSM at all.
+quantities as regression features for taxi-out.
 
 Source: `docs/prior_art.md`.
 
@@ -182,16 +184,18 @@ Sources: `reports/data_review.md`, *Airports and months* and *Inventory*.
 
 ### 2.2 External data, and the license position
 
-OpenStreetMap (data (c) OpenStreetMap contributors, ODbL 1.0), OurAirports
-(public domain), Iowa Environmental Mesonet METAR (public domain), and, for the ground-movement correction of §8.7 alone, the adsb.lol
-globe history (ODbL 1.0). Each is openly licensed, documented, and re-fetchable
-by a scripted, cached client: the prize rules require additional datasets to be
-"openly available under an open source license", and a dataset a reader cannot
+OpenStreetMap (data (c) OpenStreetMap contributors, ODbL 1.0; OpenStreetMap
+contributors, n.d.), OurAirports (public domain; OurAirports, n.d.), Iowa
+Environmental Mesonet METAR (public domain; Iowa State University, n.d.), and,
+for the ground-movement correction of §8.7 alone, the adsb.lol globe history
+(ODbL 1.0; adsb.lol, n.d.). Each is openly licensed, documented, and re-fetchable
+by a scripted, cached client: the prize rules (EUROCONTROL Performance Review Commission, n.d.) require
+additional datasets to be "openly available under an open source license", and a dataset a reader cannot
 re-fetch fails the reproduction clause. The ground-movement correction also
-reads EUROCONTROL's OPDI flight events, whose site states no data license. They
+reads EUROCONTROL's OPDI flight events (EUROCONTROL, n.d.), whose site states no data license. They
 are fetched with a scripted client like the others, and no OPDI file, and no
 table built from one, is tracked or deposited. OpenSky
-historical surface tracks were considered and ruled out for the model, because
+(Schäfer et al., 2014) historical surface tracks were considered and ruled out for the model, because
 research-use access is not an open-source license. OpenSky's ten published
 scientific datasets were reviewed against the same license test plus two more: 2025 ground coverage at the ten airports, and a mechanism
 the exposed fields lack. None passes all three, and the README records each
@@ -205,7 +209,7 @@ The repository ships under GPLv3 in its entirety. The distance matrices it
 generates are a Derivative Database of OSM and carry ODbL, so they are
 regenerated rather than committed. The Zenodo deposit
 [10.5281/zenodo.23133051](https://doi.org/10.5281/zenodo.23133051) carries them
-under ODbL, with the eleven Overpass answers they derive from. Beside them it
+under ODbL, with the eleven Overpass (Olbricht, n.d.) answers they derive from. Beside them it
 holds the two public-domain inputs this work read and a later fetch would not
 return, the METAR observations and the OurAirports tables, and, also under
 ODbL, the adsb.lol event tables the ground-movement correction reads. The
@@ -267,7 +271,7 @@ in these steps, in this order:
 
 The final model adds three things to these steps, each read in §8.7 and §8.8.
 The booster carries two further feature blocks and is blended with a second
-learner, a CatBoost model, with the weight of the blend chosen per airport; the
+learner, a CatBoost model (Prokhorenkova et al., 2018), with the weight of the blend chosen per airport; the
 term's rows of step 6 are predicted row by row. A second model, the
 ground-movement correction, reads adsb.lol and OPDI ground events and replaces
 the prediction on the rows those sources cover, at the airports where it helped
@@ -302,7 +306,7 @@ ranking set exposes for the rows it reads from).
 | shrunk encoding, replacing the stand | `encoding-for-stand` | the pair's training mean shrunk toward the geometry, in place of the stand categorical | the fitting rows (§7.4) |
 | stand occupancy | `occupancy` | the last arrival at the subject's stand: the gap to its on-block, its lateness and taxi-in, its type and operator; the previous departure off the stand | arrivals' exposed fields (§6.5) |
 | callsign prefix | `callsign` | the operator, read as the callsign's prefix | the departure's own exposed fields |
-| destination and holidays | `destination` | the destination's bearing and distance; the public-holiday calendar | OurAirports; the holiday tables |
+| destination and holidays | `destination` | the destination's bearing and distance; the public-holiday calendar (Vacanza Team, n.d.) | OurAirports; the holiday tables |
 | plan differences (ships) | `plan-diffs` | the plan's own off-block values against each other | the Network Manager record, exposed |
 
 The ladder also carries rungs the submission is not fitted from: two reference
@@ -333,7 +337,7 @@ plan-shifted departures*.
 
 ### 3.4 The booster, its parameters, and the seed average
 
-The booster is LightGBM with `objective` regression: 6,000 trees at a learning
+The booster is LightGBM (Ke et al., 2017) with `objective` regression: 6,000 trees at a learning
 rate of 0.03, 127 leaves, a minimum child sample of 20, a column sample of 0.9
 and a row sample of 0.8 per tree, and categorical splits capped at 64
 thresholds with a smoothing of 20.0. It uses no early stopping, since stopping
@@ -395,8 +399,9 @@ called noise, it says which one speaks.
   within what changing the seed alone produces. The floor is measured on the
   shipped rung and applied to every block's change, an approximation the reports
   state.
-- **The day-clustered interval**, a 95% percentile bootstrap over the evaluation
-  set with days as the clusters and the same draw for both arms: how far a
+- **The day-clustered interval**, a 95% percentile bootstrap (Efron &
+  Tibshirani, 1993) over the evaluation set with days as the clusters (Cameron
+  et al., 2008) and the same draw for both arms: how far a
   figure would move on another sample of days. The interval and the floor
   measure different things and have disagreed (§7.1.1, §7.1.2).
 - **The pair-clustered interval** of the held-out-pair claim, 1,000 draws
@@ -550,7 +555,7 @@ Three defects are repaired to a fixed point: coincident-but-unshared nodes,
 nodes lying on edges they are not joined to, and ways that cross with no shared
 vertex. Stands are attached to the repaired graph, with the snap distance
 recorded per stand. Each route is described by several descriptors rather than
-one number: distance, turn angle on a Douglas–Peucker simplification,
+one number: distance, turn angle on a Douglas–Peucker simplification (Douglas & Peucker, 1973),
 junction-free running and backtrack.
 
 Sources: `reports/taxi_routing.md`; `reports/penalty_sensitivity.md`;
@@ -710,7 +715,7 @@ and what the difference would do to a claim.
 | The map is one OpenStreetMap extract per airport, pinned to its fetch time. | The map changes as contributors edit it, and the licence travels with the extract. | Pin each fetch, re-fetch deliberately, and carry the ODbL attribution. | Whether a distance can be reproduced. |
 | The record-quality term exists where the off-block time was defaulted to the schedule, which here is one airport. | A new operator may default differently, or never. | Run the cell test of §4 on the airport. If no cell qualifies, the airport is left to the physical model. | Whether an RMSE means anything at the airport. |
 | The ground-movement correction reads aircraft seen within 8 km of the reference point. | Receiver coverage differs by airport and by day. | Measure coverage per airport before applying the correction. | Where the correction can be claimed to help. |
-| Data terms are recorded beside each cache: ODbL for the map and for adsb.lol, public domain for the weather and for OurAirports, MIT for the holiday code. | A new region's data may restrict redistribution. | Record the terms with the cache manifest, as here. | Whether the result can be reproduced by a reader. |
+| Data terms are recorded beside each cache: ODbL for the map and for adsb.lol, public domain for the weather and for OurAirports, MIT for the holiday code (Vacanza Team, n.d.). | A new region's data may restrict redistribution. | Record the terms with the cache manifest, as here. | Whether the result can be reproduced by a reader. |
 
 **Crosswalk 2: the operator's fields and the names used here.** A new airport
 maps its own fields onto these, and the mapping is the first thing to check.
@@ -1104,7 +1109,7 @@ separate.* On October the better reading is 6,000 trees at a learning rate of
 was not taken. The two differ by 0.1350 s, 0.74 of the floor, and by less than
 half of the 0.2872 s the better cell moves between two draws of its own seed, so
 this instrument cannot separate them. That is the situation the
-one-standard-error rule of Breiman, Friedman, Olshen and Stone (1984) exists
+one-standard-error rule of Breiman et al. (1984) exists
 for: among candidates the evidence cannot separate, it takes the cheaper. The
 cell that ships, 6,000 trees at 0.03 and 127 leaves with a minimum child sample
 of 20, builds 762,000 terminal nodes against the alternative's 1,530,000 and
@@ -1305,7 +1310,7 @@ and is tested against the same leakage modes as the fold-wise one.*
 **What was built, and against what.** §5.4 says where the identifier model has
 nothing to memorize, and that the geometry is the better prior where it runs
 out. The obvious way to spend that inside the booster is an empirical-Bayes
-encoding of the (airport, stand, runway) pair: its out-of-fold training mean
+encoding (Micci-Barreca, 2001; Efron & Morris, 1973) of the (airport, stand, runway) pair: its out-of-fold training mean
 shrunk toward the geometric prediction rather than toward a group mean, `(n × ȳ + k ×
 ĝ) / (n + k)`, with `k` estimated per airport as the ratio of within-pair to
 between-pair variance, the sampling noise of each pair mean subtracted, and the
@@ -2985,4 +2990,52 @@ dated records.
 
 ## References
 
-From `docs/prior_art.md`, *Sources*.
+adsb.lol. (n.d.). *Globe history* [Data set]. https://github.com/adsblol
+
+Angrist, J. D., & Pischke, J.-S. (2009). *Mostly harmless econometrics: An empiricist's companion*. Princeton University Press.
+
+Breiman, L., Friedman, J. H., Olshen, R. A., & Stone, C. J. (1984). *Classification and regression trees*. Wadsworth.
+
+Cameron, A. C., Gelbach, J. B., & Miller, D. L. (2008). Bootstrap-based improvements for inference with clustered errors. *The Review of Economics and Statistics, 90*(3), 414–427.
+
+Douglas, D. H., & Peucker, T. K. (1973). Algorithms for the reduction of the number of points required to represent a digitized line or its caricature. *Cartographica: The International Journal for Geographic Information and Geovisualization, 10*(2), 112–122. https://doi.org/10.3138/FM57-6770-U75U-7727
+
+Efron, B., & Morris, C. (1973). Stein's estimation rule and its competitors: An empirical Bayes approach. *Journal of the American Statistical Association, 68*(341), 117–130.
+
+Efron, B., & Tibshirani, R. J. (1993). *An introduction to the bootstrap*. Chapman & Hall.
+
+EUROCONTROL. (n.d.). *Open Performance Data Initiative (OPDI), version 0.0.2* [Data set]. https://www.eurocontrol.int/performance/data/download/OPDI/v002/
+
+EUROCONTROL Performance Review Commission. (n.d.). *PRC Data Challenge 2026*. https://ansperformance.eu/study/data-challenge/dc2026/
+
+Idris, H., Clarke, J.-P., Bhuva, R., & Kang, L. (2002). Queuing model for taxi-out time estimation. *Air Traffic Control Quarterly, 10*(1), 1–22.
+
+Iowa State University. (n.d.). *Iowa Environmental Mesonet: ASOS, AWOS and METAR observations* [Data set]. https://mesonet.agron.iastate.edu/
+
+Ke, G., Meng, Q., Finley, T., Wang, T., Chen, W., Ma, W., Ye, Q., & Liu, T.-Y. (2017). LightGBM: A highly efficient gradient boosting decision tree. In *Advances in Neural Information Processing Systems* (Vol. 30, pp. 3146–3154). Curran Associates.
+
+Lee, H., Malik, W., & Jung, Y. C. (2016). *Taxi-out time prediction for departures at Charlotte airport using machine learning techniques* (AIAA Paper 2016-3910). American Institute of Aeronautics and Astronautics.
+
+Micci-Barreca, D. (2001). A preprocessing scheme for high-cardinality categorical attributes in classification and prediction problems. *ACM SIGKDD Explorations Newsletter, 3*(1), 27–32. https://doi.org/10.1145/507533.507538
+
+Olbricht, R. (n.d.). *Overpass API* [Computer software]. https://github.com/drolbr/Overpass-API
+
+Olive, X. (2019). traffic, a toolbox for processing and analysing air traffic data. *Journal of Open Source Software, 4*(39), Article 1518. https://doi.org/10.21105/joss.01518
+
+Olive, X., Waltert, M., & Schultz, M. (2025). *Assessing airport surface traffic performance from open sources of aviation data* [Paper presentation]. Air Transportation Research and Development Symposium. https://www.unibw.de/lvk-en/publications/2025_zhr_surface
+
+OpenStreetMap contributors. (n.d.). *OpenStreetMap* [Map data]. https://www.openstreetmap.org/copyright
+
+OurAirports. (n.d.). *OurAirports open data* [Data set]. https://ourairports.com/data/
+
+Prokhorenkova, L., Gusev, G., Vorobev, A., Dorogush, A. V., & Gulin, A. (2018). CatBoost: Unbiased boosting with categorical features. In *Advances in Neural Information Processing Systems* (Vol. 31). Curran Associates.
+
+Ravizza, S., Atkin, J. A. D., Maathuis, M. H., & Burke, E. K. (2013). A combined statistical approach and ground movement model for improving taxi time estimations at airports. *Journal of the Operational Research Society, 64*(9), 1347–1360.
+
+Ravizza, S., Chen, J., Atkin, J. A. D., Stewart, P., & Burke, E. K. (2014). Aircraft taxi time prediction: Comparisons and insights. *Applied Soft Computing, 14*, 397–406. https://doi.org/10.1016/j.asoc.2013.10.004
+
+Schäfer, M., Strohmeier, M., Lenders, V., Martinovic, I., & Wilhelm, M. (2014). Bringing up OpenSky: A large-scale ADS-B sensor network for research. In *Proceedings of the 13th International Symposium on Information Processing in Sensor Networks* (pp. 83–94). IEEE.
+
+Simaiakis, I., & Balakrishnan, H. (2016). A queuing model of the airport departure process. *Transportation Science, 50*(1), 94–109. https://doi.org/10.1287/trsc.2015.0603 
+
+Vacanza Team. (n.d.). *Open World Holidays Framework* (Version 0.104) [Computer software]. https://doi.org/10.5281/zenodo.14884702

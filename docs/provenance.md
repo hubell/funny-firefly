@@ -143,7 +143,7 @@ condition, and `--report` prints every figure with its status, section by
 section, with every number in scope it matches, so a chance match can be
 told from the row a sentence quotes.
 
-**4** patterns mark a token shaped like a
+**5** patterns mark a token shaped like a
 figure as something else. A token they cover is counted under the
 pattern's name, not dropped.
 
@@ -153,6 +153,7 @@ pattern's name, not dropped.
 | heading number | `^#{1,6}\s+\d+(?:\.\d+)*\.?(?=\s)` | a section's own number at the start of its heading: the same thing as a section reference, seen from the section itself |
 | year | `(?<![\w.,])(?:19\|20)\d{2}(?![\w%]\|\.\d\|,\d{3})` | a bare four-digit integer from 1900 to 2099. The paper writes every count of a thousand or more with a thousands separator, so a bare four-digit integer in it is a year: the training year, the ranking year, or the year of a cited work |
 | version string | `(?i:\b(?:v\|version\|release\|python\|cpython\|odbl\|gplv?)\s?)\d+(?:\.\d+)+` | a software or license version names a release and measures nothing. A dotted number with three or more parts is never read as a figure in the first place, so this covers the two-part form after a name |
+| reference entry | `^[A-Za-z][^(]{0,250}?\. \((?:\d{4}\|n\.d\.)\)\..*$` | a line of the paper's reference list: an author, a year and a title, written on one line. Its pages, volume, article number and DOI name a publication and measure nothing |
 
 **2** sections carry figures and no source
 line by design, and are read against every live report instead. What an

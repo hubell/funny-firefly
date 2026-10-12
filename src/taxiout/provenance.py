@@ -3593,6 +3593,13 @@ PAPER_EXEMPT_PATTERNS: tuple[PaperPattern, ...] = (
         " A dotted number with three or more parts is never read as a figure"
         " in the first place, so this covers the two-part form after a name",
     ),
+    PaperPattern(
+        "reference entry",
+        r"^[A-Za-z][^(]{0,250}?\. \((?:\d{4}|n\.d\.)\)\..*$",
+        "a line of the paper's reference list: an author, a year and a title,"
+        " written on one line. Its pages, volume, article number and DOI"
+        " name a publication and measure nothing",
+    ),
 )
 
 
