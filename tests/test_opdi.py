@@ -8,12 +8,13 @@ from __future__ import annotations
 
 import json
 
-import numpy as np
-import pandas as pd
 import pytest
 
-from taxiout import opdi
-from taxiout.adsb import REFERENCE_POINTS
+np = pytest.importorskip("numpy")
+pd = pytest.importorskip("pandas")
+
+from taxiout import opdi  # noqa: E402
+from taxiout.adsb import REFERENCE_POINTS  # noqa: E402
 
 pa = pytest.importorskip("pyarrow")
 

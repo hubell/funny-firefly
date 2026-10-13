@@ -674,3 +674,23 @@ def test_strict_passes_on_the_paper_as_it_stands(capsys):
     assert all(v.listed for _r, v in chk._verdicts(result, chk.HISTORICAL))
     assert not any(r.broken for r in result.sections)
     capsys.readouterr()
+
+
+def test_the_two_subsections_of_the_design_stand_alone_and_other_fours_do_not():
+    """7.1.1 and 7.1.2 sit at four hashes in the paper and are still read as
+    sections of their own; any other four-hash heading stays inside the
+    section above it."""
+    text = "\n".join(
+        [
+            "# Title",
+            "## 7. Validation",
+            "### 7.1 The design",
+            "#### 7.1.1 What the forward legs cannot see",
+            "#### 7.1.2 The rules under the parameters that ship",
+            "### 8.7 After the first score",
+            "#### 8.7.1 From the base configuration to the final one",
+        ]
+    )
+    keys = [s.key for s in chk.sections(text)]
+    assert "§7.1.1" in keys and "§7.1.2" in keys
+    assert not any(k.startswith("§8.7.") for k in keys)

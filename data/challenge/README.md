@@ -21,6 +21,10 @@ data/challenge/
   submitting.parquet    the submission template
 ```
 
+The final phase publishes these two as `final_ranking.parquet` and
+`final_submitting.parquet`; they go here under the names above, which are the
+names the code reads.
+
 Roughly 280 MB in total, so it is small enough to keep locally and far too
 sensitive to keep anywhere else.
 
@@ -45,13 +49,12 @@ as Gate 0 and answered in
    normalization (`taxiout.join`): 87–99.9% of departures by airport.
 
 2. **Is the target reconstructible from other columns?** Not cleanly.
-   `AOBT_3_flt` survives in `ranking.parquet`, but it is a minute-resolution
-   estimate that misses the blanked block time by minutes and carries no more
-   information than the filed EOBT. It is excluded from every feature
-   regardless, the organizers state that they monitor for attempts to
-   exploit the ranking process, and an entry judged on originality has nothing
-   to gain from it. The constants that say what may not be read are in
-   `taxiout.challenge`.
+   `AOBT_3_flt` survives in `ranking.parquet`, a minute-resolution estimate
+   that misses the blanked block time by minutes and, alone, carries no more
+   information than the filed EOBT. The base configuration reads nothing built
+   on it; the final configuration does (`taxiout.aobt3`), under the
+   challenge's post-hoc framing, and the paper says so (§6.3, §8.7.3). The
+   constants that say what may not be read are in `taxiout.challenge`.
 
 A third thing the review found that the checks did not ask: the ranking set
 blanks `BLOCK_TIME_UTC_mvt` for every departure, so no feature may count other

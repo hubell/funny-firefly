@@ -7,11 +7,12 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-import numpy as np
-import pandas as pd
 import pytest
 
-from taxiout import tails
+np = pytest.importorskip("numpy")
+pd = pytest.importorskip("pandas")
+
+from taxiout import tails  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[1]
 T0 = pd.Timestamp("2025-03-01 10:00", tz="UTC")

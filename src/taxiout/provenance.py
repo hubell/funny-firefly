@@ -3005,6 +3005,36 @@ FROZEN_DOCUMENTS: tuple[Frozen, ...] = (
         " which `tests/test_preregistered_copies.py` checks against the note"
         " where the note is on hand",
     ),
+    Frozen(
+        "reports/preregistered-2026-10-06-c8-prior.md",
+        "8e82cad6f24a37b61932070091df93eb824987a2425f8d6d2cd8ae459f1d8eec",
+        "the amendment that adds C8c, C8's weights corrected for the class"
+        " ratio, to the C7 and C8 amendment, a choice made after C8's figures"
+        " and stated as one; C8c was not adopted. What is frozen is this"
+        " published copy, at the digest beside it. What fixed the order is the"
+        " working note it was copied from, sha256"
+        " 81871eeb4f43d82b6a0aca1b5f3302d40a65cd5446efc05cf7289cb3a6fc1e98,"
+        " written on 6 October 2026 before any fit of the candidate it defines."
+        " The copy differs from it in the four places its closing section"
+        " lists, one of them inside a rule by the owner's decision of 7 October"
+        " 2026, which `tests/test_preregistered_copies.py` checks against the"
+        " note where the note is on hand",
+    ),
+    Frozen(
+        "reports/preregistered-2026-10-08-c18-c19.md",
+        "c31393c1957bade383c99cac8301cd20ef13066bbef760e514b54cf9b0dfc5a2",
+        "the pre-registration of C18, the surface state from arrivals, and C19,"
+        " the booster monotone in route length, for the final phase, with the"
+        " rule that decides whether either joins v12; neither was adopted."
+        " What is frozen is this published copy, at the digest beside it. What"
+        " fixed the order is the working note it was copied from, sha256"
+        " 78d4a701b8d2e96f6b34d9da6efe8331e24db8f9a26844bd653694757423b7c0,"
+        " written on 8 October 2026 before any figure it governs existed. The"
+        " copy differs from it in the seven places its closing section lists,"
+        " six of them inside a rule by the owner's decision of 7 October 2026,"
+        " which `tests/test_preregistered_copies.py` checks against the note"
+        " where the note is on hand",
+    ),
 )
 
 
@@ -3594,8 +3624,14 @@ PAPER_EXEMPT_PATTERNS: tuple[PaperPattern, ...] = (
         " in the first place, so this covers the two-part form after a name",
     ),
     PaperPattern(
+        "DOI prefix",
+        r"(?<![\w.])10\.\d{4,9}(?=/)",
+        "the registrant prefix of a DOI, before the slash. It names who"
+        " registered the identifier and measures nothing",
+    ),
+    PaperPattern(
         "reference entry",
-        r"^[A-Za-z][^(]{0,250}?\. \((?:\d{4}|n\.d\.)\)\..*$",
+        r"^[A-Za-z][^(]{0,250}?\. \((?:\d{4}[a-z]?|n\.d\.)\)\..*$",
         "a line of the paper's reference list: an author, a year and a title,"
         " written on one line. Its pages, volume, article number and DOI"
         " name a publication and measure nothing",
@@ -3788,6 +3824,121 @@ PAPER_HISTORICAL_FIGURES: tuple[PaperFigure, ...] = (
         " the upload rule and recorded in `reports/submission-2026-10-08-v11.md`, a dated record. No"
         " live report holds it: it is the scorer's figure over the ranking"
         " set's withheld labels, which nothing in the repository reads",
+    ),
+    PaperFigure(
+        "§7.4",
+        "1.60",
+        "the route-length check's ratio for `pair` as the final file's manifest"
+        " records it, from the dated record of the one final upload of"
+        " 11 October 2026. No live report reads that manifest: the record is"
+        " frozen because the upload happens once, and the sentence names the"
+        " manifest as where the reading stands",
+    ),
+    PaperFigure(
+        "§8.7",
+        "32.73%",
+        "the pilot gate's figures as the amendment of 4 October 2026 records "
+        "them in `reports/preregistered-2026-10-04-adsb-after-gate.md`, a "
+        "dated record. No live report holds them: the pilot's report is a "
+        "working record the repository does not publish",
+    ),
+    PaperFigure(
+        "§8.7",
+        "5,054",
+        "the pilot gate's figures as the amendment of 4 October 2026 records "
+        "them in `reports/preregistered-2026-10-04-adsb-after-gate.md`, a "
+        "dated record. No live report holds them: the pilot's report is a "
+        "working record the repository does not publish",
+    ),
+    PaperFigure(
+        "§8.7",
+        "30%",
+        "the pilot gate's figures as the amendment of 4 October 2026 records "
+        "them in `reports/preregistered-2026-10-04-adsb-after-gate.md`, a "
+        "dated record. No live report holds them: the pilot's report is a "
+        "working record the repository does not publish",
+    ),
+    PaperFigure(
+        "§8.7",
+        "50%",
+        "the pilot gate's figures as the amendment of 4 October 2026 records "
+        "them in `reports/preregistered-2026-10-04-adsb-after-gate.md`, a "
+        "dated record. No live report holds them: the pilot's report is a "
+        "working record the repository does not publish",
+    ),
+    PaperFigure(
+        "§8.7",
+        "232.2",
+        "the pilot gate's figures as the amendment of 4 October 2026 records "
+        "them in `reports/preregistered-2026-10-04-adsb-after-gate.md`, a "
+        "dated record. No live report holds them: the pilot's report is a "
+        "working record the repository does not publish",
+    ),
+    PaperFigure(
+        "§8.7",
+        "229.5",
+        "the pilot gate's figures as the amendment of 4 October 2026 records "
+        "them in `reports/preregistered-2026-10-04-adsb-after-gate.md`, a "
+        "dated record. No live report holds them: the pilot's report is a "
+        "working record the repository does not publish",
+    ),
+    PaperFigure(
+        "Annex K: every candidate measured after the freeze",
+        "533.1066",
+        "the organizers' score for v8, read back once on 4 October 2026 under"
+        " the upload rule and recorded in "
+        "`reports/submission-2026-10-04-v8.md`, a dated record. No live "
+        "report holds it: it is the scorer's figure over the ranking set's "
+        "withheld labels, which nothing in the repository reads",
+    ),
+    PaperFigure(
+        "Annex K: every candidate measured after the freeze",
+        "313.169",
+        "the organizers' score for v7, read back once on 4 October 2026 under"
+        " the upload rule and recorded in `reports/submission-2026-10-04.md`,"
+        " a dated record. No live report holds it: it is the scorer's figure "
+        "over the ranking set's withheld labels, which nothing in the "
+        "repository reads",
+    ),
+    PaperFigure(
+        "Annex K: every candidate measured after the freeze",
+        "30%",
+        "the pilot gate's figures as the amendment of 4 October 2026 records "
+        "them in `reports/preregistered-2026-10-04-adsb-after-gate.md`, a "
+        "dated record. No live report holds them: the pilot's report is a "
+        "working record the repository does not publish",
+    ),
+    PaperFigure(
+        "Annex K: every candidate measured after the freeze",
+        "5,054",
+        "the pilot gate's figures as the amendment of 4 October 2026 records "
+        "them in `reports/preregistered-2026-10-04-adsb-after-gate.md`, a "
+        "dated record. No live report holds them: the pilot's report is a "
+        "working record the repository does not publish",
+    ),
+    PaperFigure(
+        "Annex K: every candidate measured after the freeze",
+        "32.73%",
+        "the pilot gate's figures as the amendment of 4 October 2026 records "
+        "them in `reports/preregistered-2026-10-04-adsb-after-gate.md`, a "
+        "dated record. No live report holds them: the pilot's report is a "
+        "working record the repository does not publish",
+    ),
+    PaperFigure(
+        "Annex K: every candidate measured after the freeze",
+        "50%",
+        "the pilot gate's figures as the amendment of 4 October 2026 records "
+        "them in `reports/preregistered-2026-10-04-adsb-after-gate.md`, a "
+        "dated record. No live report holds them: the pilot's report is a "
+        "working record the repository does not publish",
+    ),
+    PaperFigure(
+        "Annex K: every candidate measured after the freeze",
+        "232.2",
+        "the pilot gate's figures as the amendment of 4 October 2026 records "
+        "them in `reports/preregistered-2026-10-04-adsb-after-gate.md`, a "
+        "dated record. No live report holds them: the pilot's report is a "
+        "working record the repository does not publish",
     ),
 )
 

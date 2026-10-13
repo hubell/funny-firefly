@@ -5,11 +5,20 @@ Taxi-out time prediction for the [EUROCONTROL PRC Data Challenge 2026](https://a
 Predicts `TAXITIME_SEC_mvt`, the taxi-out time, for departures at the ten
 European airports the challenge covers; the repository's own airport list also
 holds Antalya, which has no rows in the challenge data (see
-[`reports/data_review.md`](reports/data_review.md)). The final phase ranks one
-file by RMSE over January, February, June and July 2026: January with July,
-February with June, and the four together.
+[`reports/data_review.md`](reports/data_review.md)). The challenge ranks by RMSE.
+Its final phase takes one file, `<team-name>_final.parquet`, predicting four
+months of 2026: January and July, with February and June added. This entry's
+final file, `funny-firefly_final.parquet`, was uploaded once, on 11 October
+2026, ahead of the deadline of 14 October 2026, 12:00 CET
+([`reports/submission-2026-10-11-v12.md`](reports/submission-2026-10-11-v12.md)).
 
-**Licence: GNU GPL v3.0 only.** Copyright (C) 2026 Hunter Bell. Every file in
+**Citing.** The code, the reports and the paper are archived on Zenodo at
+[10.5281/zenodo.23320026](https://doi.org/10.5281/zenodo.23320026), release `V1.1`;
+`CITATION.cff` has the entry. The data the pipeline reads, apart from the
+challenge data, are at
+[10.5281/zenodo.23133051](https://doi.org/10.5281/zenodo.23133051).
+
+**License: GNU GPL v3.0 only.** Copyright (C) 2026 Hunter Bell. Every file in
 this repository is GPLv3, from the first commit, as prize eligibility requires;
 there is no second license anywhere in it. The distance matrices the pipeline
 *generates* are a Derivative Database of OpenStreetMap and carry ODbL, which is
@@ -94,7 +103,10 @@ make transfer PYTHON=.venv/bin/python                        # leave one airport
 
 **Level 3: the final file, end to end.** With Level 2's inputs in place and the
 adsb.lol and OPDI caches added, this is the order a clean clone followed on 10
-and 11 October 2026 (*v12 from a clean checkout*, below):
+and 11 October 2026 (*v12 from a clean checkout*, below). The final phase's
+files go in under the names the code reads: the organizers' `final_ranking.parquet`
+as `data/challenge/ranking.parquet` and `final_submitting.parquet` as
+`data/challenge/submitting.parquet`, which is how that clone ran.
 
 ```bash
 make reports PYTHON=.venv/bin/python
@@ -372,7 +384,8 @@ data review and everything after it need `pip install -e ".[modelling]"`.
 | `scripts/make_submission.py` | `data/challenge/`, `data/processed/taxi_distance/`, `data/raw/metar/`, `data/raw/ourairports_airports.csv`, `data/processed/fusion/`, `data/processed/candidates_board/` | `data/submissions/<team>_v<n>.parquet`, or `<team>_final.parquet` with `--final` (gitignored; the directory is made if absent) |
 
 Only `fetch_osm.py`, `fetch_metar.py`, `fetch_metar_history.py`,
-`fetch_ourairports.py` and `check_runways_ourairports.py` touch the network.
+`fetch_ourairports.py`, `check_runways_ourairports.py`, `fetch_adsb.py` and
+`fetch_opdi.py` touch the network.
 `build_taxi_graph.py` runs all 11 airports in about two minutes from the
 cache and takes `--airports`,
 `--runway-penalty` and `--max-snap-m` for sensitivity checks. Output is
@@ -421,16 +434,16 @@ answer's database state beside its pin. A rebuild in which every mirror fails
 or refuses is a stop and not a fallback: the pin cannot be served that day.
 
 **What a reader brings, and what a clean checkout reproduces.** The
-repository at the commit the paper is committed in, tagged
-`entry-2026-10-04`, tracks three files under `data/` and nothing else there.
-Three tags mark the history: `freeze-2026-10-04` the model's freeze,
+repository tracks three files under `data/` and nothing else there. Three tags
+mark the history up to the first score: `freeze-2026-10-04` the model's freeze,
 `model-v7-2026-10-02` the rule of the plan-shifted departures, and
 `entry-2026-10-04` the file that was scored first. The four files after it are
 tagged `model-v8-2026-10-04`, `model-v9-2026-10-06`, `model-v10-2026-10-07` and
 `model-v11-2026-10-07`, and `scripts/make_submission.py` at the last of them
-builds v11. v12, the final phase's one file, carries no tag yet: `make final`
-builds it at the commit that landed its code and at every commit after it
-that leaves what the script computes unchanged. A reader brings the challenge
+builds v11. v12, the final phase's one file, is tagged `model-v12-2026-10-11`:
+`make final` builds it there and at every commit after it that leaves what the
+script computes unchanged. Release `V1.1`, which carries the paper, is such a
+commit. A reader brings the challenge
 data, from the organizers, into `data/challenge/`; the eleven Overpass
 answers, fetched at their pins as above or copied from the deposit into
 `data/raw/`; and, from the deposit, the METAR cache into `data/raw/metar/` and
@@ -494,9 +507,10 @@ against this repository at the tag, and `SHA256SUMS` covers every file in it.
 It holds, under ODbL, the adsb.lol event tables v12 reads, 470 days with
 their manifest and notice, which `make adsb` then verifies offline;
 `python scripts/fetch_adsb.py --all` fetches them again instead, more than a
-terabyte of releases. It does not hold OPDI: OPDI's site states no data
-licence and the entry uses OPDI on the organizers' confirmation, so no OPDI
-file is deposited, and `make opdi` fetches the files again from EUROCONTROL.
+terabyte of releases. It does not hold OPDI: the entry uses OPDI as an
+external dataset (see *Data sources*), and since its site states no data
+license, no OPDI file is deposited and `make opdi` fetches the files again from
+EUROCONTROL.
 
 ## Data sources
 
@@ -541,9 +555,14 @@ file is deposited, and `make opdi` fetches the files again from EUROCONTROL.
   `MANIFEST.json` and `ODbL-NOTICE.md`: 470 days, 350 of 2025 and the 120 of
   the four ranking months. The fusion model reads it and nothing else does.
 - **OPDI**: the flight events and flight lists of EUROCONTROL's Open
-  Performance Data Initiative, v0.0.2. Its site states no data licence; the
-  entry uses OPDI on the organizers' confirmation that it is open to the
-  challenge (`docs/prior_art.md`). `scripts/fetch_opdi.py` fetches the
+  Performance Data Initiative, v0.0.2. The prize rules ask that every external
+  dataset used be "openly accessible/usable and documented": EUROCONTROL
+  publishes OPDI openly, it is documented here and in `docs/prior_art.md`, and
+  the organizers confirmed that it is open to the challenge. Their other
+  condition, "openly available under an open source license", this entry reads
+  as governing the datasets it adds, which the deposit carries under ODbL. OPDI's
+  site states no data license, so nothing from it is deposited.
+  `scripts/fetch_opdi.py` fetches the
   published files into `data/raw/opdi/` and matches them to the departures
   under `data/interim/opdi/`; both are gitignored, and no OPDI file or table
   built from one is tracked or deposited. Like adsb.lol, it enters only the
@@ -573,11 +592,10 @@ existence to the "phased delays" the challenge rationale describes; the
 portal's notice permits copying "provided that EUROCONTROL is mentioned as the
 source and it is not used for commercial purposes" and states that the
 information "may not be modified without prior written permission", which is
-non-commercial and no-derivatives, and this entry reads that as failing the
-prize rules' requirement that additional datasets be "openly available under
-an open source license", the same reading that kept OPDI out of the entry
-until the organizers confirmed it open to the challenge, as
-[`docs/prior_art.md`](docs/prior_art.md) records. ERA5 (Copernicus, CC-BY since July
+non-commercial and no-derivatives. This entry read that as failing the
+condition that an external dataset be "openly accessible/usable" for a dataset
+features are built from, and did not ask the organizers about it, as it did
+about OPDI ([`docs/prior_art.md`](docs/prior_art.md)). ERA5 (Copernicus, CC-BY since July
 2025) clears the rule and was not pursued: the nearest test, the METAR's own
 wind, ceiling, temperature and thunderstorm fields, bought nothing.
 
@@ -701,12 +719,14 @@ scripts/
   check_provenance.py          verifies every number is categorised (+ docs/provenance.md)
 docs/
   paper.md            the paper
-  paper.docx          the paper as a Word document, built by `make paper-docx`
+  paper.docx          the paper as a Word document: `make paper-docx` builds it, and a
+                      formatting pass outside the repository sets figures, tables,
+                      the cover page and the linked contents
   review_headroom.md  the dated review of 8 September 2026
   provenance.md       generated; where every number comes from, and what is open
   modelling_notes.md  decisions, caveats, open questions, leakage rules
-  prior_art.md        literature, external data licences, benchmarks
-  plan.md             gated plan to the 11 October deadline
+  prior_art.md        literature, external data licenses, benchmarks
+  plan.md             gated plan, written to the first deadline of 11 October
 reports/              generated; every number in them is computed, not typed
 data/
   raw/                OSM cache (gitignored)

@@ -143,7 +143,7 @@ condition, and `--report` prints every figure with its status, section by
 section, with every number in scope it matches, so a chance match can be
 told from the row a sentence quotes.
 
-**5** patterns mark a token shaped like a
+**6** patterns mark a token shaped like a
 figure as something else. A token they cover is counted under the
 pattern's name, not dropped.
 
@@ -153,7 +153,8 @@ pattern's name, not dropped.
 | heading number | `^#{1,6}\s+\d+(?:\.\d+)*\.?(?=\s)` | a section's own number at the start of its heading: the same thing as a section reference, seen from the section itself |
 | year | `(?<![\w.,])(?:19\|20)\d{2}(?![\w%]\|\.\d\|,\d{3})` | a bare four-digit integer from 1900 to 2099. The paper writes every count of a thousand or more with a thousands separator, so a bare four-digit integer in it is a year: the training year, the ranking year, or the year of a cited work |
 | version string | `(?i:\b(?:v\|version\|release\|python\|cpython\|odbl\|gplv?)\s?)\d+(?:\.\d+)+` | a software or license version names a release and measures nothing. A dotted number with three or more parts is never read as a figure in the first place, so this covers the two-part form after a name |
-| reference entry | `^[A-Za-z][^(]{0,250}?\. \((?:\d{4}\|n\.d\.)\)\..*$` | a line of the paper's reference list: an author, a year and a title, written on one line. Its pages, volume, article number and DOI name a publication and measure nothing |
+| DOI prefix | `(?<![\w.])10\.\d{4,9}(?=/)` | the registrant prefix of a DOI, before the slash. It names who registered the identifier and measures nothing |
+| reference entry | `^[A-Za-z][^(]{0,250}?\. \((?:\d{4}[a-z]?\|n\.d\.)\)\..*$` | a line of the paper's reference list: an author, a year and a title, written on one line. Its pages, volume, article number and DOI name a publication and measure nothing |
 
 **2** sections carry figures and no source
 line by design, and are read against every live report instead. What an
@@ -170,7 +171,7 @@ reported with their figure count rather than skipped.
 | section | why |
 | --- | --- |
 
-**32** historical figures stand, each with
+**46** historical figures stand, each with
 its reason.
 
 | section | figure | why |
@@ -207,6 +208,20 @@ its reason.
 | §8.7 | 282.399 | the organizers' score for v9, read back once on 6 October 2026 under the upload rule and recorded in `reports/submission-2026-10-06-v9.md`, a dated record. No live report holds it: it is the scorer's figure over the ranking set's withheld labels, which nothing in the repository reads |
 | §8.7 | 272.0897 | the organizers' score for v10, read back once on 7 October 2026 under the upload rule and recorded in `reports/submission-2026-10-07-v10.md`, a dated record. No live report holds it: it is the scorer's figure over the ranking set's withheld labels, which nothing in the repository reads |
 | §8.7 | 269.1368 | the organizers' score for v11, read back once on 8 October 2026 under the upload rule and recorded in `reports/submission-2026-10-08-v11.md`, a dated record. No live report holds it: it is the scorer's figure over the ranking set's withheld labels, which nothing in the repository reads |
+| §7.4 | 1.60 | the route-length check's ratio for `pair` as the final file's manifest records it, from the dated record of the one final upload of 11 October 2026. No live report reads that manifest: the record is frozen because the upload happens once, and the sentence names the manifest as where the reading stands |
+| §8.7 | 32.73% | the pilot gate's figures as the amendment of 4 October 2026 records them in `reports/preregistered-2026-10-04-adsb-after-gate.md`, a dated record. No live report holds them: the pilot's report is a working record the repository does not publish |
+| §8.7 | 5,054 | the pilot gate's figures as the amendment of 4 October 2026 records them in `reports/preregistered-2026-10-04-adsb-after-gate.md`, a dated record. No live report holds them: the pilot's report is a working record the repository does not publish |
+| §8.7 | 30% | the pilot gate's figures as the amendment of 4 October 2026 records them in `reports/preregistered-2026-10-04-adsb-after-gate.md`, a dated record. No live report holds them: the pilot's report is a working record the repository does not publish |
+| §8.7 | 50% | the pilot gate's figures as the amendment of 4 October 2026 records them in `reports/preregistered-2026-10-04-adsb-after-gate.md`, a dated record. No live report holds them: the pilot's report is a working record the repository does not publish |
+| §8.7 | 232.2 | the pilot gate's figures as the amendment of 4 October 2026 records them in `reports/preregistered-2026-10-04-adsb-after-gate.md`, a dated record. No live report holds them: the pilot's report is a working record the repository does not publish |
+| §8.7 | 229.5 | the pilot gate's figures as the amendment of 4 October 2026 records them in `reports/preregistered-2026-10-04-adsb-after-gate.md`, a dated record. No live report holds them: the pilot's report is a working record the repository does not publish |
+| Annex K: every candidate measured after the freeze | 533.1066 | the organizers' score for v8, read back once on 4 October 2026 under the upload rule and recorded in `reports/submission-2026-10-04-v8.md`, a dated record. No live report holds it: it is the scorer's figure over the ranking set's withheld labels, which nothing in the repository reads |
+| Annex K: every candidate measured after the freeze | 313.169 | the organizers' score for v7, read back once on 4 October 2026 under the upload rule and recorded in `reports/submission-2026-10-04.md`, a dated record. No live report holds it: it is the scorer's figure over the ranking set's withheld labels, which nothing in the repository reads |
+| Annex K: every candidate measured after the freeze | 30% | the pilot gate's figures as the amendment of 4 October 2026 records them in `reports/preregistered-2026-10-04-adsb-after-gate.md`, a dated record. No live report holds them: the pilot's report is a working record the repository does not publish |
+| Annex K: every candidate measured after the freeze | 5,054 | the pilot gate's figures as the amendment of 4 October 2026 records them in `reports/preregistered-2026-10-04-adsb-after-gate.md`, a dated record. No live report holds them: the pilot's report is a working record the repository does not publish |
+| Annex K: every candidate measured after the freeze | 32.73% | the pilot gate's figures as the amendment of 4 October 2026 records them in `reports/preregistered-2026-10-04-adsb-after-gate.md`, a dated record. No live report holds them: the pilot's report is a working record the repository does not publish |
+| Annex K: every candidate measured after the freeze | 50% | the pilot gate's figures as the amendment of 4 October 2026 records them in `reports/preregistered-2026-10-04-adsb-after-gate.md`, a dated record. No live report holds them: the pilot's report is a working record the repository does not publish |
+| Annex K: every candidate measured after the freeze | 232.2 | the pilot gate's figures as the amendment of 4 October 2026 records them in `reports/preregistered-2026-10-04-adsb-after-gate.md`, a dated record. No live report holds them: the pilot's report is a working record the repository does not publish |
 
 **22** figures are computed from report
 figures rather than quoted, each with the arithmetic the check verifies,
@@ -247,7 +262,7 @@ than this record claiming it.
 
 ## Frozen documents
 
-**36** dated records, each with a sha256. These need
+**38** dated records, each with a sha256. These need
 the opposite gate from every other file here: the risk is not that they go
 stale, it is that somebody edits them. A currency check over one would
 demand destroying the record.
@@ -290,6 +305,8 @@ demand destroying the record.
 | `reports/preregistered-2026-10-08-final-phase.md` | the amendment of the four-month pre-registration for the final phase: the season candidates withdrawn, v12 the single final file, uploaded once, and the checks before that upload. What is frozen is this published copy, at the digest beside it. What fixed the order is the working note it was copied from, sha256 553e042f94494798c2c7fd1c92823713069514eebdc90ba61a161d9bd12f41fa, written on 8 October 2026 before any figure it governs existed. The copy differs from it in the one place its closing section lists, inside a rule by the owner's decision of 7 October 2026, which `tests/test_preregistered_copies.py` checks against the note where the note is on hand |
 | `reports/preregistered-2026-10-09-jj-check.md` | the amendment of the January and July check after the organizers drew those months' times again, and of the final file's name. What is frozen is this published copy, at the digest beside it. What fixed the order is the working note it was copied from, sha256 05214673d1868f88f6215bee204ed43c17e733f527f16b18a56143b89ca0d85e, written on 9 October 2026 before any figure it governs existed. The copy differs from it in the three places its closing section lists, one of them inside a rule by the owner's decision of 7 October 2026, which `tests/test_preregistered_copies.py` checks against the note where the note is on hand |
 | `reports/preregistered-2026-10-09-records.md` | the pre-registration of W, the flight-plan window, of the tests of the shifted records and C20, and of the audit of the final file; W was found valid and is v12's last step, and C20 was not adopted. What is frozen is this published copy, at the digest beside it. What fixed the order is the working note it was copied from, sha256 908780852884eee96a4619986eb2fca47a8680ab4fd8462cf5029711c92895eb, written on 9 October 2026 before any figure it governs existed. The copy differs from it in the one place its closing section lists, which `tests/test_preregistered_copies.py` checks against the note where the note is on hand |
+| `reports/preregistered-2026-10-06-c8-prior.md` | the amendment that adds C8c, C8's weights corrected for the class ratio, to the C7 and C8 amendment, a choice made after C8's figures and stated as one; C8c was not adopted. What is frozen is this published copy, at the digest beside it. What fixed the order is the working note it was copied from, sha256 81871eeb4f43d82b6a0aca1b5f3302d40a65cd5446efc05cf7289cb3a6fc1e98, written on 6 October 2026 before any fit of the candidate it defines. The copy differs from it in the four places its closing section lists, one of them inside a rule by the owner's decision of 7 October 2026, which `tests/test_preregistered_copies.py` checks against the note where the note is on hand |
+| `reports/preregistered-2026-10-08-c18-c19.md` | the pre-registration of C18, the surface state from arrivals, and C19, the booster monotone in route length, for the final phase, with the rule that decides whether either joins v12; neither was adopted. What is frozen is this published copy, at the digest beside it. What fixed the order is the working note it was copied from, sha256 78d4a701b8d2e96f6b34d9da6efe8331e24db8f9a26844bd653694757423b7c0, written on 8 October 2026 before any figure it governs existed. The copy differs from it in the seven places its closing section lists, six of them inside a rule by the owner's decision of 7 October 2026, which `tests/test_preregistered_copies.py` checks against the note where the note is on hand |
 
 ## What a rebuild of an external input is pinned to
 

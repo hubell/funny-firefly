@@ -13,13 +13,14 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
-import numpy as np
-import pandas as pd
 import pytest
 
-from taxiout import submission
-from taxiout.aobt3 import aobt3_features
-from taxiout.models import BOOSTER_PARAMS, SUBMISSION_CONFIGURATION
+np = pytest.importorskip("numpy")
+pd = pytest.importorskip("pandas")
+
+from taxiout import submission  # noqa: E402
+from taxiout.aobt3 import aobt3_features  # noqa: E402
+from taxiout.models import BOOSTER_PARAMS, SUBMISSION_CONFIGURATION  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[1]
 ID, TARGET = "MVT_ID_mvt", "TAXITIME_SEC_mvt"

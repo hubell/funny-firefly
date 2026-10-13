@@ -330,6 +330,7 @@ _LANDING = "the landing of v10"
 _REPORT_FILE = r"\(`" + _NOTE_FILE + r"`\)"
 _REFIT = "the fusion's refit on group B's base"
 _FOUR_INPUTS = "the measurement of the four months' inputs"
+_READING = "the reading of the candidates C1 to C5, C7 and C8"
 
 COPIES_OF_7_OCTOBER = {
     "reports/preregistered-2026-10-04-adsb-leg.md": (
@@ -660,6 +661,54 @@ COPIES_OF_7_OCTOBER = {
             ),
         ),
         0,
+    ),
+    # the C8c amendment of 6 October and the C18 and C19 note of 8 October,
+    # made the same way on 13 October; the first names the work block that
+    # read the candidates as the airports amendment's copy names it
+    "reports/preregistered-2026-10-06-c8-prior.md": (
+        "preregistration_2026-10-06_c8_prior.md",
+        "81871eeb4f43d82b6a0aca1b5f3302d40a65cd5446efc05cf7289cb3a6fc1e98",
+        (
+            (
+                r"after " + _WORK_BLOCK + r"'s verdict,",
+                "after the verdict of " + _READING + ",",
+            ),
+            (
+                r"\(" + _WORK_BLOCK + r"'s report, `reports/candidates-2026-10-05\.md`\)",
+                "(the report of " + _READING + ", `reports/candidates-2026-10-05.md`)",
+            ),
+            (
+                _WORK_BLOCK + r" adopted C1 and C4",
+                "The reading of the candidates C1 to C5, C7 and C8 adopted C1 and C4",
+            ),
+            # the one inside the combination rule
+            (
+                r"the combination is " + _WORK_BLOCK + r"'s adopted configuration",
+                "the combination is the adopted configuration of " + _READING,
+            ),
+        ),
+        1,
+    ),
+    "reports/preregistered-2026-10-08-c18-c19.md": (
+        "preregistration_2026-10-08_c18_c19.md",
+        "78d4a701b8d2e96f6b34d9da6efe8331e24db8f9a26844bd653694757423b7c0",
+        (
+            (r"\(`" + _NOTE_FILE + r"` §2:", "(" + _UNPUBLISHED + ", §2:"),
+            # the six inside the rule and v12's definition
+            (
+                _WORK_BLOCK + r"'s `heldout-2025-MM__c14__seed0`",
+                "the overnight run's `heldout-2025-MM__c14__seed0`",
+            ),
+            (
+                _WORK_BLOCK + r"'s stacker is refitted",
+                "The stacker of " + _REFIT + " is refitted",
+            ),
+            (r"on " + _WORK_BLOCK + r"'s days", "on the days of " + _REFIT),
+            (r"against " + _WORK_BLOCK + r"'s G1n", "against the G1n of " + _REFIT),
+            (_WORK_BLOCK + r"'s fits run", "the fits of the measurement of C17 run"),
+            (r"else " + _WORK_BLOCK + r"'s\)", "else that of " + _REFIT + ")"),
+        ),
+        6,
     ),
 }
 

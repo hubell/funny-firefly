@@ -1,0 +1,25 @@
+cff-version: 1.2.0
+message: "If you use this work, please cite the archived release."
+title: "funny-firefly: Taxi-out prediction from OpenStreetMap geometry (PRC Data Challenge 2026), code, paper and reports"
+version: V1.1
+type: software
+authors:
+  - family-names: Bell
+    given-names: Hunter
+doi: 10.5281/zenodo.23320026
+repository-code: "https://github.com/hubell/funny-firefly"
+license: GPL-3.0-only
+keywords:
+  - taxi-out
+  - OpenStreetMap
+  - airport surface
+  - EUROCONTROL
+  - PRC Data Challenge
+references:
+  - type: dataset
+    title: "Data caches for taxi-out prediction at eleven European airports: OpenStreetMap stand-to-runway distance matrices, METAR observations, airport tables and adsb.lol event tables (team funny-firefly, EUROCONTROL PRC Data Challenge 2026)"
+    authors:
+      - family-names: Bell
+        given-names: Hunter
+    doi: 10.5281/zenodo.23133051
+    license: ODbL-1.0

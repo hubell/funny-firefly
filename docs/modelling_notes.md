@@ -333,17 +333,21 @@ a noisy copy of one it hides. Concretely:
   blanked for every departure in January and July 2026. So is anything that
   subtracts other departures' taxi times. Both were oracle-quality in training
   and would have been noise on the leaderboard.
-- *Excluded by decision:* `AOBT_3_flt`. It survives in the ranking set, but it
-  is a minute-resolution Network Manager off-block that sits a median 51 s
-  from the blanked field with an interquartile range of five minutes; as a
-  single predictor it is worth no more than the filed EOBT lag. Not an oracle,
-  but a noisy copy of a hidden field, and an entry judged on originality has
-  nothing to gain from it. The organizers say they monitor for attempts to
-  exploit the ranking process; this is one of the two places it could be
-  alleged, and it is the one settled by not reading the field at all.
+- *Excluded from the base configuration, admitted in the final one:*
+  `AOBT_3_flt`. It survives in the ranking set, a minute-resolution Network
+  Manager off-block that sits a median 51 s from the blanked field with an
+  interquartile range of five minutes; as a single predictor it is worth no
+  more than the filed EOBT lag. The base configuration reads nothing built on
+  it. After the first score, the final configuration admitted features built
+  on it (`taxiout.aobt3`, candidate C1 of `reports/preregistered-2026-10-04.md`)
+  under the challenge's post-hoc framing: the data page documents the field,
+  the ranking set blanks only the block time and the taxi time, and the
+  challenge's stated purpose is post-operations analysis, for which the field
+  is available after the fact. It stays in `EXCLUDED_BY_DECISION` for every
+  other module, and `tests/test_aobt3.py` holds that.
 
-  The other is the stand-occupancy block, and it is not settled that way
-  because the block is used. It reads arrivals' on-block times, which the
+  The stand-occupancy block is another feature that depends on the post-hoc
+  framing, and it is in both configurations. It reads arrivals' on-block times, which the
   ranking set exposes in full, to bound a field the ranking set hides for
   departures. Every column it reads is exposed and the poison tests hold it to
   that, so it is inside the rule as written, but the rule as written is a
@@ -376,12 +380,14 @@ in force, from other movements' designators. Each is constructed identically
 on both sides, with the subject excluded from its own count and the tie-break
 for an equal timestamp fixed explicitly.
 
-**What is still forbidden even under post-hoc rules.** Reading the target of
-any departure; reading `AOBT_3_flt`; and recovering the blanked off-block time
-from outside the challenge data: ADS-B surface tracks for the ranking months
-would do it, and using them would be reconstructing a hidden variable through
-a side channel, whatever their license. External data is for calibrating the
-physical layer on 2025 and nothing else.
+**What is still forbidden.** Reading the target, or the blanked block time, of
+any departure. The base configuration also reads neither `AOBT_3_flt` nor any
+surface track for the ranking months, and its external data calibrates the
+physical layer on 2025 and nothing else. The final configuration reads both,
+under the same post-hoc framing: features on `AOBT_3_flt` as above, and a
+ground-movement correction from the adsb.lol globe history (ODbL) and OPDI's
+flight events, which give when each departure was first seen to move
+(`reports/fusion.md`; the paper's §8.7.3 and §8.7.4).
 
 **The literature's benchmark figures do not transfer.** Idris's takeoff queue
 size counts departures between the subject's pushback and its take-off, a

@@ -4,11 +4,12 @@ and the two gates. No data and no fit; every row is written here."""
 
 from __future__ import annotations
 
-import numpy as np
-import pandas as pd
 import pytest
 
-from taxiout import fusion
+np = pytest.importorskip("numpy")
+pd = pytest.importorskip("pandas")
+
+from taxiout import fusion  # noqa: E402
 
 
 def ts(s):

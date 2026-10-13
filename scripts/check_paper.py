@@ -172,7 +172,11 @@ NUMBER = re.compile(
 # reports as a hyphen; both read as minus.
 SIGNS = {"+": "+", "-": "-", "−": "-"}
 
-SECTION_HEADING = re.compile(r"^(#{2,3})\s+(.+?)\s*$")
+# Two and three hashes, and the two subsections of 7.1 at four: the paper sets
+# 7.1.1 and 7.1.2 one level below 7.1, and each keeps its own sources, figures
+# and entries here, as it did when it stood at three hashes. Every other four-hash
+# heading (8.7.1 to 8.7.6, say) stays inside the section above it.
+SECTION_HEADING = re.compile(r"^(#{2,3}|#{4}(?=\s+7\.1\.[12]\s))\s+(.+?)\s*$")
 STATUS_TAG = re.compile(r"\s*\[[^\]]*\]\s*$")
 SECTION_NUMBER = re.compile(r"^(\d+(?:\.\d+)*)\.?\s")
 SOURCE_LINE = re.compile(r"^Sources?:\s*")
@@ -482,7 +486,7 @@ def _source_paragraphs(lines) -> tuple[str, frozenset[int]]:
 
 
 def sections(text: str) -> list[Section]:
-    """The paper cut at every heading of two or three hashes.
+    """The paper cut at every heading of two or three hashes, and at 7.1.1 and 7.1.2.
 
     What comes before the first is kept as a section of its own, so a figure
     in the title or the status note cannot fall outside every check.
@@ -1198,7 +1202,8 @@ def structure(result: Result) -> str:
     """The shape of the paper, in one line."""
     headed = [r for r in result.sections if r.section.key != PREAMBLE]
     return (
-        f"{result.paper}: {len(headed)} sections at ## and ###,"
+        f"{result.paper}: {len(headed)} sections at ##, ### and the two subsections"
+        " that stand at ####,"
         f" {sum(1 for r in headed if r.section.source)} with a source line,"
         f" {sum(1 for r in headed if r.scope == EXCLUDED)} excluded by name"
     )

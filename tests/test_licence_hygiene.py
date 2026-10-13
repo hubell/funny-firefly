@@ -387,6 +387,33 @@ def test_the_copies_of_9_october_exempt_one_candidate_name_only(
     assert exempt in capsys.readouterr().out
 
 
+def test_the_c18_c19_copy_exempts_its_two_candidate_names_only(
+    tmp_path, monkeypatch, capsys
+):
+    """The C18 and C19 copy names C18 and C15 as its note does; those two are
+    exempt there, nowhere else, and nothing else is."""
+    exempt = "reports/preregistered-2026-10-08-c18-c19.md"
+    assert hygiene.IDENTIFIER_EXEMPTIONS[exempt][0] == frozenset({"C15", "C18"})
+    _quiet(monkeypatch)
+    monkeypatch.setattr(
+        hygiene, "osm_stand_identifiers", lambda: {"C15", "C18", "B7X", "A9Z", "D4Q"}
+    )
+    names = "Candidates C18 and C15, and stand B7X."
+    credit = "\n\nData (c) OpenStreetMap contributors, ODbL 1.0.\n"
+    (tmp_path / exempt).parent.mkdir(parents=True, exist_ok=True)
+    (tmp_path / exempt).write_text(names + credit)
+    monkeypatch.setattr(hygiene, "REPO", tmp_path)
+    assert hygiene.main() == 0
+    capsys.readouterr()
+    (tmp_path / exempt).write_text(names + " Stands A9Z and D4Q." + credit)
+    assert hygiene.main() == 1
+    assert exempt in capsys.readouterr().out
+    (tmp_path / exempt).write_text(credit)
+    (tmp_path / "reports/other.md").write_text(names + credit)
+    assert hygiene.main() == 1
+    assert "reports/other.md" in capsys.readouterr().out
+
+
 def test_the_group_b_report_exempts_the_same_five_names_only(
     tmp_path, monkeypatch, capsys
 ):

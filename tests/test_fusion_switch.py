@@ -15,11 +15,13 @@ import ast
 import importlib.util
 from pathlib import Path
 
-import numpy as np
-import pandas as pd
+import pytest
 
-from taxiout import fusion
-from taxiout.provenance import CHOSEN, CONSTANTS
+np = pytest.importorskip("numpy")
+pd = pytest.importorskip("pandas")
+
+from taxiout import fusion  # noqa: E402
+from taxiout.provenance import CHOSEN, CONSTANTS  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[1]
 MODELS = REPO / "src" / "taxiout" / "models.py"

@@ -35,12 +35,13 @@ HIDDEN_FOR_TEST_DEPARTURES: tuple[str, ...] = (
     "TAXITIME_SEC_mvt",
 )
 
-# Present in the ranking set but excluded from every feature by decision.
-# ``AOBT_3_flt`` is the Network Manager's off-block time for the flown
-# trajectory: minute-resolution, a median 51 s and an interquartile range of
-# five minutes away from the blanked block time, and no more informative as a
-# single predictor than the filed EOBT. It is still a noisy copy of the hidden
-# field, and an entry judged on originality has nothing to gain from it.
+# Present in the ranking set but excluded from every feature of the base
+# configuration. ``AOBT_3_flt`` is the Network Manager's off-block time for the
+# flown trajectory: minute-resolution, a median 51 s and an interquartile range
+# of five minutes away from the blanked block time, and no more informative as
+# a single predictor than the filed EOBT. ``taxiout.aobt3`` is the one module
+# that reads it, for the final configuration's features, under the challenge's
+# post-hoc framing; ``tests/test_aobt3.py`` holds every other module to this.
 EXCLUDED_BY_DECISION: tuple[str, ...] = ("AOBT_3_flt",)
 
 FORBIDDEN_FEATURE_INPUTS: tuple[str, ...] = (

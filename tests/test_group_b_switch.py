@@ -18,13 +18,14 @@ import importlib.util
 import json
 from pathlib import Path
 
-import numpy as np
-import pandas as pd
 import pytest
 
-from taxiout import group_b
-from taxiout.models import GROUP_B_APPLIED, GROUP_B_BASE
-from taxiout.provenance import CHOSEN, CONSTANTS
+np = pytest.importorskip("numpy")
+pd = pytest.importorskip("pandas")
+
+from taxiout import group_b  # noqa: E402
+from taxiout.models import GROUP_B_APPLIED, GROUP_B_BASE  # noqa: E402
+from taxiout.provenance import CHOSEN, CONSTANTS  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[1]
 MODELS = REPO / "src" / "taxiout" / "models.py"
